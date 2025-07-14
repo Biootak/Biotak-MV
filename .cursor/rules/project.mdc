@@ -1,0 +1,54 @@
+---
+alwaysApply: true
+---
+### Project Development Rules
+
+This document outlines the rules and best practices for developing custom studies for MotiveWave in this project.
+
+#### Versioning
+
+- **Java Version**: `21.0.3`
+- **MotiveWave SDK Version**: `6.9.9`
+- **Note**: Ensure that the JDK used for development is compatible with the specified version to avoid compilation and runtime issues.
+
+#### Development Methodology for using the MotiveWave SDK
+
+When encountering unknown classes or methods, or when fixing linter/compilation errors, follow this prioritized process:
+
+1.  **Consult In-Project Examples First:**
+    *   **Source:** The `src/study_examples/` directory.
+    *   **Action:** Before searching elsewhere, thoroughly examine the existing example files (e.g., `SampleMACross.java`). These provide the most direct and contextually correct patterns for common tasks like defining settings (`initialize` method) and implementing calculations (`calculate` method). This is the fastest way to solve issues related to SDK usage patterns.
+
+2.  **Refer to the Official SDK Javadoc:**
+    *   **Source:** [MotiveWave SDK Javadoc](https://www.motivewave.com/sdk/javadoc/index.html)
+    *   **Action:** If the examples do not cover a specific use case, use the official Javadoc. Use the search functionality to look up the specific class name you are working with (e.g., `Instrument`, `DataSeries`, `PathDescriptor`). Pay attention to:
+        *   Method signatures and parameters.
+        *   Deprecated methods (and their suggested replacements).
+        *   Class hierarchies to understand relationships.
+
+3.  **Use Logical Deduction and Iteration:**
+    *   **Action:** If a direct method isn't available (e.g., a method to get decimal places), deduce the information from related, available methods (e.g., calculating decimal places from `getTickSize()`).
+    *   Test your assumptions with small, incremental code changes and observe the results to iterate towards a solution.
+
+By following this hierarchy, development will be faster and the resulting code will be more consistent with the SDK's design principles.
+
+#### Code Best Practices
+
+-   **Code Organization:**
+    -   **Package Structure:** Place all custom studies within a consistent package structure (e.g., `com.biotak`).
+    -   **Setting Keys:** Define all setting keys as `final static String` constants at the top of the class. This prevents typos and centralizes all keys for easy management.
+
+-   **UI & Settings (`initialize` method):**
+    -   **User Experience:** Organize settings into logical tabs (`addTab`) and groups (`addGroup`) to create a clean and user-friendly study dialog.
+    -   **Use Specific Descriptors:** Always use the most specific descriptor for each setting (e.g., `PathDescriptor`, `BooleanDescriptor`, `IntegerDescriptor`) for better type safety and UI rendering.
+
+-   **Calculation & Drawing (`calculate` method):**
+    -   **Calculate on Latest Bar:** To prevent performance issues and visual clutter from duplicate figures, perform expensive calculations and chart-wide drawings (like horizontal lines) **only on the most recent bar**. Use the check `if (index == series.size() - 1)`.
+    -   **Clear Old Figures:** At the beginning of the calculation on the latest bar, call `clearFigures()` to remove all figures drawn in the previous calculation. This ensures a clean redraw.
+    -   **Check for Complete Bar:** Always begin the `calculate` method by checking if the bar is complete before running logic: `if (!series.isBarComplete(index)) return;`.
+    -   **Helper Methods:** Encapsulate complex or reusable calculation logic into private helper methods to keep the `calculate` method clean, readable, and focused on its main task.
+
+---
+
+
+---

@@ -1,0 +1,10 @@
+# Folders
+.idea/
+lib/
+Mt4/
+out/
+build/
+
+# Files
+*.log
+biotak_log.txt 
