@@ -5,6 +5,7 @@ import com.biotak.enums.PanelPosition;
 import com.biotak.util.THCalculator;
 import com.biotak.util.TimeframeUtil;
 import com.biotak.util.Logger;
+import com.biotak.util.Constants;
 import com.biotak.util.Logger.LogLevel;
 import com.motivewave.platform.sdk.common.*;
 import com.motivewave.platform.sdk.common.desc.*;
@@ -32,8 +33,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.HashMap;
 
-import static com.biotak.util.Constants.*;
 import com.motivewave.platform.sdk.common.Enums.ResizeType;
+import static com.biotak.util.Constants.*;
 
 /**
  * Biotak Trigger TH3 Indicator for MotiveWave.
@@ -53,6 +54,7 @@ public class BiotakTrigger extends Study {
 
     public static final String S_PANEL_MINIMIZED = "panelMinimized";
     public static final String S_CUSTOM_PRICE   = "customPrice"; // stores user-defined custom price
+    public final static String S_HISTORICAL_BARS = "historicalBars";
 
     private InfoPanel infoPanel;
     private ResizePoint customPricePoint; // draggable point for custom price
@@ -61,6 +63,11 @@ public class BiotakTrigger extends Study {
     // Added caches to avoid full-series scans on each redraw
     private double cachedHigh = Double.NEGATIVE_INFINITY;
     private double cachedLow  = Double.POSITIVE_INFINITY;
+    private boolean extremesInitialized = false; // ensures we load stored extremes once
+
+    private static final long LOG_INTERVAL_MS = 60_000;      // 1 minute
+    private static long lastCalcTableLogTime = 0;             // Tracks last time the calc table was printed
+    private static long lastHighLowLogTime = 0;             // Tracks last time historical high/low was logged
 
     public BiotakTrigger() {
         super();
@@ -89,6 +96,8 @@ public class BiotakTrigger extends Study {
         grp.addRow(new BooleanDescriptor(S_MANUAL_HL_ENABLE, "Enable Manual High/Low", false));
         grp.addRow(new DoubleDescriptor(S_MANUAL_HIGH, "Manual High", 0, 0, Double.MAX_VALUE, 0.0001));
         grp.addRow(new DoubleDescriptor(S_MANUAL_LOW, "Manual Low", 0, 0, Double.MAX_VALUE, 0.0001));
+        // Historical Data Loading
+        grp.addRow(new IntegerDescriptor(S_HISTORICAL_BARS, "Historical Bars to Load", 100000, 1000, Integer.MAX_VALUE, 1000));
         
         grp = tab.addGroup("Info Panel");
         grp.addRow(new BooleanDescriptor(S_SHOW_INFO_PANEL, "Show Info Panel", true));
@@ -195,12 +204,35 @@ public class BiotakTrigger extends Study {
     public void calculate(int index, DataContext ctx) {
         DataSeries series = ctx.getDataSeries();
         if (!series.isBarComplete(index)) return;
+
+        // Initialize cached extremes from settings on first invocation
+        if (!extremesInitialized) {
+            Settings s = getSettings();
+            double storedHigh = s.getDouble(Constants.S_HISTORICAL_HIGH, Double.NaN);
+            double storedLow  = s.getDouble(Constants.S_HISTORICAL_LOW, Double.NaN);
+            if (!Double.isNaN(storedHigh) && storedHigh != 0) cachedHigh = storedHigh;
+            if (!Double.isNaN(storedLow)  && storedLow  != 0) cachedLow  = storedLow;
+            extremesInitialized = true;
+        }
         
-        // Incrementally update cached high/low so we don't need to rescan the whole series.
         double barHigh = series.getHigh(index);
         double barLow  = series.getLow(index);
-        if (barHigh > cachedHigh) cachedHigh = barHigh;
-        if (barLow  < cachedLow)  cachedLow  = barLow;
+
+        boolean hadValidHigh = cachedHigh != Double.NEGATIVE_INFINITY && cachedHigh != Double.POSITIVE_INFINITY;
+        boolean hadValidLow  = cachedLow  != Double.NEGATIVE_INFINITY && cachedLow  != Double.POSITIVE_INFINITY;
+
+        if (barHigh > cachedHigh) {
+            cachedHigh = barHigh;
+            if (hadValidHigh) {
+                getSettings().setDouble(Constants.S_HISTORICAL_HIGH, cachedHigh);
+            }
+        }
+        if (barLow < cachedLow) {
+            cachedLow = barLow;
+            if (hadValidLow) {
+                getSettings().setDouble(Constants.S_HISTORICAL_LOW, cachedLow);
+            }
+        }
         
         // Only log and draw figures for the first and last bars to reduce excessive logging
         boolean isFirstBar = (index == 0);
@@ -211,6 +243,11 @@ public class BiotakTrigger extends Study {
             drawFigures(index, ctx);
         }
         else if (isLastBar) {
+            long nowHL = System.currentTimeMillis();
+            if (nowHL - lastHighLowLogTime > LOG_INTERVAL_MS) {
+                Logger.info("BiotakTrigger: Historical High/Low calculated from " + series.getBarSize() + " timeframe (merged). High: " + cachedHigh + ", Low: " + cachedLow);
+                lastHighLowLogTime = nowHL;
+            }
             Logger.info("BiotakTrigger: Last bar detected. Updating figures...");
             drawFigures(index, ctx);
         }
@@ -248,16 +285,30 @@ public class BiotakTrigger extends Study {
             } else {
                 if (index == 0) {
                     // Calculate high/low on the fly from the entire loaded series (only once on very first bar)
-                finalHigh = Double.NEGATIVE_INFINITY;
-                finalLow  = Double.POSITIVE_INFINITY;
-                for (int i = 0; i < series.size(); i++) {
-                    finalHigh = Math.max(finalHigh, series.getHigh(i));
-                    finalLow  = Math.min(finalLow, series.getLow(i));
-                }
-                    // Seed the cache for subsequent fast access
+                    double computedHigh = Double.NEGATIVE_INFINITY;
+                    double computedLow  = Double.POSITIVE_INFINITY;
+                    for (int i = 0; i < series.size(); i++) {
+                        computedHigh = Math.max(computedHigh, series.getHigh(i));
+                        computedLow  = Math.min(computedLow,  series.getLow(i));
+                    }
+
+                    // Merge with stored extremes so we never shrink the range
+                    finalHigh = Math.max(cachedHigh, computedHigh);
+                    finalLow  = Math.min(cachedLow,  computedLow);
+
+                    // Persist only if new extremes discovered
+                    if (finalHigh > cachedHigh) getSettings().setDouble(S_HISTORICAL_HIGH, finalHigh);
+                    if (finalLow  < cachedLow)  getSettings().setDouble(S_HISTORICAL_LOW,  finalLow);
+
+                    // Update in-memory cache
                     cachedHigh = finalHigh;
                     cachedLow  = finalLow;
-                    Logger.info("BiotakTrigger: Historical High/Low calculated from loaded data (initial scan). High: " + finalHigh + ", Low: " + finalLow);
+
+                    long nowHL2 = System.currentTimeMillis();
+                    if (nowHL2 - lastHighLowLogTime > LOG_INTERVAL_MS) {
+                        Logger.info("BiotakTrigger: Historical High/Low calculated from " + series.getBarSize() + " timeframe (merged). High: " + cachedHigh + ", Low: " + cachedLow);
+                        lastHighLowLogTime = nowHL2;
+                    }
                 } else {
                     // Use cached values, already updated incrementally in calculate()
                     finalHigh = cachedHigh;
@@ -349,8 +400,12 @@ public class BiotakTrigger extends Study {
             double pipMultiplier = getPipMultiplier(series.getInstrument());
 
             // Log detailed calculation table
-            logCalculationTable(series, thValue, structureValue, patternValue, triggerValue, 
-                               shortStep, longStep, atrValue, liveAtrValue, pipMultiplier);
+            long now = System.currentTimeMillis();
+            if (now - lastCalcTableLogTime > LOG_INTERVAL_MS) {
+                logCalculationTable(series, thValue, structureValue, patternValue, triggerValue, 
+                                   shortStep, longStep, atrValue, liveAtrValue, pipMultiplier);
+                lastCalcTableLogTime = now;
+            }
             
             // Draw the information panel with the new values
             drawInfoPanel(series, thValue, startTime, shortStep, longStep, atrValue, liveAtrValue);
@@ -380,6 +435,11 @@ public class BiotakTrigger extends Study {
             customPriceLabel.setData(rp.getTime(), rp.getValue(), txt);
             addFigure(customPriceLabel);
         }
+    }
+
+    @Override
+    public int getMinBars() {
+        return getSettings().getInteger(S_HISTORICAL_BARS, 100000);
     }
 
     /**
@@ -1281,15 +1341,19 @@ public class BiotakTrigger extends Study {
         }
 
         double pointValue = series.getInstrument().getTickSize();
-        Logger.debug("BiotakTrigger: Point value (tick size): " + pointValue);
-        
+        // Apply pip multiplier so that spacing matches MT4 (price to pips conversion)
+        double pipMultiplier = getPipMultiplier(series.getInstrument());
+        Logger.debug("BiotakTrigger: Point value (tick size): " + pointValue + ", Pip multiplier: " + pipMultiplier);
+
+        // Final price distance between consecutive TH levels
+        double stepPrice = thStepInPoints * pointValue * pipMultiplier;
         int maxLevelsAbove = getSettings().getInteger(S_MAX_LEVELS_ABOVE);
         int maxLevelsBelow = getSettings().getInteger(S_MAX_LEVELS_BELOW);
 
         // Draw levels above midpoint
         int stepCountAbove = 1;
         int levelCountAbove = 0;
-        double priceLevelAbove = midpointPrice + (thStepInPoints * pointValue);
+        double priceLevelAbove = midpointPrice + stepPrice;
         while (priceLevelAbove <= highestHigh && levelCountAbove < maxLevelsAbove) {
             PathInfo path = getPathForLevel(stepCountAbove);
             if (path != null) {
@@ -1297,14 +1361,14 @@ public class BiotakTrigger extends Study {
                 addFigure(new Line(new Coordinate(startTime, priceLevelAbove), new Coordinate(endTime, priceLevelAbove), path));
                 levelCountAbove++;
             }
-            priceLevelAbove += (thStepInPoints * pointValue);
+            priceLevelAbove += stepPrice;
             stepCountAbove++;
         }
 
         // Draw levels below midpoint
         int stepCountBelow = 1;
         int levelCountBelow = 0;
-        double priceLevelBelow = midpointPrice - (thStepInPoints * pointValue);
+        double priceLevelBelow = midpointPrice - stepPrice;
         while (priceLevelBelow >= lowestLow && levelCountBelow < maxLevelsBelow) {
             PathInfo path = getPathForLevel(stepCountBelow);
             if (path != null) {
@@ -1312,7 +1376,7 @@ public class BiotakTrigger extends Study {
                 addFigure(new Line(new Coordinate(startTime, priceLevelBelow), new Coordinate(endTime, priceLevelBelow), path));
                 levelCountBelow++;
             }
-            priceLevelBelow -= (thStepInPoints * pointValue);
+            priceLevelBelow -= stepPrice;
             stepCountBelow++;
         }
     }
