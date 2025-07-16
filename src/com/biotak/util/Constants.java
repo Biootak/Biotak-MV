@@ -90,4 +90,8 @@ public final class Constants {
     public final static String S_STRUCT_L5_PATH = "structL5Path";
     // Display
     public final static String S_SHOW_MIDPOINT = "showMidpoint";
+    // ------------------  SS / LS Step Mode ------------------
+    public final static String S_STEP_MODE = "stepMode";          // TH or SS/LS
+    public final static String S_LS_FIRST = "lsFirst";            // If true → draw LS before SS
+    public final static String S_SSLS_BASIS = "sslsBasis";        // Structure / Pattern / Trigger / Auto
 } 

@@ -35,6 +35,8 @@ import java.util.HashMap;
 
 import com.motivewave.platform.sdk.common.Enums.ResizeType;
 import static com.biotak.util.Constants.*;
+import com.biotak.enums.StepCalculationMode;
+import com.biotak.enums.SSLSBasisType;
 
 /**
  * Biotak Trigger TH3 Indicator for MotiveWave.
@@ -168,6 +170,22 @@ public class BiotakTrigger extends Study {
         tab = sd.addTab("Display");
         grp = tab.addGroup("Display Options");
         grp.addRow(new BooleanDescriptor(S_SHOW_MIDPOINT, "Show Midpoint Line", true));
+        
+        // -----------------  NEW SS/LS STEP OPTIONS -----------------
+        tab = sd.addTab("Step Mode");
+        grp = tab.addGroup("Step Calculation");
+        java.util.List<NVP> modeOptions = new java.util.ArrayList<>();
+        for (StepCalculationMode m : StepCalculationMode.values()) {
+            modeOptions.add(new NVP(m.toString(), m.name()));
+        }
+        grp.addRow(new DiscreteDescriptor(S_STEP_MODE, "Step Mode", StepCalculationMode.TH_STEP.name(), modeOptions));
+        grp.addRow(new BooleanDescriptor(S_LS_FIRST, "Draw LS First", true));
+        java.util.List<NVP> basisOptions = new java.util.ArrayList<>();
+        for (SSLSBasisType b : SSLSBasisType.values()) {
+            basisOptions.add(new NVP(b.toString(), b.name()));
+        }
+        grp.addRow(new DiscreteDescriptor(S_SSLS_BASIS, "SS/LS Timeframe", SSLSBasisType.STRUCTURE.name(), basisOptions));
+        // Quick settings could be added later if desired
         
         // Quick Settings: Allow rapid toggling of TH Start Point from toolbar / popup editor
         sd.addQuickSettings(S_START_POINT);
@@ -331,9 +349,25 @@ public class BiotakTrigger extends Study {
             
             Logger.debug("BiotakTrigger: Start time: " + startTime + ", End time: " + endTime);
     
+            // Determine selected step mode once
+            StepCalculationMode currentMode = StepCalculationMode.valueOf(getSettings().getString(S_STEP_MODE, StepCalculationMode.TH_STEP.name()));
+
             // Draw the components of the indicator.
-            drawHistoricalLines(startTime, endTime, finalHigh, finalLow);
-            double midpointPrice = determineMidpointPrice(finalHigh, finalLow);
+            if (currentMode == StepCalculationMode.TH_STEP) {
+                drawHistoricalLines(startTime, endTime, finalHigh, finalLow);
+            }
+            double midpointPrice;
+            if (currentMode == StepCalculationMode.SS_LS_STEP) {
+                // Force use of custom price as anchor; if not set, default to last close
+                double cp = getSettings().getDouble(S_CUSTOM_PRICE, Double.NaN);
+                if (Double.isNaN(cp) || cp == 0) {
+                    cp = series.getClose(totalBars - 1);
+                    getSettings().setDouble(S_CUSTOM_PRICE, cp);
+                }
+                midpointPrice = cp;
+            } else {
+                midpointPrice = determineMidpointPrice(finalHigh, finalLow);
+            }
             Logger.debug("BiotakTrigger: Midpoint price calculated: " + midpointPrice);
             // Handle interactive custom price point
             String startTypeStr = getSettings().getString(S_START_POINT, THStartPointType.MIDPOINT.name());
@@ -370,12 +404,12 @@ public class BiotakTrigger extends Study {
                 // clear label if any
             }
             
-            drawMidpointLine(startTime, endTime, midpointPrice);
-    
-            if (getSettings().getBoolean(S_SHOW_TH_LEVELS, true)) {
-                Logger.debug("BiotakTrigger: Drawing TH levels");
-                drawTHLevels(series, midpointPrice, finalHigh, finalLow, thBasePrice, startTime, endTime);
+            // Draw midpoint line only if not in SS/LS mode (where custom price acts as anchor)
+            if (currentMode == StepCalculationMode.TH_STEP) {
+                drawMidpointLine(startTime, endTime, midpointPrice);
             }
+    
+            // Step lines (TH or SS/LS) will be drawn below once all required values are calculated.
             
             // Calculate TH value for the info panel
             double timeframePercentage = TimeframeUtil.getTimeframePercentage(series.getBarSize());
@@ -413,6 +447,32 @@ public class BiotakTrigger extends Study {
             // Draw the information panel with the new values
             drawInfoPanel(series, thValue, startTime, shortStep, longStep, atrValue, liveAtrValue);
             
+            // ------------------------------------------------------------------
+            // Draw either TH-based or SS/LS-based horizontal levels now that all
+            // required fractal values are available.
+            // ------------------------------------------------------------------
+            if (currentMode == StepCalculationMode.TH_STEP) {
+                if (getSettings().getBoolean(S_SHOW_TH_LEVELS, true)) {
+                    drawTHLevels(series, midpointPrice, finalHigh, finalLow, thBasePrice, startTime, endTime);
+                }
+            } else {
+                SSLSBasisType basis = SSLSBasisType.valueOf(getSettings().getString(S_SSLS_BASIS, SSLSBasisType.STRUCTURE.name()));
+
+                double baseTH;
+                switch (basis) {
+                    case PATTERN:  baseTH = patternValue;  break;
+                    case TRIGGER:  baseTH = triggerValue;  break;
+                    case AUTO:     baseTH = patternValue;  break; // simple heuristic for now
+                    case STRUCTURE:
+                    default:       baseTH = structureValue; break;
+                }
+
+                double ssValue = baseTH * 1.5;
+                double lsValue = baseTH * 2.0;
+                boolean drawLsFirst = getSettings().getBoolean(S_LS_FIRST, true);
+
+                drawSSLSLevels(series, midpointPrice, finalHigh, finalLow, ssValue, lsValue, drawLsFirst, startTime, endTime);
+            }
         } finally {
             // Restore previous log level
             Logger.setLogLevel(LogLevel.WARN);
@@ -1476,6 +1536,68 @@ public class BiotakTrigger extends Study {
         @Override
         public boolean contains(double x, double y, DrawContext ctx) {
             return false;
+        }
+    }
+
+    /**
+     * Draws variable-distance levels alternating between Short Step (SS) and Long Step (LS).
+     *
+     * @param series         Data series (for instrument/tick size if needed)
+     * @param midpointPrice  Center reference price
+     * @param highestHigh    Upper bound for drawing
+     * @param lowestLow      Lower bound for drawing
+     * @param ssValue        Short-Step distance (price units)
+     * @param lsValue        Long-Step distance  (price units)
+     * @param lsFirst        If true, first step after midpoint uses LS, otherwise SS
+     * @param startTime      Start timestamp for horizontal lines
+     * @param endTime        End timestamp for horizontal lines
+     */
+    private void drawSSLSLevels(DataSeries series, double midpointPrice, double highestHigh, double lowestLow,
+                                double ssValue, double lsValue, boolean lsFirst,
+                                long startTime, long endTime) {
+        if (ssValue <= 0 || lsValue <= 0) {
+            Logger.warn("BiotakTrigger: Invalid SS/LS values – cannot draw levels.");
+            return;
+        }
+
+        // Convert to "pip" distance similar to TH logic
+        double pipMultiplier = getPipMultiplier(series.getInstrument());
+        double stepSS = ssValue * pipMultiplier;
+        double stepLS = lsValue * pipMultiplier;
+        double[] stepDistances = new double[]{lsFirst ? stepLS : stepSS, lsFirst ? stepSS : stepLS};
+
+        int drawnAbove = 0;
+        int logicalStep = 0; // counts every step (SS/LS) processed
+        double cumulative = 0;
+        int maxLevelsAbove = getSettings().getInteger(S_MAX_LEVELS_ABOVE);
+        while (drawnAbove < maxLevelsAbove) {
+            double dist = stepDistances[logicalStep % 2];
+            cumulative += dist;
+            logicalStep++;
+            double priceLevel = midpointPrice + cumulative;
+            if (priceLevel > highestHigh) break;
+            PathInfo path = getPathForLevel(logicalStep);
+            if (path != null) {
+                addFigure(new Line(new Coordinate(startTime, priceLevel), new Coordinate(endTime, priceLevel), path));
+                drawnAbove++;
+            }
+        }
+
+        int drawnBelow = 0;
+        logicalStep = 0;
+        cumulative = 0;
+        int maxLevelsBelow = getSettings().getInteger(S_MAX_LEVELS_BELOW);
+        while (drawnBelow < maxLevelsBelow) {
+            double dist = stepDistances[logicalStep % 2];
+            cumulative += dist;
+            logicalStep++;
+            double priceLevel = midpointPrice - cumulative;
+            if (priceLevel < lowestLow) break;
+            PathInfo path = getPathForLevel(logicalStep);
+            if (path != null) {
+                addFigure(new Line(new Coordinate(startTime, priceLevel), new Coordinate(endTime, priceLevel), path));
+                drawnBelow++;
+            }
         }
     }
 } 
