@@ -249,26 +249,21 @@ public class BiotakTrigger extends Study {
                 Logger.info("BiotakTrigger: Using automatic historical values. High: " + finalHigh + ", Low: " + finalLow);
             }
             
-            // برای محاسبه TH از 200 کندل آخر استفاده می‌کنیم
+            // Get the base price for TH calculation
             int totalBars = series.size();
-            int lookback = Math.min(200, totalBars);
-            double thBasePrice = series.getClose(totalBars - 2); // Use previous bar's close for TH calculation.
+            double thBasePrice = series.getClose(totalBars - 2); // Use previous bar's close for TH calculation
             
             // Use the first and last bar times directly for line drawing
             long startTime = series.getStartTime(0);
             long endTime = series.getStartTime(totalBars - 1);
             
-            Logger.debug("BiotakTrigger: Start time: " + startTime + ", End time: " + endTime);
-    
             // Draw the components of the indicator.
             drawHistoricalLines(startTime, endTime, finalHigh, finalLow);
             double midpointPrice = determineMidpointPrice(finalHigh, finalLow);
-            Logger.debug("BiotakTrigger: Midpoint price calculated: " + midpointPrice);
             
             drawMidpointLine(startTime, endTime, midpointPrice);
     
             if (getSettings().getBoolean(S_SHOW_TH_LEVELS, true)) {
-                Logger.debug("BiotakTrigger: Drawing TH levels");
                 drawTHLevels(series, midpointPrice, finalHigh, finalLow, thBasePrice, startTime, endTime);
             }
             
@@ -678,7 +673,7 @@ public class BiotakTrigger extends Study {
         private Font titleFont;
         private PanelPosition position;
         private int marginX, marginY, transparency;
-        private boolean isSecondsBased; // آیا تایم‌فریم ثانیه‌ای است
+        private boolean isSecondsBased; // Is the timeframe in seconds
 
         // Main Values
         private double thValue, shortStep, longStep, atrValue, liveAtrValue;
@@ -739,6 +734,7 @@ public class BiotakTrigger extends Study {
             
             // Prepare content for each section
             List<String> coreLines = new ArrayList<>();
+            // Format numbers to match log output - use 1 decimal place for pips
             coreLines.add("TH: " + String.format("%.1f", thValue * pipMultiplier));
             coreLines.add("ATR: " + String.format("%.1f", atrValue * pipMultiplier));
             coreLines.add("SS: " + String.format("%.1f", shortStep * pipMultiplier));
@@ -772,12 +768,12 @@ public class BiotakTrigger extends Study {
             gc.setFont(contentFont);
             FontMetrics contentMetrics = gc.getFontMetrics();
             int contentLineHeight = contentMetrics.getHeight();
-            int lineSpacing = 7; // افزایش فاصله بین خطوط برای خوانایی بهتر
+            int lineSpacing = 7; // Increased line spacing for better readability
             
-            int coreWidth = contentMetrics.stringWidth(coreLines.get(0)) + contentMetrics.stringWidth(coreLines.get(1)) + 50; // افزایش فاصله افقی
+            int coreWidth = contentMetrics.stringWidth(coreLines.get(0)) + contentMetrics.stringWidth(coreLines.get(1)) + 50; // Increased horizontal spacing
             int hierarchyWidth = 0;
             for(String line : hierarchyLines) hierarchyWidth = Math.max(hierarchyWidth, contentMetrics.stringWidth(line));
-            int panelWidth = Math.max(coreWidth, hierarchyWidth) + 40; // افزایش عرض پنل
+            int panelWidth = Math.max(coreWidth, hierarchyWidth) + 40; // Increased panel width
 
             int coreSectionHeight = (3 * (contentLineHeight + lineSpacing)) + 15; // 3 rows of content
             int hierarchySectionHeight = isMinimized ? 0 : (hierarchyLines.size() * (contentLineHeight + lineSpacing)) + 15;
@@ -1006,18 +1002,46 @@ public class BiotakTrigger extends Study {
                         marginX, marginY, transparency, 
                         shortStep, longStep, atrValue, liveAtrValue, isSecondsBased, isMinimized);
 
-        // Get fractal info
+        // Calculate fractal values the same way as in the logCalculationTable method
+        double timeframePercentage = TimeframeUtil.getTimeframePercentage(barSize);
+        double structureValue = thValue; // Structure value is the TH value for current timeframe
+        double basePrice = series.getClose(series.size() - 2);
+        
+        // Pattern timeframe calculations (current level)
         BarSize patternBarSize = TimeframeUtil.getPatternBarSize(barSize);
+        double patternTimeframePercentage = TimeframeUtil.getTimeframePercentage(patternBarSize);
+        double patternValue = structureValue / 2.0;
+        double patternTH = THCalculator.calculateTHPoints(instrument, basePrice, patternTimeframePercentage) * instrument.getTickSize();
+        
+        // Trigger timeframe calculations (lower level)
         BarSize triggerBarSize = TimeframeUtil.getTriggerBarSize(barSize);
-        double patternTH = TimeframeUtil.getTimeframePercentage(patternBarSize) * (instrument.getHigh() - instrument.getLow());
-        double triggerTH = TimeframeUtil.getTimeframePercentage(triggerBarSize) * (instrument.getHigh() - instrument.getLow());
-
-        infoPanel.setDownwardFractalInfo(formatTimeframeString(patternBarSize), formatTimeframeString(triggerBarSize), patternTH, triggerTH);
-
+        double triggerTimeframePercentage = TimeframeUtil.getTimeframePercentage(triggerBarSize);
+        double triggerValue = structureValue / 4.0;
+        double triggerTH = THCalculator.calculateTHPoints(instrument, basePrice, triggerTimeframePercentage) * instrument.getTickSize();
+        
+        // Structure timeframe calculations (higher timeframe)
         BarSize structureBarSize = TimeframeUtil.getStructureBarSize(barSize);
-        double structureTH = TimeframeUtil.getTimeframePercentage(structureBarSize) * (instrument.getHigh() - instrument.getLow());
+        double structureTimeframePercentage = TimeframeUtil.getTimeframePercentage(structureBarSize);
+        double structureTH = THCalculator.calculateTHPoints(instrument, basePrice, structureTimeframePercentage) * instrument.getTickSize();
+        
+        // Calculate the higher pattern TH correctly (pattern of the higher timeframe)
+        BarSize higherPatternBarSize = TimeframeUtil.getPatternBarSize(structureBarSize);
+        double higherPatternTimeframePercentage = TimeframeUtil.getTimeframePercentage(higherPatternBarSize);
+        double higherPatternTH = THCalculator.calculateTHPoints(instrument, basePrice, higherPatternTimeframePercentage) * instrument.getTickSize();
 
-        infoPanel.setUpwardFractalInfo(formatTimeframeString(patternBarSize), formatTimeframeString(structureBarSize), patternTH, structureTH);
+        infoPanel.setDownwardFractalInfo(
+            formatTimeframeString(patternBarSize), 
+            formatTimeframeString(triggerBarSize), 
+            patternTH, 
+            triggerTH
+        );
+
+        infoPanel.setUpwardFractalInfo(
+            formatTimeframeString(higherPatternBarSize), 
+            formatTimeframeString(structureBarSize), 
+            higherPatternTH, 
+            structureTH
+        );
 
         addFigure(this.infoPanel);
     }
@@ -1045,45 +1069,42 @@ public class BiotakTrigger extends Study {
      */
     private double getPipMultiplier(Instrument instrument) {
         if (instrument == null) return 10.0; // Default multiplier
+
+        // For Forex and most other instruments
+        double pipMultiplier = 10.0; // Default multiplier of 10
         
         String symbol = instrument.getSymbol();
         double tickSize = instrument.getTickSize();
         
-        // Determine number of decimal places in tick size
-        int decimalPlaces = 0;
-        if (tickSize > 0) {
-            String tickStr = String.valueOf(tickSize);
-            if (tickStr.contains(".")) {
-                decimalPlaces = tickStr.length() - tickStr.indexOf('.') - 1;
-            }
+        // Check if this is a special case based on symbol and tickSize
+        if (tickSize <= 0.0001 && (
+                symbol.contains("JPY") || 
+                symbol.contains("XAU") || 
+                symbol.contains("GOLD") || 
+                symbol.contains("XAG") || 
+                symbol.contains("SILVER"))) {
+            pipMultiplier = 100.0;
+        } else if (tickSize <= 0.0001) {
+            // Standard Forex with 5 decimal places
+            pipMultiplier = 10000.0;
+        } else if (tickSize <= 0.001) {
+            // Forex with 3 decimal places (e.g., JPY pairs)
+            pipMultiplier = 1000.0;
+        } else if (tickSize <= 0.01) {
+            // Other instruments with 2 decimal places
+            pipMultiplier = 100.0;
+        } else if (tickSize <= 0.1) {
+            // For instruments with 1 decimal place
+            pipMultiplier = 10.0;
+        } else {
+            // For whole number prices
+            pipMultiplier = 1.0;
         }
         
-        // For forex pairs
-        if (symbol != null && 
-            (symbol.contains("/") || 
-             (symbol.length() >= 6 && !symbol.contains(".")))) {
-            
-            // JPY pairs typically have 2 decimal places
-            if (symbol.contains("JPY") || symbol.contains("jpy")) {
-                return 100.0;
-            }
-            
-            // Most other forex pairs have 4 decimal places, with pip being the 4th decimal
-            if (decimalPlaces >= 4) {
-                return 10.0;
-            }
-        }
+        // Log the pip multiplier for debugging
+        Logger.debug("Pip multiplier for " + symbol + " with tick size " + tickSize + ": " + pipMultiplier);
         
-        // For indices, stocks, etc. - use a multiplier based on decimal places
-        switch (decimalPlaces) {
-            case 0: return 1.0;    // No decimal places
-            case 1: return 10.0;   // 1 decimal place
-            case 2: return 100.0;  // 2 decimal places
-            case 3: return 10.0;   // 3 decimal places (unusual)
-            case 4: return 10.0;   // 4 decimal places (standard forex)
-            case 5: return 10.0;   // 5 decimal places (some brokers)
-            default: return 10.0;  // Default
-        }
+        return pipMultiplier;
     }
 
     /**
