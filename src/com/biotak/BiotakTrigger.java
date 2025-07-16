@@ -878,30 +878,43 @@ public class BiotakTrigger extends Study {
             Rectangle bounds = ctx.getBounds();
             
             // Prepare content for each section
+            // -----------------------------  CORE VALUES  ---------------------------------
+            // Calculate Control (C) as the average of SS and LS => 7T.
+            double controlValue = (shortStep + longStep) / 2.0; // C = (SS + LS) / 2
+
             List<String> coreLines = new ArrayList<>();
-            // Format numbers to match log output - use 1 decimal place for pips
-            coreLines.add("TH: " + String.format("%.1f", thValue * pipMultiplier));
-            coreLines.add("ATR: " + String.format("%.1f", atrValue * pipMultiplier));
-            coreLines.add("SS: " + String.format("%.1f", shortStep * pipMultiplier));
-            coreLines.add("LS: " + String.format("%.1f", longStep * pipMultiplier));
+            // Format numbers to one decimal place (in pips)
+            coreLines.add("TH: "   + String.format("%.1f", thValue      * pipMultiplier));
+            coreLines.add("ATR: "  + String.format("%.1f", atrValue     * pipMultiplier));
+            coreLines.add("SS: "   + String.format("%.1f", shortStep    * pipMultiplier));
+            coreLines.add("LS: "   + String.format("%.1f", longStep     * pipMultiplier));
+            coreLines.add("C: "    + String.format("%.1f", controlValue * pipMultiplier));
             coreLines.add("Live: " + String.format("%.1f", liveAtrValue * pipMultiplier));
 
+            //---------------------------  HIERARCHY VALUES  --------------------------------
             List<String> hierarchyLines = new ArrayList<>();
+
+            // Helper lambda to format TH and C together to avoid clutter
+            java.util.function.BiFunction<Double, Double, String> formatThC = (th, pipMult) -> {
+                double cVal = th * 7.0; // C = 7T for the given timeframe (T == TH)
+                return String.format("%.1f", th * pipMult) + "  (C:" + String.format("%.1f", cVal * pipMult) + ")";
+            };
+
             if (higherStructureTF != null && !higherStructureTF.isEmpty()) {
-                hierarchyLines.add("▲ S [" + higherStructureTF + "]: " + String.format("%.1f", higherStructureTH * pipMultiplier));
+                hierarchyLines.add("▲ S [" + higherStructureTF + "]: " + formatThC.apply(higherStructureTH, pipMultiplier));
             }
             if (higherPatternTF != null && !higherPatternTF.isEmpty()) {
-                hierarchyLines.add("▲ P [" + higherPatternTF + "]: " + String.format("%.1f", higherPatternTH * pipMultiplier));
+                hierarchyLines.add("▲ P [" + higherPatternTF + "]: " + formatThC.apply(higherPatternTH, pipMultiplier));
             }
-            
-            // Current timeframe display - mark with a star and highlight if seconds-based
-            hierarchyLines.add("■ [" + timeframe + "]: " + String.format("%.1f", thValue * pipMultiplier) + " *");
-            
+
+            // Current timeframe – include star marker
+            hierarchyLines.add("■ [" + timeframe + "]: " + formatThC.apply(thValue, pipMultiplier) + " *");
+
             if (lowerPatternTF != null && !lowerPatternTF.isEmpty()) {
-                hierarchyLines.add("▼ P [" + lowerPatternTF + "]: " + String.format("%.1f", lowerPatternTH * pipMultiplier));
+                hierarchyLines.add("▼ P [" + lowerPatternTF + "]: " + formatThC.apply(lowerPatternTH, pipMultiplier));
             }
             if (lowerTriggerTF != null && !lowerTriggerTF.isEmpty()) {
-                hierarchyLines.add("▼ T [" + lowerTriggerTF + "]: " + String.format("%.1f", lowerTriggerTH * pipMultiplier));
+                hierarchyLines.add("▼ T [" + lowerTriggerTF + "]: " + formatThC.apply(lowerTriggerTH, pipMultiplier));
             }
 
             // Calculate panel dimensions
@@ -915,13 +928,28 @@ public class BiotakTrigger extends Study {
             int contentLineHeight = contentMetrics.getHeight();
             int lineSpacing = 7; // Increased line spacing for better readability
             
-            int coreWidth = contentMetrics.stringWidth(coreLines.get(0)) + contentMetrics.stringWidth(coreLines.get(1)) + 50; // Increased horizontal spacing
+            // Dynamically determine maximum width needed for the two-column core section
+            int coreWidth = 0;
+            for (int i = 0; i + 1 < coreLines.size(); i += 2) {
+                int pairWidth = contentMetrics.stringWidth(coreLines.get(i)) + contentMetrics.stringWidth(coreLines.get(i + 1)) + 50;
+                if (pairWidth > coreWidth) coreWidth = pairWidth;
+            }
+            // In case of an odd leftover (should not happen with current list size), include its width
+            if (coreLines.size() % 2 == 1) {
+                coreWidth = Math.max(coreWidth, contentMetrics.stringWidth(coreLines.get(coreLines.size() - 1)));
+            }
+
+            // Determine maximum width of hierarchy section as well
             int hierarchyWidth = 0;
-            for(String line : hierarchyLines) hierarchyWidth = Math.max(hierarchyWidth, contentMetrics.stringWidth(line));
+            for (String line : hierarchyLines) {
+                hierarchyWidth = Math.max(hierarchyWidth, contentMetrics.stringWidth(line));
+            }
+
             int panelWidth = Math.max(coreWidth, hierarchyWidth) + 40; // Increased panel width
 
             // Adjusted padding after the separator using constant
-            int coreSectionHeight = (3 * (contentLineHeight + lineSpacing)) + SEPARATOR_PADDING; // 3 rows of content
+            int coreRows = ((coreLines.size() + 1) / 2); // rows = pairs + possible leftover
+            int coreSectionHeight = (coreRows * (contentLineHeight + lineSpacing)) + SEPARATOR_PADDING;
             int hierarchySectionHeight = isMinimized ? 0 : (hierarchyLines.size() * (contentLineHeight + lineSpacing)) + SEPARATOR_PADDING;
             int panelHeight = (titleHeight + SEPARATOR_PADDING) + coreSectionHeight + hierarchySectionHeight;
 
@@ -1105,7 +1133,8 @@ public class BiotakTrigger extends Study {
             gc.setColor(Color.WHITE);
             gc.setFont(font);
             if (isTwoColumn) {
-                for(int i = 0; i < 4; i += 2) {
+                int i = 0;
+                for (; i + 1 < lines.size(); i += 2) {
                     String left  = lines.get(i);
                     String right = lines.get(i + 1);
                     int leftWidth  = fm.stringWidth(left);
@@ -1116,9 +1145,12 @@ public class BiotakTrigger extends Study {
                     gc.drawString(right, rightX, currentY);
                     currentY += fm.getHeight() + spacing;
                 }
-                // Center the Live row
-                int liveWidth = fm.stringWidth(lines.get(4));
-                gc.drawString(lines.get(4), x + (panelWidth - liveWidth) / 2, currentY);
+                // If there is an unpaired line left (odd count), center it
+                if (i < lines.size()) {
+                    String lone = lines.get(i);
+                    int loneWidth = fm.stringWidth(lone);
+                    gc.drawString(lone, x + (panelWidth - loneWidth) / 2, currentY);
+                }
             } else {
                 // Centered single-column layout
                 for(String line : lines) {
