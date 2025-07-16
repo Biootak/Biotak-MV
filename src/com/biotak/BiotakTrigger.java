@@ -241,12 +241,12 @@ public class BiotakTrigger extends Study {
             } else {
                 if (index == 0) {
                     // Calculate high/low on the fly from the entire loaded series (only once on very first bar)
-                    finalHigh = Double.NEGATIVE_INFINITY;
-                    finalLow  = Double.POSITIVE_INFINITY;
-                    for (int i = 0; i < series.size(); i++) {
-                        finalHigh = Math.max(finalHigh, series.getHigh(i));
-                        finalLow  = Math.min(finalLow, series.getLow(i));
-                    }
+                finalHigh = Double.NEGATIVE_INFINITY;
+                finalLow  = Double.POSITIVE_INFINITY;
+                for (int i = 0; i < series.size(); i++) {
+                    finalHigh = Math.max(finalHigh, series.getHigh(i));
+                    finalLow  = Math.min(finalLow, series.getLow(i));
+                }
                     // Seed the cache for subsequent fast access
                     cachedHigh = finalHigh;
                     cachedLow  = finalLow;
@@ -817,8 +817,8 @@ public class BiotakTrigger extends Study {
             gc.setColor(panelBg);
             gc.fillRoundRect(x, y, panelWidth, panelHeight, 8, 8);
             // Draw minimize/restore button (top-right corner)
-            int btnSize = 12;
-            int btnPadding = 6;
+            int btnSize = 20; // enlarged for easier click
+            int btnPadding = 4;
             int btnX = x + panelWidth - btnSize - btnPadding;
             int btnY = y + btnPadding;
             minimizeButtonRect = new Rectangle(btnX, btnY, btnSize, btnSize);
