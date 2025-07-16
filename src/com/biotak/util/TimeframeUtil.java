@@ -457,6 +457,149 @@ public final class TimeframeUtil {
     }
     
     /**
+<<<<<<< HEAD
+=======
+     * Gets the relative position of a non-fractal timeframe between its neighboring fractal timeframes.
+     * This helps understand where a timeframe like M20 sits between M16 and M64.
+     * 
+     * @param barSize The bar size to analyze
+     * @return A value between 0.0 and 1.0 indicating the position between lower and higher fractal timeframes
+     */
+    public static double getNonFractalPosition(BarSize barSize) {
+        int totalMinutes = getTotalMinutes(barSize);
+        
+        // If it's already a fractal timeframe, return 0.0 (exact match with lower)
+        if (FRACTAL_MINUTES_MAP.containsKey(totalMinutes) || POWER3_MINUTES_MAP.containsKey(totalMinutes)) {
+            return 0.0;
+        }
+        
+        // Find neighboring fractal timeframes (powers of 2)
+        Map.Entry<Integer, String> lowerEntry = FRACTAL_MINUTES_MAP.floorEntry(totalMinutes);
+        Map.Entry<Integer, String> higherEntry = FRACTAL_MINUTES_MAP.ceilingEntry(totalMinutes);
+        
+        if (lowerEntry != null && higherEntry != null) {
+            // Calculate position using logarithmic scale (more appropriate for fractal timeframes)
+            double logLower = Math.log(lowerEntry.getKey());
+            double logHigher = Math.log(higherEntry.getKey());
+            double logCurrent = Math.log(totalMinutes);
+            
+            return (logCurrent - logLower) / (logHigher - logLower);
+        }
+        
+        // If we don't have both bounds, check if it's close to powers of 3
+        Map.Entry<Integer, String> lowerEntry3 = POWER3_MINUTES_MAP.floorEntry(totalMinutes);
+        Map.Entry<Integer, String> higherEntry3 = POWER3_MINUTES_MAP.ceilingEntry(totalMinutes);
+        
+        if (lowerEntry3 != null && higherEntry3 != null) {
+            // Calculate position using logarithmic scale
+            double logLower = Math.log(lowerEntry3.getKey());
+            double logHigher = Math.log(higherEntry3.getKey());
+            double logCurrent = Math.log(totalMinutes);
+            
+            return (logCurrent - logLower) / (logHigher - logLower);
+        }
+        
+        // If all else fails, return 0.5 (middle position)
+        return 0.5;
+    }
+    
+    /**
+     * Checks if a number is a power of 2 or very close to it
+     */
+    private static boolean isPowerOf2(int number) {
+        double log2 = Math.log(number) / Math.log(2);
+        double roundedLog2 = Math.round(log2);
+        
+        // Check if log2 is very close to an integer
+        return Math.abs(log2 - roundedLog2) < 0.05;
+    }
+    
+    /**
+     * Checks if a number is a power of 3 or very close to it
+     */
+    private static boolean isPowerOf3(int number) {
+        double log3 = Math.log(number) / Math.log(3);
+        double roundedLog3 = Math.round(log3);
+        
+        // Check if log3 is very close to an integer
+        return Math.abs(log3 - roundedLog3) < 0.05;
+    }
+    
+    /**
+     * Checks if a number is close to any exact timeframe (standard, power of 2, or power of 3)
+     */
+    private static boolean isCloseToExactTimeframe(int minutes) {
+        // Check standard timeframes
+        for (int standardMinutes : STANDARD_TIMEFRAMES_MAP.keySet()) {
+            if (Math.abs(minutes - standardMinutes) <= 0.1 * standardMinutes) {
+                return true;
+            }
+        }
+        
+        // Check power of 2 timeframes
+        for (int powerMinutes : FRACTAL_MINUTES_MAP.keySet()) {
+            if (Math.abs(minutes - powerMinutes) <= 0.1 * powerMinutes) {
+                return true;
+            }
+        }
+        
+        // Check power of 3 timeframes
+        for (int powerMinutes : POWER3_MINUTES_MAP.keySet()) {
+            if (Math.abs(minutes - powerMinutes) <= 0.1 * powerMinutes) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Finds the closest timeframe (from standard, power of 2, or power of 3) to the given minutes
+     */
+    private static Map.Entry<Integer, String> findClosestTimeframe(int minutes) {
+        // Try to find the closest standard timeframe
+        Map.Entry<Integer, String> standardLower = STANDARD_TIMEFRAMES_MAP.floorEntry(minutes);
+        Map.Entry<Integer, String> standardHigher = STANDARD_TIMEFRAMES_MAP.ceilingEntry(minutes);
+        
+        // Try to find the closest power of 2 timeframe
+        Map.Entry<Integer, String> power2Lower = FRACTAL_MINUTES_MAP.floorEntry(minutes);
+        Map.Entry<Integer, String> power2Higher = FRACTAL_MINUTES_MAP.ceilingEntry(minutes);
+        
+        // Try to find the closest power of 3 timeframe
+        Map.Entry<Integer, String> power3Lower = POWER3_MINUTES_MAP.floorEntry(minutes);
+        Map.Entry<Integer, String> power3Higher = POWER3_MINUTES_MAP.ceilingEntry(minutes);
+        
+        // Find the closest entry among all options
+        TreeMap<Integer, Map.Entry<Integer, String>> distanceMap = new TreeMap<>();
+        
+        addIfNotNull(distanceMap, standardLower, minutes);
+        addIfNotNull(distanceMap, standardHigher, minutes);
+        addIfNotNull(distanceMap, power2Lower, minutes);
+        addIfNotNull(distanceMap, power2Higher, minutes);
+        addIfNotNull(distanceMap, power3Lower, minutes);
+        addIfNotNull(distanceMap, power3Higher, minutes);
+        
+        // Return the entry with the smallest distance
+        if (!distanceMap.isEmpty()) {
+            return distanceMap.firstEntry().getValue();
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Helper method to add an entry to the distance map if it's not null
+     */
+    private static void addIfNotNull(TreeMap<Integer, Map.Entry<Integer, String>> distanceMap, 
+                                   Map.Entry<Integer, String> entry, int targetMinutes) {
+        if (entry != null) {
+            int distance = Math.abs(entry.getKey() - targetMinutes);
+            distanceMap.put(distance, entry);
+        }
+    }
+    
+    /**
+>>>>>>> 722ba07644c2ccf9e8a54d5e43c2003d41cb74f2
      * Converts minutes to a timeframe string
      */
     private static String getTimeframeString(int minutes) {
