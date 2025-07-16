@@ -665,6 +665,8 @@ public class BiotakTrigger extends Study {
         private double higherPatternTH, higherStructureTH;
         private boolean isMinimized;
         private Rectangle panelBounds;
+        // Added constant to control vertical padding after separator lines inside the panel
+        private static final int SEPARATOR_PADDING = 25; // was previously 15 – gives text more breathing room
         
         public InfoPanel(String timeframe, double thValue, double pipMultiplier, 
                         Font contentFont, Font titleFont, PanelPosition position, 
@@ -754,9 +756,10 @@ public class BiotakTrigger extends Study {
             for(String line : hierarchyLines) hierarchyWidth = Math.max(hierarchyWidth, contentMetrics.stringWidth(line));
             int panelWidth = Math.max(coreWidth, hierarchyWidth) + 40; // Increased panel width
 
-            int coreSectionHeight = (3 * (contentLineHeight + lineSpacing)) + 15; // 3 rows of content
-            int hierarchySectionHeight = isMinimized ? 0 : (hierarchyLines.size() * (contentLineHeight + lineSpacing)) + 15;
-            int panelHeight = (titleHeight + 15) + coreSectionHeight + hierarchySectionHeight;
+            // Adjusted padding after the separator using constant
+            int coreSectionHeight = (3 * (contentLineHeight + lineSpacing)) + SEPARATOR_PADDING; // 3 rows of content
+            int hierarchySectionHeight = isMinimized ? 0 : (hierarchyLines.size() * (contentLineHeight + lineSpacing)) + SEPARATOR_PADDING;
+            int panelHeight = (titleHeight + SEPARATOR_PADDING) + coreSectionHeight + hierarchySectionHeight;
 
             // Calculate panel position
             int x, y;
@@ -808,7 +811,7 @@ public class BiotakTrigger extends Study {
             gc.setColor(new Color(60, 60, 70, 200));
             gc.setStroke(new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, new float[]{3.0f}, 0.0f));
             gc.drawLine(x + 10, currentY, x + panelWidth - 10, currentY);
-            currentY += 15; // Add some padding after the line
+            currentY += SEPARATOR_PADDING; // Increased padding after separator line
             
             // Section Content - Centered single-column layout with special handling for current timeframe
             gc.setFont(font);
@@ -914,7 +917,7 @@ public class BiotakTrigger extends Study {
             gc.setColor(new Color(60, 60, 70, 200));
             gc.setStroke(new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, new float[]{3.0f}, 0.0f));
             gc.drawLine(x + 10, currentY, x + panelWidth - 10, currentY);
-            currentY += 15; // Add some padding after the line
+            currentY += SEPARATOR_PADDING; // Increased padding after separator line
             
             // Section Content
             gc.setColor(Color.WHITE);
