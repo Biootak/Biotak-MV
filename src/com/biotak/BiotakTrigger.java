@@ -13,7 +13,6 @@ import com.motivewave.platform.sdk.common.menu.MenuDescriptor;
 import com.motivewave.platform.sdk.common.menu.MenuItem;
 import com.motivewave.platform.sdk.draw.Line;
 import com.motivewave.platform.sdk.draw.Figure;
-import com.motivewave.platform.sdk.draw.Label;
 import com.motivewave.platform.sdk.draw.ResizePoint;
 import com.motivewave.platform.sdk.study.Study;
 import com.motivewave.platform.sdk.study.StudyHeader;
@@ -34,6 +33,7 @@ import java.util.TreeMap;
 import java.util.HashMap;
 
 import static com.biotak.util.Constants.*;
+import com.motivewave.platform.sdk.common.Enums.ResizeType;
 
 /**
  * Biotak Trigger TH3 Indicator for MotiveWave.
@@ -52,8 +52,12 @@ import static com.biotak.util.Constants.*;
 public class BiotakTrigger extends Study {
 
     public static final String S_PANEL_MINIMIZED = "panelMinimized";
+    public static final String S_CUSTOM_PRICE   = "customPrice"; // stores user-defined custom price
 
     private InfoPanel infoPanel;
+    private ResizePoint customPricePoint; // draggable point for custom price
+    private PriceLabel customPriceLabel; // displays the numeric value next to the custom price line
+    // Label was not added due to SDK limitations; using only ResizePoint for visual feedback
     // Added caches to avoid full-series scans on each redraw
     private double cachedHigh = Double.NEGATIVE_INFINITY;
     private double cachedLow  = Double.POSITIVE_INFINITY;
@@ -155,6 +159,9 @@ public class BiotakTrigger extends Study {
         tab = sd.addTab("Display");
         grp = tab.addGroup("Display Options");
         grp.addRow(new BooleanDescriptor(S_SHOW_MIDPOINT, "Show Midpoint Line", true));
+        
+        // Quick Settings: Allow rapid toggling of TH Start Point from toolbar / popup editor
+        sd.addQuickSettings(S_START_POINT);
     }
 
     @Override
@@ -274,6 +281,40 @@ public class BiotakTrigger extends Study {
             drawHistoricalLines(startTime, endTime, finalHigh, finalLow);
             double midpointPrice = determineMidpointPrice(finalHigh, finalLow);
             Logger.debug("BiotakTrigger: Midpoint price calculated: " + midpointPrice);
+            // Handle interactive custom price point
+            String startTypeStr = getSettings().getString(S_START_POINT, THStartPointType.MIDPOINT.name());
+            THStartPointType spType = THStartPointType.valueOf(startTypeStr);
+            if (spType == THStartPointType.CUSTOM_PRICE) {
+                long anchorTime = endTime; // stick to last bar's time so point on right edge
+
+                // --- draggable point ---
+                if (customPricePoint == null) {
+                    customPricePoint = new ResizePoint(ResizeType.VERTICAL, true);
+                    // Enable MotiveWave's native magnet snapping
+                    customPricePoint.setSnapToLocation(true);
+                }
+                // Determine price to place the point: use saved custom price if available, otherwise last close price
+                double savedPrice = settings.getDouble(S_CUSTOM_PRICE, Double.NaN);
+                if (Double.isNaN(savedPrice) || savedPrice == 0) {
+                    savedPrice = series.getClose(totalBars - 1);
+                }
+                // No manual snapping here; rely on MotiveWave's native magnet when the user drags the point.
+
+                customPricePoint.setLocation(anchorTime, savedPrice);
+                addFigure(customPricePoint);
+
+                // --- numeric label ---
+                if (customPriceLabel == null) customPriceLabel = new PriceLabel();
+                String priceText = series.getInstrument().format(savedPrice);
+                customPriceLabel.setData(anchorTime, savedPrice, priceText);
+                addFigure(customPriceLabel);
+
+                // Additional visual labeling can be explored later if needed.
+            }
+            else {
+                customPricePoint = null; // not needed
+                // clear label if any
+            }
             
             drawMidpointLine(startTime, endTime, midpointPrice);
     
@@ -317,6 +358,27 @@ public class BiotakTrigger extends Study {
         } finally {
             // Restore previous log level
             Logger.setLogLevel(LogLevel.WARN);
+        }
+    }
+
+    @Override
+    public void onEndResize(ResizePoint rp, DrawContext ctx) {
+        if (rp != null && rp == customPricePoint) {
+            double newPrice = rp.getValue();
+            getSettings().setDouble(S_CUSTOM_PRICE, newPrice);
+        }
+    }
+
+    // Provide live feedback while dragging the custom price point
+    @Override
+    public void onResize(ResizePoint rp, DrawContext ctx) {
+        if (rp != null && rp == customPricePoint) {
+            var series = ctx.getDataContext().getDataSeries();
+            // Update price label live (value might be rounded by native snap)
+            if (customPriceLabel == null) customPriceLabel = new PriceLabel();
+            String txt = series.getInstrument().format(rp.getValue());
+            customPriceLabel.setData(rp.getTime(), rp.getValue(), txt);
+            addFigure(customPriceLabel);
         }
     }
 
@@ -1183,7 +1245,10 @@ public class BiotakTrigger extends Study {
         switch (startPointType) {
             case HISTORICAL_HIGH: return high;
             case HISTORICAL_LOW: return low;
-            case CUSTOM_PRICE: // NOTE: Custom price input is not implemented yet.
+            case CUSTOM_PRICE:
+                // Use stored custom price, fallback to midpoint if not set
+                double cp = getSettings().getDouble(S_CUSTOM_PRICE, 0);
+                return cp != 0 ? cp : (high + low) / 2.0;
             case MIDPOINT:
             default:
                 return (high + low) / 2.0;
@@ -1272,5 +1337,46 @@ public class BiotakTrigger extends Study {
         }
 
         return null; // Don't draw anything if neither structure nor trigger lines are enabled for this step
+    }
+
+    /**
+     * Small figure to draw price text right next to the custom price point.
+     */
+    private class PriceLabel extends Figure {
+        private long time;
+        private double price;
+        private String text;
+        private final Font font = new Font("Arial", Font.BOLD, 14);
+
+        private void setData(long time, double price, String text) {
+            this.time = time;
+            this.price = price;
+            this.text = text;
+        }
+
+        @Override
+        public void draw(Graphics2D gc, DrawContext ctx) {
+            if (time == 0 || text == null) return;
+            Point2D p = ctx.translate(new Coordinate(time, price));
+            gc.setFont(font);
+            FontMetrics fm = gc.getFontMetrics();
+            int textW = fm.stringWidth(text);
+            int textH = fm.getAscent();
+            int padding = 6;
+            Rectangle gb = ctx.getBounds();
+            int x = (int) (gb.getX() + gb.getWidth()/2 - textW/2); // center of chart
+            int y = (int) (p.getY() - textH/2); // exactly on the line
+            gc.setColor(new Color(0, 0, 0, 200)); // dark translucent background
+            gc.fillRoundRect(x - padding, y - textH, textW + 2 * padding, textH + padding, 10, 10);
+            gc.setColor(new Color(255, 215, 0)); // gold border
+            gc.drawRoundRect(x - padding, y - textH, textW + 2 * padding, textH + padding, 10, 10);
+            gc.setColor(Color.WHITE);
+            gc.drawString(text, x, y);
+        }
+
+        @Override
+        public boolean contains(double x, double y, DrawContext ctx) {
+            return false;
+        }
     }
 } 
