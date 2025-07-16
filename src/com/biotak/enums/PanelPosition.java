@@ -7,7 +7,8 @@ public enum PanelPosition {
     TOP_RIGHT("Top Right"),
     TOP_LEFT("Top Left"),
     BOTTOM_RIGHT("Bottom Right"),
-    BOTTOM_LEFT("Bottom Left");
+    BOTTOM_LEFT("Bottom Left"),
+    CENTER("Center");
 
     private final String value;
     

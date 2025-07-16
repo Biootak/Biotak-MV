@@ -91,7 +91,7 @@ public class BiotakTrigger extends Study {
         for(PanelPosition pos : PanelPosition.values()) {
             positionOptions.add(new NVP(pos.toString(), pos.name()));
         }
-        grp.addRow(new DiscreteDescriptor(S_PANEL_POSITION, "Panel Position", PanelPosition.BOTTOM_RIGHT.name(), positionOptions));
+        grp.addRow(new DiscreteDescriptor(S_PANEL_POSITION, "Panel Position", PanelPosition.CENTER.name(), positionOptions));
         
         // Add panel margin settings
         grp.addRow(new IntegerDescriptor(S_PANEL_MARGIN_X, "Panel Margin X", 10, 0, 100, 1));
@@ -218,35 +218,14 @@ public class BiotakTrigger extends Study {
                 finalLow = settings.getDouble(S_MANUAL_LOW, 0);
                 Logger.info("BiotakTrigger: Using manual high/low values. High: " + finalHigh + ", Low: " + finalLow);
             } else {
-                // More efficient automatic detection:
-                // We only need to check the last bar's high and low against the stored historical values.
-                double historicalHigh = settings.getDouble(S_HISTORICAL_HIGH, Double.MIN_VALUE);
-                double historicalLow = settings.getDouble(S_HISTORICAL_LOW, Double.MAX_VALUE);
-
-                double currentBarHigh = series.getHigh(index);
-                double currentBarLow = series.getLow(index);
-
-                boolean updated = false;
-                if (currentBarHigh > historicalHigh) {
-                    settings.setDouble(S_HISTORICAL_HIGH, currentBarHigh);
-                    historicalHigh = currentBarHigh;
-                    updated = true;
-                    Logger.info("BiotakTrigger: New historical high found and saved: " + historicalHigh);
+                // Compute true historical high/low from entire loaded series
+                finalHigh = Double.MIN_VALUE;
+                finalLow = Double.MAX_VALUE;
+                for (int i = 0; i < series.size(); i++) {
+                    finalHigh = Math.max(finalHigh, series.getHigh(i));
+                    finalLow = Math.min(finalLow, series.getLow(i));
                 }
-                if (currentBarLow < historicalLow) {
-                    settings.setDouble(S_HISTORICAL_LOW, currentBarLow);
-                    historicalLow = currentBarLow;
-                    updated = true;
-                    Logger.info("BiotakTrigger: New historical low found and saved: " + historicalLow);
-                }
-
-                if (!updated) {
-                    Logger.info("BiotakTrigger: Historical high/low remain unchanged.");
-                }
-                
-                finalHigh = historicalHigh;
-                finalLow = historicalLow;
-                Logger.info("BiotakTrigger: Using automatic historical values. High: " + finalHigh + ", Low: " + finalLow);
+                Logger.info("BiotakTrigger: Computed historical values from full series. High: " + finalHigh + ", Low: " + finalLow);
             }
             
             // Get the base price for TH calculation
@@ -262,7 +241,7 @@ public class BiotakTrigger extends Study {
             double midpointPrice = determineMidpointPrice(finalHigh, finalLow);
             
             drawMidpointLine(startTime, endTime, midpointPrice);
-    
+
             if (getSettings().getBoolean(S_SHOW_TH_LEVELS, true)) {
                 drawTHLevels(series, midpointPrice, finalHigh, finalLow, thBasePrice, startTime, endTime);
             }
@@ -785,6 +764,7 @@ public class BiotakTrigger extends Study {
                 case TOP_LEFT: x = bounds.x + marginX; y = bounds.y + marginY; break;
                 case TOP_RIGHT: x = bounds.x + bounds.width - panelWidth - marginX; y = bounds.y + marginY; break;
                 case BOTTOM_LEFT: x = bounds.x + marginX; y = bounds.y + bounds.height - panelHeight - marginY; break;
+                case CENTER: x = bounds.x + (bounds.width - panelWidth) / 2; y = bounds.y + (bounds.height - panelHeight) / 2; break;
                 default: x = bounds.x + bounds.width - panelWidth - marginX; y = bounds.y + bounds.height - panelHeight - marginY; break;
             }
             
@@ -940,18 +920,20 @@ public class BiotakTrigger extends Study {
             gc.setColor(Color.WHITE);
             gc.setFont(font);
             if (isTwoColumn) {
-                // Two-column layout
-                gc.drawString(lines.get(0), x + 15, currentY);
-                gc.drawString(lines.get(1), x + panelWidth / 2, currentY);
-                currentY += fm.getHeight() + spacing;
-
-                gc.drawString(lines.get(2), x + 15, currentY);
-                gc.drawString(lines.get(3), x + panelWidth / 2, currentY);
-                currentY += fm.getHeight() + spacing;
-
+                for(int i = 0; i < 4; i += 2) {
+                    String left = lines.get(i);
+                    String right = lines.get(i+1);
+                    int leftWidth = fm.stringWidth(left);
+                    int rightWidth = fm.stringWidth(right);
+                    int leftX = x + (panelWidth/2 - leftWidth)/2; // Removed extra padding for true centering
+                    int rightX = x + panelWidth/2 + (panelWidth/2 - rightWidth)/2;
+                    gc.drawString(left, leftX, currentY);
+                    gc.drawString(right, rightX, currentY);
+                    currentY += fm.getHeight() + spacing;
+                }
+                // Center the Live row
                 int liveWidth = fm.stringWidth(lines.get(4));
                 gc.drawString(lines.get(4), x + (panelWidth - liveWidth) / 2, currentY);
-
             } else {
                 // Centered single-column layout
                 for(String line : lines) {
