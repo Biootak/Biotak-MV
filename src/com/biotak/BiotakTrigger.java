@@ -180,8 +180,10 @@ public class BiotakTrigger extends Study {
                 boolean newState = !getSettings().getBoolean(S_PANEL_MINIMIZED, false);
                 getSettings().setBoolean(S_PANEL_MINIMIZED, newState);
                 infoPanel.setMinimized(newState);
-                clearFigures();
-                addFigure(infoPanel);
+                // Redraw all figures to prevent levels from disappearing
+                DataContext dc = ctx.getDataContext();
+                int lastIdx = dc.getDataSeries().size() - 1;
+                drawFigures(lastIdx, dc);
             }
             // Suppress any context menu inside panel completely
             return new MenuDescriptor(null, true);
@@ -195,8 +197,9 @@ public class BiotakTrigger extends Study {
             boolean newState = !getSettings().getBoolean(S_PANEL_MINIMIZED, false);
             getSettings().setBoolean(S_PANEL_MINIMIZED, newState);
             infoPanel.setMinimized(newState);
-            clearFigures();
-            addFigure(infoPanel);
+            DataContext dc = ctx.getDataContext();
+            int lastIdx = dc.getDataSeries().size() - 1;
+            drawFigures(lastIdx, dc);
         }
     }
 
