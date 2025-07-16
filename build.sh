@@ -1,41 +1,50 @@
 #!/bin/bash
 
-# Set the paths
-JAVA_HOME="C:/Program Files/Java/jdk-23"
+# -----------------------------
+# Simple build script for Biotak indicator
+# Usage:
+#   ./build.sh          -> Compile & package jar (normal deploy)
+#   ./build.sh dev      -> Compile classes into Extensions/dev for hot-reload
+# -----------------------------
+ 
+# Set the paths (edit if your paths differ)
+JAVA_HOME="/c/Program Files/Java/jdk-23"
 MWAVE_SDK_JAR="lib/mwave_sdk.jar"
 SRC_DIR="src"
-BUILD_DIR="build"
-EXTENSIONS_DIR="C:/Users/fatemeh/MotiveWave Extensions"
+BUILD_DIR="build/classes"
+EXT_DIR="/c/Users/fatemeh/MotiveWave Extensions"
 
-# Create build directory if it doesn't exist
-mkdir -p $BUILD_DIR
+MODE=${1:-jar}   # default jar, dev when arg = dev
 
-# Compile the code
+# Clean previous build
+rm -rf "$BUILD_DIR"
+mkdir -p "$BUILD_DIR"
+
+# Compile sources
 echo "Compiling Java files..."
-"$JAVA_HOME/bin/javac" -cp "$MWAVE_SDK_JAR" -d $BUILD_DIR $(find $SRC_DIR -name "*.java")
+"$JAVA_HOME/bin/javac" -cp "$MWAVE_SDK_JAR" -d "$BUILD_DIR" $(find "$SRC_DIR" -name "*.java") || { echo "Compilation failed"; exit 1; }
 
-if [ $? -ne 0 ]; then
-    echo "Compilation failed!"
-    exit 1
+echo "Compilation successful."
+
+if [[ "$MODE" == "dev" ]]; then
+  echo "Deploying class files to $EXT_DIR/dev ..."
+  rm -rf "$EXT_DIR/dev"
+  mkdir -p "$EXT_DIR/dev"
+  cp -r "$BUILD_DIR"/* "$EXT_DIR/dev/" || { echo "Copy failed"; exit 1; }
+  touch "$EXT_DIR/.last_updated"
+  echo "Build successful – dev classes copied."
+  exit 0
 fi
 
-# Create the JAR file
-echo "Creating JAR file..."
-cd $BUILD_DIR
-"$JAVA_HOME/bin/jar" cf biotak.jar com
+# Otherwise build jar
+JAR_OUT="build/biotak.jar"
+mkdir -p build
+cd "$BUILD_DIR" || exit 1
+"$JAVA_HOME/bin/jar" cf "../biotak.jar" com || { echo "Jar creation failed"; exit 1; }
+cd ../../
 
-if [ $? -ne 0 ]; then
-    echo "JAR creation failed!"
-    exit 1
-fi
+mkdir -p "$EXT_DIR/lib"
+cp "$JAR_OUT" "$EXT_DIR/lib/" || { echo "Copy jar failed"; exit 1; }
 
-# Copy the JAR to the MotiveWave Extensions directory
-echo "Copying JAR to MotiveWave Extensions directory..."
-cp biotak.jar "$EXTENSIONS_DIR"
-
-if [ $? -ne 0 ]; then
-    echo "Failed to copy JAR to Extensions directory!"
-    exit 1
-fi
-
-echo "Build and deployment complete!" 
+touch "$EXT_DIR/.last_updated"
+echo "Build successful – jar deployed to MotiveWave Extensions/lib." 
