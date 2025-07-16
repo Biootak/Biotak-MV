@@ -160,16 +160,28 @@ public class BiotakTrigger extends Study {
     @Override
     public MenuDescriptor onMenu(String plotName, Point loc, DrawContext ctx) {
         if (infoPanel != null && infoPanel.contains(loc.x, loc.y, ctx)) {
-            boolean isMinimized = getSettings().getBoolean(S_PANEL_MINIMIZED, false);
-            String menuItemText = isMinimized ? "Maximize Panel" : "Minimize Panel";
-            
-            MenuItem item = new MenuItem(menuItemText, () -> {
-                getSettings().setBoolean(S_PANEL_MINIMIZED, !isMinimized);
-            });
-            
-            return new MenuDescriptor(List.of(item), true);
+            if (infoPanel.isInMinimizeButton(loc.x, loc.y)) {
+                boolean newState = !getSettings().getBoolean(S_PANEL_MINIMIZED, false);
+                getSettings().setBoolean(S_PANEL_MINIMIZED, newState);
+                infoPanel.setMinimized(newState);
+                clearFigures();
+                addFigure(infoPanel);
+            }
+            // Suppress any context menu inside panel completely
+            return new MenuDescriptor(null, true);
         }
         return null;
+    }
+
+    // Toggle panel on any left-click (generic mouse down) within its bounds
+    public void onMouseDown(Point loc, DrawContext ctx) {
+        if (infoPanel != null && infoPanel.contains(loc.x, loc.y, ctx)) {
+            boolean newState = !getSettings().getBoolean(S_PANEL_MINIMIZED, false);
+            getSettings().setBoolean(S_PANEL_MINIMIZED, newState);
+            infoPanel.setMinimized(newState);
+            clearFigures();
+            addFigure(infoPanel);
+        }
     }
 
     @Override
@@ -689,6 +701,7 @@ public class BiotakTrigger extends Study {
         private double higherPatternTH, higherStructureTH;
         private boolean isMinimized;
         private Rectangle panelBounds;
+        private Rectangle minimizeButtonRect; // Stores bounds of minimize/restore button
         // Added constant to control vertical padding after separator lines inside the panel
         private static final int SEPARATOR_PADDING = 25; // was previously 15 – gives text more breathing room
         
@@ -726,6 +739,8 @@ public class BiotakTrigger extends Study {
             this.higherPatternTH = patternTH;
             this.higherStructureTH = structureTH;
         }
+
+        public void setMinimized(boolean value) { this.isMinimized = value; }
         
         @Override
         public void draw(Graphics2D gc, DrawContext ctx) {
@@ -797,13 +812,27 @@ public class BiotakTrigger extends Study {
             
             this.panelBounds = new Rectangle(x, y, panelWidth, panelHeight);
 
-            // Draw panel background and border
-            int alpha = 255 - transparency;
-            gc.setColor(new Color(25, 25, 30, alpha));
-            gc.fillRoundRect(x, y, panelWidth, panelHeight, 10, 10);
-            gc.setColor(new Color(80, 80, 90, alpha));
-            gc.setStroke(new BasicStroke(1.5f));
-            gc.drawRoundRect(x, y, panelWidth, panelHeight, 10, 10);
+            // Draw panel background (with transparency)
+            Color panelBg = new Color(30, 30, 30, transparency);
+            gc.setColor(panelBg);
+            gc.fillRoundRect(x, y, panelWidth, panelHeight, 8, 8);
+            // Draw minimize/restore button (top-right corner)
+            int btnSize = 12;
+            int btnPadding = 6;
+            int btnX = x + panelWidth - btnSize - btnPadding;
+            int btnY = y + btnPadding;
+            minimizeButtonRect = new Rectangle(btnX, btnY, btnSize, btnSize);
+            // Button background hover state not tracked; draw simple grey box
+            gc.setColor(Color.DARK_GRAY);
+            gc.fillRect(btnX, btnY, btnSize, btnSize);
+            gc.setColor(Color.WHITE);
+            // Draw symbol: '-' if not minimized, '+' if minimized
+            if (isMinimized) {
+                gc.drawLine(btnX + 3, btnY + btnSize/2, btnX + btnSize - 3, btnY + btnSize/2);
+                gc.drawLine(btnX + btnSize/2, btnY + 3, btnX + btnSize/2, btnY + btnSize - 3);
+            } else {
+                gc.drawLine(btnX + 3, btnY + btnSize/2, btnX + btnSize - 3, btnY + btnSize/2);
+            }
 
             // Draw title (centered)
             gc.setFont(titleFont);
@@ -825,6 +854,10 @@ public class BiotakTrigger extends Study {
             gc.setColor(origColor);
             gc.setFont(origFont);
             gc.setStroke(origStroke);
+        }
+
+        public boolean isInMinimizeButton(double x, double y) {
+            return minimizeButtonRect != null && minimizeButtonRect.contains(x, y);
         }
 
         private void drawHierarchySection(Graphics2D gc, int x, int y, int panelWidth, List<String> lines, 
