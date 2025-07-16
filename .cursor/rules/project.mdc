@@ -56,6 +56,7 @@ By following this hierarchy, development will be faster and the resulting code w
 ---
 
 #### Testing and Debugging
+<<<<<<< HEAD
 
 When the indicator does not work as expected in the MotiveWave environment or displays unexpected results, follow these steps sequentially to identify and resolve the issue:
 
@@ -137,6 +138,9 @@ By following this hierarchy, development will be faster and the resulting code w
 
 #### Testing and Debugging
 
+=======
+
+>>>>>>> 722ba07644c2ccf9e8a54d5e43c2003d41cb74f2
 When the indicator does not work as expected in the MotiveWave environment or displays unexpected results, follow these steps sequentially to identify and resolve the issue:
 
 1.  **Check MotiveWave Logs:**
