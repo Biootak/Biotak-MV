@@ -91,11 +91,7 @@ public class BiotakTrigger extends Study {
         for(PanelPosition pos : PanelPosition.values()) {
             positionOptions.add(new NVP(pos.toString(), pos.name()));
         }
-<<<<<<< HEAD
-        grp.addRow(new DiscreteDescriptor(S_PANEL_POSITION, "Panel Position", PanelPosition.CENTER.name(), positionOptions));
-=======
         grp.addRow(new DiscreteDescriptor(S_PANEL_POSITION, "Panel Position", PanelPosition.BOTTOM_RIGHT.name(), positionOptions));
->>>>>>> 722ba07644c2ccf9e8a54d5e43c2003d41cb74f2
         
         // Add panel margin settings
         grp.addRow(new IntegerDescriptor(S_PANEL_MARGIN_X, "Panel Margin X", 10, 0, 100, 1));
@@ -222,28 +218,13 @@ public class BiotakTrigger extends Study {
                 finalLow = settings.getDouble(S_MANUAL_LOW, 0);
                 Logger.info("BiotakTrigger: Using manual high/low values. High: " + finalHigh + ", Low: " + finalLow);
             } else {
-<<<<<<< HEAD
-                // Compute true historical high/low from entire loaded series
-                finalHigh = Double.MIN_VALUE;
-                finalLow = Double.MAX_VALUE;
-                for (int i = 0; i < series.size(); i++) {
-                    finalHigh = Math.max(finalHigh, series.getHigh(i));
-                    finalLow = Math.min(finalLow, series.getLow(i));
-                }
-                Logger.info("BiotakTrigger: Computed historical values from full series. High: " + finalHigh + ", Low: " + finalLow);
-            }
-            
-            // Get the base price for TH calculation
-            int totalBars = series.size();
-            double thBasePrice = series.getClose(totalBars - 2); // Use previous bar's close for TH calculation
-=======
                 // More efficient automatic detection:
                 // We only need to check the last bar's high and low against the stored historical values.
                 double historicalHigh = settings.getDouble(S_HISTORICAL_HIGH, Double.MIN_VALUE);
-                double historicalLow = settings.getDouble(S_HISTORICAL_LOW, Double.MAX_VALUE);
+                double historicalLow  = settings.getDouble(S_HISTORICAL_LOW , Double.MAX_VALUE);
 
                 double currentBarHigh = series.getHigh(index);
-                double currentBarLow = series.getLow(index);
+                double currentBarLow  = series.getLow(index);
 
                 boolean updated = false;
                 if (currentBarHigh > historicalHigh) {
@@ -264,29 +245,19 @@ public class BiotakTrigger extends Study {
                 }
                 
                 finalHigh = historicalHigh;
-                finalLow = historicalLow;
+                finalLow  = historicalLow;
                 Logger.info("BiotakTrigger: Using automatic historical values. High: " + finalHigh + ", Low: " + finalLow);
             }
-            
+
             // برای محاسبه TH از 200 کندل آخر استفاده می‌کنیم
-            int totalBars = series.size();
-            int lookback = Math.min(200, totalBars);
+            int totalBars    = series.size();
+            int lookback     = Math.min(200, totalBars);
             double thBasePrice = series.getClose(totalBars - 2); // Use previous bar's close for TH calculation.
->>>>>>> 722ba07644c2ccf9e8a54d5e43c2003d41cb74f2
             
             // Use the first and last bar times directly for line drawing
             long startTime = series.getStartTime(0);
             long endTime = series.getStartTime(totalBars - 1);
             
-<<<<<<< HEAD
-            // Draw the components of the indicator.
-            drawHistoricalLines(startTime, endTime, finalHigh, finalLow);
-            double midpointPrice = determineMidpointPrice(finalHigh, finalLow);
-            
-            drawMidpointLine(startTime, endTime, midpointPrice);
-
-            if (getSettings().getBoolean(S_SHOW_TH_LEVELS, true)) {
-=======
             Logger.debug("BiotakTrigger: Start time: " + startTime + ", End time: " + endTime);
     
             // Draw the components of the indicator.
@@ -298,7 +269,6 @@ public class BiotakTrigger extends Study {
     
             if (getSettings().getBoolean(S_SHOW_TH_LEVELS, true)) {
                 Logger.debug("BiotakTrigger: Drawing TH levels");
->>>>>>> 722ba07644c2ccf9e8a54d5e43c2003d41cb74f2
                 drawTHLevels(series, midpointPrice, finalHigh, finalLow, thBasePrice, startTime, endTime);
             }
             
@@ -708,11 +678,7 @@ public class BiotakTrigger extends Study {
         private Font titleFont;
         private PanelPosition position;
         private int marginX, marginY, transparency;
-<<<<<<< HEAD
         private boolean isSecondsBased; // Is the timeframe in seconds
-=======
-        private boolean isSecondsBased; // آیا تایم‌فریم ثانیه‌ای است
->>>>>>> 722ba07644c2ccf9e8a54d5e43c2003d41cb74f2
 
         // Main Values
         private double thValue, shortStep, longStep, atrValue, liveAtrValue;
@@ -725,11 +691,8 @@ public class BiotakTrigger extends Study {
         private double higherPatternTH, higherStructureTH;
         private boolean isMinimized;
         private Rectangle panelBounds;
-<<<<<<< HEAD
         // Added constant to control vertical padding after separator lines inside the panel
         private static final int SEPARATOR_PADDING = 25; // was previously 15 – gives text more breathing room
-=======
->>>>>>> 722ba07644c2ccf9e8a54d5e43c2003d41cb74f2
         
         public InfoPanel(String timeframe, double thValue, double pipMultiplier, 
                         Font contentFont, Font titleFont, PanelPosition position, 
@@ -778,10 +741,7 @@ public class BiotakTrigger extends Study {
             
             // Prepare content for each section
             List<String> coreLines = new ArrayList<>();
-<<<<<<< HEAD
             // Format numbers to match log output - use 1 decimal place for pips
-=======
->>>>>>> 722ba07644c2ccf9e8a54d5e43c2003d41cb74f2
             coreLines.add("TH: " + String.format("%.1f", thValue * pipMultiplier));
             coreLines.add("ATR: " + String.format("%.1f", atrValue * pipMultiplier));
             coreLines.add("SS: " + String.format("%.1f", shortStep * pipMultiplier));
@@ -815,7 +775,6 @@ public class BiotakTrigger extends Study {
             gc.setFont(contentFont);
             FontMetrics contentMetrics = gc.getFontMetrics();
             int contentLineHeight = contentMetrics.getHeight();
-<<<<<<< HEAD
             int lineSpacing = 7; // Increased line spacing for better readability
             
             int coreWidth = contentMetrics.stringWidth(coreLines.get(0)) + contentMetrics.stringWidth(coreLines.get(1)) + 50; // Increased horizontal spacing
@@ -827,18 +786,6 @@ public class BiotakTrigger extends Study {
             int coreSectionHeight = (3 * (contentLineHeight + lineSpacing)) + SEPARATOR_PADDING; // 3 rows of content
             int hierarchySectionHeight = isMinimized ? 0 : (hierarchyLines.size() * (contentLineHeight + lineSpacing)) + SEPARATOR_PADDING;
             int panelHeight = (titleHeight + SEPARATOR_PADDING) + coreSectionHeight + hierarchySectionHeight;
-=======
-            int lineSpacing = 7; // افزایش فاصله بین خطوط برای خوانایی بهتر
-            
-            int coreWidth = contentMetrics.stringWidth(coreLines.get(0)) + contentMetrics.stringWidth(coreLines.get(1)) + 50; // افزایش فاصله افقی
-            int hierarchyWidth = 0;
-            for(String line : hierarchyLines) hierarchyWidth = Math.max(hierarchyWidth, contentMetrics.stringWidth(line));
-            int panelWidth = Math.max(coreWidth, hierarchyWidth) + 40; // افزایش عرض پنل
-
-            int coreSectionHeight = (3 * (contentLineHeight + lineSpacing)) + 15; // 3 rows of content
-            int hierarchySectionHeight = isMinimized ? 0 : (hierarchyLines.size() * (contentLineHeight + lineSpacing)) + 15;
-            int panelHeight = (titleHeight + 15) + coreSectionHeight + hierarchySectionHeight;
->>>>>>> 722ba07644c2ccf9e8a54d5e43c2003d41cb74f2
 
             // Calculate panel position
             int x, y;
@@ -846,10 +793,7 @@ public class BiotakTrigger extends Study {
                 case TOP_LEFT: x = bounds.x + marginX; y = bounds.y + marginY; break;
                 case TOP_RIGHT: x = bounds.x + bounds.width - panelWidth - marginX; y = bounds.y + marginY; break;
                 case BOTTOM_LEFT: x = bounds.x + marginX; y = bounds.y + bounds.height - panelHeight - marginY; break;
-<<<<<<< HEAD
                 case CENTER: x = bounds.x + (bounds.width - panelWidth) / 2; y = bounds.y + (bounds.height - panelHeight) / 2; break;
-=======
->>>>>>> 722ba07644c2ccf9e8a54d5e43c2003d41cb74f2
                 default: x = bounds.x + bounds.width - panelWidth - marginX; y = bounds.y + bounds.height - panelHeight - marginY; break;
             }
             
@@ -893,11 +837,7 @@ public class BiotakTrigger extends Study {
             gc.setColor(new Color(60, 60, 70, 200));
             gc.setStroke(new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, new float[]{3.0f}, 0.0f));
             gc.drawLine(x + 10, currentY, x + panelWidth - 10, currentY);
-<<<<<<< HEAD
             currentY += SEPARATOR_PADDING; // Increased padding after separator line
-=======
-            currentY += 15; // Add some padding after the line
->>>>>>> 722ba07644c2ccf9e8a54d5e43c2003d41cb74f2
             
             // Section Content - Centered single-column layout with special handling for current timeframe
             gc.setFont(font);
@@ -1003,45 +943,26 @@ public class BiotakTrigger extends Study {
             gc.setColor(new Color(60, 60, 70, 200));
             gc.setStroke(new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, new float[]{3.0f}, 0.0f));
             gc.drawLine(x + 10, currentY, x + panelWidth - 10, currentY);
-<<<<<<< HEAD
             currentY += SEPARATOR_PADDING; // Increased padding after separator line
-=======
-            currentY += 15; // Add some padding after the line
->>>>>>> 722ba07644c2ccf9e8a54d5e43c2003d41cb74f2
             
             // Section Content
             gc.setColor(Color.WHITE);
             gc.setFont(font);
             if (isTwoColumn) {
-<<<<<<< HEAD
                 for(int i = 0; i < 4; i += 2) {
-                    String left = lines.get(i);
-                    String right = lines.get(i+1);
-                    int leftWidth = fm.stringWidth(left);
+                    String left  = lines.get(i);
+                    String right = lines.get(i + 1);
+                    int leftWidth  = fm.stringWidth(left);
                     int rightWidth = fm.stringWidth(right);
-                    int leftX = x + (panelWidth/2 - leftWidth)/2; // Removed extra padding for true centering
-                    int rightX = x + panelWidth/2 + (panelWidth/2 - rightWidth)/2;
-                    gc.drawString(left, leftX, currentY);
+                    int leftX  = x + (panelWidth / 2 - leftWidth)  / 2;
+                    int rightX = x + panelWidth / 2 + (panelWidth / 2 - rightWidth) / 2;
+                    gc.drawString(left , leftX , currentY);
                     gc.drawString(right, rightX, currentY);
                     currentY += fm.getHeight() + spacing;
                 }
                 // Center the Live row
                 int liveWidth = fm.stringWidth(lines.get(4));
                 gc.drawString(lines.get(4), x + (panelWidth - liveWidth) / 2, currentY);
-=======
-                // Two-column layout
-                gc.drawString(lines.get(0), x + 15, currentY);
-                gc.drawString(lines.get(1), x + panelWidth / 2, currentY);
-                currentY += fm.getHeight() + spacing;
-
-                gc.drawString(lines.get(2), x + 15, currentY);
-                gc.drawString(lines.get(3), x + panelWidth / 2, currentY);
-                currentY += fm.getHeight() + spacing;
-
-                int liveWidth = fm.stringWidth(lines.get(4));
-                gc.drawString(lines.get(4), x + (panelWidth - liveWidth) / 2, currentY);
-
->>>>>>> 722ba07644c2ccf9e8a54d5e43c2003d41cb74f2
             } else {
                 // Centered single-column layout
                 for(String line : lines) {
@@ -1092,61 +1013,41 @@ public class BiotakTrigger extends Study {
                         marginX, marginY, transparency, 
                         shortStep, longStep, atrValue, liveAtrValue, isSecondsBased, isMinimized);
 
-<<<<<<< HEAD
-        // Calculate fractal values the same way as in the logCalculationTable method
-        double timeframePercentage = TimeframeUtil.getTimeframePercentage(barSize);
-        double structureValue = thValue; // Structure value is the TH value for current timeframe
+        // Calculate fractal TH values for hierarchy display
         double basePrice = series.getClose(series.size() - 2);
-        
-        // Pattern timeframe calculations (current level)
+
+        // Pattern timeframe (one level down)
         BarSize patternBarSize = TimeframeUtil.getPatternBarSize(barSize);
-        double patternTimeframePercentage = TimeframeUtil.getTimeframePercentage(patternBarSize);
-        double patternValue = structureValue / 2.0;
-        double patternTH = THCalculator.calculateTHPoints(instrument, basePrice, patternTimeframePercentage) * instrument.getTickSize();
-        
-        // Trigger timeframe calculations (lower level)
+        double patternTFPercent = TimeframeUtil.getTimeframePercentage(patternBarSize);
+        double patternTH = THCalculator.calculateTHPoints(instrument, basePrice, patternTFPercent) * instrument.getTickSize();
+
+        // Trigger timeframe (two levels down)
         BarSize triggerBarSize = TimeframeUtil.getTriggerBarSize(barSize);
-        double triggerTimeframePercentage = TimeframeUtil.getTimeframePercentage(triggerBarSize);
-        double triggerValue = structureValue / 4.0;
-        double triggerTH = THCalculator.calculateTHPoints(instrument, basePrice, triggerTimeframePercentage) * instrument.getTickSize();
-        
-        // Structure timeframe calculations (higher timeframe)
-        BarSize structureBarSize = TimeframeUtil.getStructureBarSize(barSize);
-        double structureTimeframePercentage = TimeframeUtil.getTimeframePercentage(structureBarSize);
-        double structureTH = THCalculator.calculateTHPoints(instrument, basePrice, structureTimeframePercentage) * instrument.getTickSize();
-        
-        // Calculate the higher pattern TH correctly (pattern of the higher timeframe)
-        BarSize higherPatternBarSize = TimeframeUtil.getPatternBarSize(structureBarSize);
-        double higherPatternTimeframePercentage = TimeframeUtil.getTimeframePercentage(higherPatternBarSize);
-        double higherPatternTH = THCalculator.calculateTHPoints(instrument, basePrice, higherPatternTimeframePercentage) * instrument.getTickSize();
+        double triggerTFPercent = TimeframeUtil.getTimeframePercentage(triggerBarSize);
+        double triggerTH = THCalculator.calculateTHPoints(instrument, basePrice, triggerTFPercent) * instrument.getTickSize();
 
         infoPanel.setDownwardFractalInfo(
-            formatTimeframeString(patternBarSize), 
-            formatTimeframeString(triggerBarSize), 
-            patternTH, 
+            formatTimeframeString(patternBarSize),
+            formatTimeframeString(triggerBarSize),
+            patternTH,
             triggerTH
         );
 
+        // Structure timeframe (one level up) and its pattern
+        BarSize structureBarSize = TimeframeUtil.getStructureBarSize(barSize);
+        double structureTFPercent = TimeframeUtil.getTimeframePercentage(structureBarSize);
+        double structureTH = THCalculator.calculateTHPoints(instrument, basePrice, structureTFPercent) * instrument.getTickSize();
+
+        BarSize higherPatternBarSize = TimeframeUtil.getPatternBarSize(structureBarSize);
+        double higherPatternPercent = TimeframeUtil.getTimeframePercentage(higherPatternBarSize);
+        double higherPatternTH = THCalculator.calculateTHPoints(instrument, basePrice, higherPatternPercent) * instrument.getTickSize();
+
         infoPanel.setUpwardFractalInfo(
-            formatTimeframeString(higherPatternBarSize), 
-            formatTimeframeString(structureBarSize), 
-            higherPatternTH, 
+            formatTimeframeString(higherPatternBarSize),
+            formatTimeframeString(structureBarSize),
+            higherPatternTH,
             structureTH
         );
-=======
-        // Get fractal info
-        BarSize patternBarSize = TimeframeUtil.getPatternBarSize(barSize);
-        BarSize triggerBarSize = TimeframeUtil.getTriggerBarSize(barSize);
-        double patternTH = TimeframeUtil.getTimeframePercentage(patternBarSize) * (instrument.getHigh() - instrument.getLow());
-        double triggerTH = TimeframeUtil.getTimeframePercentage(triggerBarSize) * (instrument.getHigh() - instrument.getLow());
-
-        infoPanel.setDownwardFractalInfo(formatTimeframeString(patternBarSize), formatTimeframeString(triggerBarSize), patternTH, triggerTH);
-
-        BarSize structureBarSize = TimeframeUtil.getStructureBarSize(barSize);
-        double structureTH = TimeframeUtil.getTimeframePercentage(structureBarSize) * (instrument.getHigh() - instrument.getLow());
-
-        infoPanel.setUpwardFractalInfo(formatTimeframeString(patternBarSize), formatTimeframeString(structureBarSize), patternTH, structureTH);
->>>>>>> 722ba07644c2ccf9e8a54d5e43c2003d41cb74f2
 
         addFigure(this.infoPanel);
     }
@@ -1174,47 +1075,10 @@ public class BiotakTrigger extends Study {
      */
     private double getPipMultiplier(Instrument instrument) {
         if (instrument == null) return 10.0; // Default multiplier
-<<<<<<< HEAD
-
-        // For Forex and most other instruments
-        double pipMultiplier = 10.0; // Default multiplier of 10
-=======
->>>>>>> 722ba07644c2ccf9e8a54d5e43c2003d41cb74f2
         
         String symbol = instrument.getSymbol();
         double tickSize = instrument.getTickSize();
         
-<<<<<<< HEAD
-        // Check if this is a special case based on symbol and tickSize
-        if (tickSize <= 0.0001 && (
-                symbol.contains("JPY") || 
-                symbol.contains("XAU") || 
-                symbol.contains("GOLD") || 
-                symbol.contains("XAG") || 
-                symbol.contains("SILVER"))) {
-            pipMultiplier = 100.0;
-        } else if (tickSize <= 0.0001) {
-            // Standard Forex with 5 decimal places
-            pipMultiplier = 10000.0;
-        } else if (tickSize <= 0.001) {
-            // Forex with 3 decimal places (e.g., JPY pairs)
-            pipMultiplier = 1000.0;
-        } else if (tickSize <= 0.01) {
-            // Other instruments with 2 decimal places
-            pipMultiplier = 100.0;
-        } else if (tickSize <= 0.1) {
-            // For instruments with 1 decimal place
-            pipMultiplier = 10.0;
-        } else {
-            // For whole number prices
-            pipMultiplier = 1.0;
-        }
-        
-        // Log the pip multiplier for debugging
-        Logger.debug("Pip multiplier for " + symbol + " with tick size " + tickSize + ": " + pipMultiplier);
-        
-        return pipMultiplier;
-=======
         // Determine number of decimal places in tick size
         int decimalPlaces = 0;
         if (tickSize > 0) {
@@ -1250,7 +1114,6 @@ public class BiotakTrigger extends Study {
             case 5: return 10.0;   // 5 decimal places (some brokers)
             default: return 10.0;  // Default
         }
->>>>>>> 722ba07644c2ccf9e8a54d5e43c2003d41cb74f2
     }
 
     /**
