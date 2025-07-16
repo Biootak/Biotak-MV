@@ -54,6 +54,9 @@ public class BiotakTrigger extends Study {
     public static final String S_PANEL_MINIMIZED = "panelMinimized";
 
     private InfoPanel infoPanel;
+    // Added caches to avoid full-series scans on each redraw
+    private double cachedHigh = Double.NEGATIVE_INFINITY;
+    private double cachedLow  = Double.POSITIVE_INFINITY;
 
     public BiotakTrigger() {
         super();
@@ -174,6 +177,12 @@ public class BiotakTrigger extends Study {
         DataSeries series = ctx.getDataSeries();
         if (!series.isBarComplete(index)) return;
         
+        // Incrementally update cached high/low so we don't need to rescan the whole series.
+        double barHigh = series.getHigh(index);
+        double barLow  = series.getLow(index);
+        if (barHigh > cachedHigh) cachedHigh = barHigh;
+        if (barLow  < cachedLow)  cachedLow  = barLow;
+        
         // Only log and draw figures for the first and last bars to reduce excessive logging
         boolean isFirstBar = (index == 0);
         boolean isLastBar = (index == series.size() - 1);
@@ -218,14 +227,24 @@ public class BiotakTrigger extends Study {
                 finalLow = settings.getDouble(S_MANUAL_LOW, 0);
                 Logger.info("BiotakTrigger: Using manual high/low values. High: " + finalHigh + ", Low: " + finalLow);
             } else {
-                // Calculate high/low on the fly from the entire loaded series
-                finalHigh = Double.NEGATIVE_INFINITY;
-                finalLow  = Double.POSITIVE_INFINITY;
-                for (int i = 0; i < series.size(); i++) {
-                    finalHigh = Math.max(finalHigh, series.getHigh(i));
-                    finalLow  = Math.min(finalLow, series.getLow(i));
+                if (index == 0) {
+                    // Calculate high/low on the fly from the entire loaded series (only once on very first bar)
+                    finalHigh = Double.NEGATIVE_INFINITY;
+                    finalLow  = Double.POSITIVE_INFINITY;
+                    for (int i = 0; i < series.size(); i++) {
+                        finalHigh = Math.max(finalHigh, series.getHigh(i));
+                        finalLow  = Math.min(finalLow, series.getLow(i));
+                    }
+                    // Seed the cache for subsequent fast access
+                    cachedHigh = finalHigh;
+                    cachedLow  = finalLow;
+                    Logger.info("BiotakTrigger: Historical High/Low calculated from loaded data (initial scan). High: " + finalHigh + ", Low: " + finalLow);
+                } else {
+                    // Use cached values, already updated incrementally in calculate()
+                    finalHigh = cachedHigh;
+                    finalLow  = cachedLow;
+                    Logger.debug("BiotakTrigger: Using cached High/Low. High: " + finalHigh + ", Low: " + finalLow);
                 }
-                Logger.info("BiotakTrigger: Historical High/Low calculated from loaded data. High: " + finalHigh + ", Low: " + finalLow);
             }
 
             // برای محاسبه TH از 200 کندل آخر استفاده می‌کنیم
