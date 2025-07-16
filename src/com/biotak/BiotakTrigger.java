@@ -218,35 +218,14 @@ public class BiotakTrigger extends Study {
                 finalLow = settings.getDouble(S_MANUAL_LOW, 0);
                 Logger.info("BiotakTrigger: Using manual high/low values. High: " + finalHigh + ", Low: " + finalLow);
             } else {
-                // More efficient automatic detection:
-                // We only need to check the last bar's high and low against the stored historical values.
-                double historicalHigh = settings.getDouble(S_HISTORICAL_HIGH, Double.MIN_VALUE);
-                double historicalLow  = settings.getDouble(S_HISTORICAL_LOW , Double.MAX_VALUE);
-
-                double currentBarHigh = series.getHigh(index);
-                double currentBarLow  = series.getLow(index);
-
-                boolean updated = false;
-                if (currentBarHigh > historicalHigh) {
-                    settings.setDouble(S_HISTORICAL_HIGH, currentBarHigh);
-                    historicalHigh = currentBarHigh;
-                    updated = true;
-                    Logger.info("BiotakTrigger: New historical high found and saved: " + historicalHigh);
+                // Calculate high/low on the fly from the entire loaded series
+                finalHigh = Double.NEGATIVE_INFINITY;
+                finalLow  = Double.POSITIVE_INFINITY;
+                for (int i = 0; i < series.size(); i++) {
+                    finalHigh = Math.max(finalHigh, series.getHigh(i));
+                    finalLow  = Math.min(finalLow, series.getLow(i));
                 }
-                if (currentBarLow < historicalLow) {
-                    settings.setDouble(S_HISTORICAL_LOW, currentBarLow);
-                    historicalLow = currentBarLow;
-                    updated = true;
-                    Logger.info("BiotakTrigger: New historical low found and saved: " + historicalLow);
-                }
-
-                if (!updated) {
-                    Logger.info("BiotakTrigger: Historical high/low remain unchanged.");
-                }
-                
-                finalHigh = historicalHigh;
-                finalLow  = historicalLow;
-                Logger.info("BiotakTrigger: Using automatic historical values. High: " + finalHigh + ", Low: " + finalLow);
+                Logger.info("BiotakTrigger: Historical High/Low calculated from loaded data. High: " + finalHigh + ", Low: " + finalLow);
             }
 
             // برای محاسبه TH از 200 کندل آخر استفاده می‌کنیم
@@ -1058,13 +1037,38 @@ public class BiotakTrigger extends Study {
     private String formatTimeframeString(BarSize barSize) {
         if (barSize == null) return "N/A";
         
-        // For seconds-based timeframes, directly use the interval to avoid parsing errors.
-        if (barSize.getIntervalType() == Enums.IntervalType.SECOND) {
-            return "S" + barSize.getInterval();
+        // Convert barSize to total minutes first
+        int interval = barSize.getInterval();
+        long totalMinutes;
+        switch (barSize.getIntervalType()) {
+            case SECOND:
+                // keep seconds separately if less than 60
+                if (interval < 60) return interval + "s";
+                totalMinutes = interval / 60;
+                break;
+            case MINUTE: totalMinutes = interval; break;
+            case HOUR:   totalMinutes = interval * 60L; break;
+            case DAY:    totalMinutes = interval * 24L * 60L; break;
+            case WEEK:   totalMinutes = interval * 7L * 24L * 60L; break;
+            default:     totalMinutes = interval; break;
         }
-        
-        // For all other timeframes, use the standard string representation.
-        return TimeframeUtil.getStandardTimeframeString(barSize);
+
+        // Build human-readable composite string in y w d h m
+        long minutes = totalMinutes;
+        long years  = minutes / (365L*24*60); minutes %= 365L*24*60;
+        long months = minutes / (30L*24*60); minutes %= 30L*24*60;
+        long weeks  = minutes / (7L*24*60);  minutes %= 7L*24*60;
+        long days   = minutes / (24*60);     minutes %= 24*60;
+        long hours  = minutes / 60;          minutes %= 60;
+
+        StringBuilder sb = new StringBuilder();
+        if (years  > 0) sb.append(years ).append("Y ");
+        if (months > 0) sb.append(months).append("M ");
+        if (weeks  > 0) sb.append(weeks ).append("W ");
+        if (days   > 0) sb.append(days  ).append("D ");
+        if (hours  > 0) sb.append(hours ).append("H ");
+        if (minutes> 0 || sb.length()==0) sb.append(minutes).append("m");
+        return sb.toString().trim();
     }
     
     /**
