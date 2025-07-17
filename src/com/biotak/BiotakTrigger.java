@@ -61,11 +61,15 @@ public class BiotakTrigger extends Study {
     private InfoPanel infoPanel;
     private ResizePoint customPricePoint; // draggable point for custom price
     private PriceLabel customPriceLabel; // displays the numeric value next to the custom price line
+    private Line customPriceLine; // horizontal line for custom price anchor
     // Label was not added due to SDK limitations; using only ResizePoint for visual feedback
     // Added caches to avoid full-series scans on each redraw
     private double cachedHigh = Double.NEGATIVE_INFINITY;
     private double cachedLow  = Double.POSITIVE_INFINITY;
     private boolean extremesInitialized = false; // ensures we load stored extremes once
+
+    // Stores SS/LS base TH when lock option is enabled
+    private double lockedBaseTH = Double.NaN;
 
     private static final long LOG_INTERVAL_MS = 60_000;      // 1 minute
     private static long lastCalcTableLogTime = 0;             // Tracks last time the calc table was printed
@@ -87,6 +91,7 @@ public class BiotakTrigger extends Study {
         
         grp = tab.addGroup("Visual");
         grp.addRow(new FontDescriptor(S_FONT, "Label Font", defaults.getFont()));
+        grp.addRow(new PathDescriptor(S_CUSTOM_PRICE_PATH, "Custom Price Line", X11Colors.GOLD, 2.0f, new float[]{2f,2f}, true, false, false));
 
         grp = tab.addGroup("Historical Lines");
         grp.addRow(new BooleanDescriptor(S_SHOW_HIGH_LINE, "Show High Line", true));
@@ -185,10 +190,13 @@ public class BiotakTrigger extends Study {
             basisOptions.add(new NVP(b.toString(), b.name()));
         }
         grp.addRow(new DiscreteDescriptor(S_SSLS_BASIS, "SS/LS Timeframe", SSLSBasisType.STRUCTURE.name(), basisOptions));
+        grp.addRow(new BooleanDescriptor(Constants.S_LOCK_SSLS_LEVELS, "Lock SS/LS Levels", false));
         // Quick settings could be added later if desired
         
         // Quick Settings: Allow rapid toggling of TH Start Point from toolbar / popup editor
         sd.addQuickSettings(S_START_POINT);
+        // Quick Settings toolbar icons for rapid access
+        sd.addQuickSettings(S_STEP_MODE, S_SSLS_BASIS, S_LS_FIRST, Constants.S_LOCK_SSLS_LEVELS);
     }
 
     @Override
@@ -351,10 +359,10 @@ public class BiotakTrigger extends Study {
     
             // Determine selected step mode once
             StepCalculationMode currentMode = StepCalculationMode.valueOf(getSettings().getString(S_STEP_MODE, StepCalculationMode.TH_STEP.name()));
-
+    
             // Draw the components of the indicator.
             if (currentMode == StepCalculationMode.TH_STEP) {
-                drawHistoricalLines(startTime, endTime, finalHigh, finalLow);
+            drawHistoricalLines(startTime, endTime, finalHigh, finalLow);
             }
             double midpointPrice;
             if (currentMode == StepCalculationMode.SS_LS_STEP) {
@@ -397,6 +405,11 @@ public class BiotakTrigger extends Study {
                 customPriceLabel.setData(anchorTime, savedPrice, priceText);
                 addFigure(customPriceLabel);
 
+                // Draw/update custom price horizontal line
+                PathInfo cpPath = getSettings().getPath(S_CUSTOM_PRICE_PATH);
+                customPriceLine = new Line(new Coordinate(startTime, savedPrice), new Coordinate(endTime, savedPrice), cpPath);
+                addFigure(customPriceLine);
+
                 // Additional visual labeling can be explored later if needed.
             }
             else {
@@ -406,7 +419,7 @@ public class BiotakTrigger extends Study {
             
             // Draw midpoint line only if not in SS/LS mode (where custom price acts as anchor)
             if (currentMode == StepCalculationMode.TH_STEP) {
-                drawMidpointLine(startTime, endTime, midpointPrice);
+            drawMidpointLine(startTime, endTime, midpointPrice);
             }
     
             // Step lines (TH or SS/LS) will be drawn below once all required values are calculated.
@@ -456,19 +469,65 @@ public class BiotakTrigger extends Study {
                     drawTHLevels(series, midpointPrice, finalHigh, finalLow, thBasePrice, startTime, endTime);
                 }
             } else {
-                SSLSBasisType basis = SSLSBasisType.valueOf(getSettings().getString(S_SSLS_BASIS, SSLSBasisType.STRUCTURE.name()));
-
-                double baseTH;
-                switch (basis) {
-                    case PATTERN:  baseTH = patternValue;  break;
-                    case TRIGGER:  baseTH = triggerValue;  break;
-                    case AUTO:     baseTH = patternValue;  break; // simple heuristic for now
-                    case STRUCTURE:
-                    default:       baseTH = structureValue; break;
+                // انتخاب مبنای TH بر اساس تنظیم کاربر
+                String basisStr = getSettings().getString(S_SSLS_BASIS, SSLSBasisType.STRUCTURE.name());
+                SSLSBasisType basis;
+                try {
+                    basis = SSLSBasisType.valueOf(basisStr);
+                } catch (IllegalArgumentException e) {
+                    // Legacy value (e.g., HIGHER_STRUCTURE) or corrupt entry – fall back
+                    basis = SSLSBasisType.STRUCTURE;
+                    getSettings().setString(S_SSLS_BASIS, SSLSBasisType.STRUCTURE.name());
                 }
 
-                double ssValue = baseTH * 1.5;
-                double lsValue = baseTH * 2.0;
+                // Lock behaviour: if user enabled lock, we calculate baseTH only once per study session
+                boolean lockLevels = getSettings().getBoolean(Constants.S_LOCK_SSLS_LEVELS, false);
+
+                double baseTHForSession;
+
+                if (lockLevels && !Double.isNaN(lockedBaseTH)) {
+                    // Already locked, use stored value
+                    baseTHForSession = lockedBaseTH;
+                } else {
+                    double baseTHCalc;
+                    switch (basis) {
+                        case PATTERN:
+                            baseTHCalc = patternValue;
+                            break;
+                        case TRIGGER:
+                            baseTHCalc = triggerValue;
+                            break;
+                        case AUTO:
+                            // حالت Auto (هوشمند): بزرگ‌ترین مبنایی را انتخاب می‌کنیم که Long-Step آن (۲ × BaseTH)
+                            // در هر دو سمت میدلاین جا شود تا سطوح قابل رؤیت باقی بمانند.
+                            double rangeAbove  = finalHigh   - midpointPrice;
+                            double rangeBelow  = midpointPrice - finalLow;
+                            double allowedRange = Math.min(rangeAbove, rangeBelow);
+
+                            // Candidates ordered large→small
+                            double[] candidates = new double[] { structureValue, patternValue, triggerValue };
+                            baseTHCalc = triggerValue; // default smallest
+                            for (double candidate : candidates) {
+                                if (2.0 * candidate <= allowedRange) {
+                                    baseTHCalc = candidate;
+                                    break;
+                                }
+                            }
+                            break;
+                        case STRUCTURE:
+                        default:
+                            baseTHCalc = structureValue;
+                    }
+
+                    baseTHForSession = baseTHCalc;
+
+                    if (lockLevels) {
+                        lockedBaseTH = baseTHForSession; // store for future calls
+                    }
+                }
+
+                double ssValue = baseTHForSession * 1.5;
+                double lsValue = baseTHForSession * 2.0;
                 boolean drawLsFirst = getSettings().getBoolean(S_LS_FIRST, true);
 
                 drawSSLSLevels(series, midpointPrice, finalHigh, finalLow, ssValue, lsValue, drawLsFirst, startTime, endTime);
@@ -497,6 +556,15 @@ public class BiotakTrigger extends Study {
             String txt = series.getInstrument().format(rp.getValue());
             customPriceLabel.setData(rp.getTime(), rp.getValue(), txt);
             addFigure(customPriceLabel);
+
+            // خط افقی را در لحظه جابه‌جا می‌کنیم تا بازخورد بصری فوری باشد.
+            DataSeries dsLive = ctx.getDataContext().getDataSeries();
+            long startT = dsLive.getStartTime(0);
+            long endT = dsLive.getStartTime(dsLive.size()-1);
+            PathInfo cpPathLive = getSettings().getPath(S_CUSTOM_PRICE_PATH);
+            if (customPriceLine != null) removeFigure(customPriceLine);
+            customPriceLine = new Line(new Coordinate(startT, rp.getValue()), new Coordinate(endT, rp.getValue()), cpPathLive);
+            addFigure(customPriceLine);
         }
     }
 

@@ -1,9 +1,9 @@
 package com.biotak.enums;
 
 /**
- * Defines which step-drawing algorithm the indicator should use.
- * TH_STEP  – classic equal-distance TH increments.
- * SS_LS_STEP – variable increments alternating between Short-Step (SS) and Long-Step (LS).
+ * Step calculation modes for level drawing.
+ * TH_STEP  – equal-distance levels based on TH (classic).
+ * SS_LS_STEP – alternating levels using Short Step (SS) and Long Step (LS).
  */
 public enum StepCalculationMode {
     TH_STEP("TH-Based"),
@@ -11,6 +11,9 @@ public enum StepCalculationMode {
 
     private final String value;
     StepCalculationMode(String value) { this.value = value; }
+
     @Override
-    public String toString() { return value; }
+    public String toString() {
+        return value;
+    }
 } 
