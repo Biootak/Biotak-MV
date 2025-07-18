@@ -63,6 +63,10 @@ public class BiotakTrigger extends Study {
     // (Leg Ruler constants removed)
     public static final String S_SHOW_RULER = "showRuler";
     public static final String S_RULER_PATH = "rulerPath";
+    public static final String S_RULER_TEXT_COLOR = "rulerTextColor";
+    public static final String S_RULER_BG_COLOR   = "rulerBgColor";
+    public static final String S_RULER_BORDER_COLOR = "rulerBorderColor";
+    public static final String S_LOG_LEVEL = "logLevel";
     public static final String S_RULER_EXT_RIGHT = "rulerExtRight";
     public static final String S_RULER_EXT_LEFT = "rulerExtLeft";
     public static final String S_RULER_START = "rulerStart";
@@ -101,6 +105,12 @@ public class BiotakTrigger extends Study {
 
     // Holds comprehensive M values for ruler matching built during drawFigures()
     private java.util.Map<String, Double> fullMValues = new java.util.HashMap<>();
+    // Holds 3×ATR values (price) for ruler comparison
+    private java.util.Map<String, Double> fullATRValues = new java.util.HashMap<>();
+
+    // Base values for ATR scaling (current timeframe)
+    private int atrStructureMin = 0;          // minutes of current structure timeframe
+    private double atrStructurePrice = Double.NaN; // 1× ATR price (not multiplied by 3)
 
     private static final long LOG_INTERVAL_MS = 60_000;      // 1 minute
     private static long lastCalcTableLogTime = 0;             // Tracks last time the calc table was printed
@@ -255,6 +265,13 @@ public class BiotakTrigger extends Study {
         grp.addRow(new PathDescriptor(S_RULER_PATH, "Ruler", X11Colors.GREEN, 1.0f, null, true, false, false));
         grp.addRow(new BooleanDescriptor(S_RULER_EXT_RIGHT, "Extend Right", false));
         grp.addRow(new BooleanDescriptor(S_RULER_EXT_LEFT, "Extend Left", false));
+        grp.addRow(new ColorDescriptor(S_RULER_TEXT_COLOR, "Ruler Text Color", java.awt.Color.BLACK));
+        grp.addRow(new ColorDescriptor(S_RULER_BG_COLOR,   "Ruler Background Color", new java.awt.Color(255,255,255)));
+        grp.addRow(new ColorDescriptor(S_RULER_BORDER_COLOR,"Ruler Border Color", java.awt.Color.GRAY));
+        // Logging
+        java.util.List<NVP> levelOpts = new java.util.ArrayList<>();
+        for (Logger.LogLevel lv : Logger.LogLevel.values()) levelOpts.add(new NVP(lv.name(), lv.name()));
+        grp.addRow(new DiscreteDescriptor(S_LOG_LEVEL, "Log Level", Logger.LogLevel.INFO.name(), levelOpts));
     }
 
     @Override
@@ -315,6 +332,14 @@ public class BiotakTrigger extends Study {
 
     @Override
     public void calculate(int index, DataContext ctx) {
+        // Sync logger level once per bar zero
+        if (index == 0) {
+            try {
+                Logger.LogLevel lvl = Logger.LogLevel.valueOf(getSettings().getString(S_LOG_LEVEL, Logger.LogLevel.INFO.name()));
+                Logger.setLogLevel(lvl);
+            } catch (IllegalArgumentException ignore) { }
+        }
+
         DataSeries series = ctx.getDataSeries();
         if (!series.isBarComplete(index)) return;
 
@@ -597,19 +622,7 @@ public class BiotakTrigger extends Study {
             // store to field for ruler access
             this.fullMValues = mMap;
  
-            // Debug: log size of comprehensive M map
-            Logger.info("[MMap] size=" + mMap.size());
-
-            // Debug: list entries with M value in pips for quick inspection
-            double tickDbg = ctx.getInstrument().getTickSize();
-            StringBuilder sbM = new StringBuilder("[MMap] entries -> ");
-            mMap.entrySet().stream()
-                .sorted(java.util.Map.Entry.comparingByKey())
-                .forEach(e -> {
-                    long pipsVal = Math.round(e.getValue() / tickDbg);
-                    sbM.append(e.getKey()).append("=").append(pipsVal).append("p, ");
-                });
-            Logger.info(sbM.toString());
+            // (Debug logging for M map removed in release version)
 
             // ---------------------- FRACTAL METRICS & PANEL ----------------------
             double[] fractalValues = FractalCalculator.calculateFractalValues(currBarSize, thValue);
@@ -625,6 +638,46 @@ public class BiotakTrigger extends Study {
             double atrValue     = FractalCalculator.calculateATR(series);
             double liveAtrValue = FractalCalculator.calculateLiveATR(series);
             double pipMultiplier = FractalCalculator.getPipMultiplier(series.getInstrument());
+
+            // --------------------- BUILD 3×ATR MAP (after ATR value ready) ---------------------
+            java.util.Map<String, Double> atrMap = new java.util.HashMap<>();
+            // minutes of structure timeframe
+            int tmpMin = parseMinutesFromLabel(tfLabels[0]);
+            if (tmpMin <= 0) {
+                tmpMin = (int)(series.getBarSize().getInterval() * switch(series.getBarSize().getIntervalType()){
+                    case SECOND -> 1.0/60.0;
+                    case MINUTE -> 1;
+                    case HOUR   -> 60;
+                    case DAY    -> 1440;
+                    case WEEK   -> 10080;
+                    default -> 1;
+                });
+            }
+            final int structureMin = tmpMin;
+
+            double structureATR_Price = atrValue;
+
+            java.util.function.BiConsumer<Integer,String> addAtrEntry = (mins,label)->{
+                if (label==null||label.isEmpty()) return;
+                if (atrMap.containsKey(label)) return;
+                double scaling = Math.sqrt((double)mins/structureMin);
+                double atrPrice = structureATR_Price * scaling;
+                atrMap.put(label, 3.0 * atrPrice);
+            };
+
+            // Add structure label first
+            addAtrEntry.accept(structureMin, tfLabels[0]);
+
+            // iterate fractal maps for more labels
+            for (var e: TimeframeUtil.getFractalMinutesMap().entrySet()) addAtrEntry.accept(e.getKey(), e.getValue());
+            for (var e: TimeframeUtil.getPower3MinutesMap().entrySet()) addAtrEntry.accept(e.getKey(), e.getValue());
+
+            // store field
+            this.fullATRValues = atrMap;
+
+            // remember base ATR scaling parameters for ruler binary search
+            this.atrStructureMin   = structureMin;
+            this.atrStructurePrice = structureATR_Price; // 1×ATR price
 
             long now = System.currentTimeMillis();
             if (now - lastCalcTableLogTime > LOG_INTERVAL_MS) {
@@ -929,8 +982,7 @@ public class BiotakTrigger extends Study {
                  // Round leg length to 0.1-pip precision for matching
                  double legPip = Math.round(pips * 10.0) / 10.0;
 
-                 Logger.debug("[Ruler] legPip=" + legPip + ", tickSize=" + tick);
-
+                 // متغیرهای نتیجه برای M مقایسه
                  String bestLabel = "-";
                  double bestBasePips = 0;
                  double bestDiff = Double.MAX_VALUE;
@@ -945,7 +997,7 @@ public class BiotakTrigger extends Study {
                      // Candidates: comprehensive map built in outer class (fullMValues)
                      java.util.Map<String, Double> mMapLocal = BiotakTrigger.this.fullMValues;
                      // حجم لاگ را کم می‌کنیم: فقط زمانی که DEBUG فعال است چاپ شود
-                     Logger.debug("[Ruler] mMapLocal size=" + (mMapLocal == null ? -1 : mMapLocal.size()));
+                     // Logger debug removed
                      double bestAboveDiff = Double.MAX_VALUE;
                      String bestAboveLabel = null;
                      double bestAbovePips = 0;
@@ -1034,9 +1086,81 @@ public class BiotakTrigger extends Study {
                      cachedBestDiff    = bestDiff;
                  }
 
+                 // ======================  ATR (3×) COMPARISON  ======================
+                 // --------- ATR×3 مقایسه با دقت بالا ---------
+                 double bestATRAboveDiff = Double.MAX_VALUE, bestATRBelowDiff = Double.MAX_VALUE;
+                 String bestATRAboveLabel = null, bestATRBelowLabel = null;
+                 double bestATRAbovePips = 0, bestATRBelowPips = 0;
+
+                 java.util.Map<String, Double> atrMapLocal = BiotakTrigger.this.fullATRValues;
+                 if (atrMapLocal != null && !atrMapLocal.isEmpty()) {
+                     for (var entry : atrMapLocal.entrySet()) {
+                         String lbl = entry.getKey();
+                         double atrPrice = entry.getValue();
+                         if (atrPrice <= 0) continue;
+                         double atrPips = Math.round(atrPrice / tick * 10.0) / 10.0;
+                         if (atrPips >= legPip) {
+                             double diff = atrPips - legPip;
+                             if (diff < bestATRAboveDiff) { bestATRAboveDiff = diff; bestATRAboveLabel = lbl; bestATRAbovePips = atrPips; }
+                         } else {
+                             double diff = legPip - atrPips;
+                             if (diff < bestATRBelowDiff) { bestATRBelowDiff = diff; bestATRBelowLabel = lbl; bestATRBelowPips = atrPips; }
+                         }
+                     }
+                 }
+
+                 String bestATRLabel;
+                 double bestATRBasePips;
+                 double bestATRDiff;
+
+                 if (bestATRAboveLabel != null) {
+                     bestATRLabel = bestATRAboveLabel; bestATRBasePips = bestATRAbovePips; bestATRDiff = bestATRAboveDiff;
+                 } else {
+                     bestATRLabel = (bestATRBelowLabel != null? bestATRBelowLabel : "-");
+                     bestATRBasePips = bestATRBelowPips; bestATRDiff = bestATRBelowDiff;
+                 }
+
+                 // Binary refine using continuous scaling if initial diff >0.05 pip
+                 if (bestATRDiff > 0.05 && bestATRAboveLabel != null && bestATRBelowLabel != null) {
+                     int lowMin  = parseMinutesFromLabel(bestATRBelowLabel);
+                     int highMin = parseMinutesFromLabel(bestATRAboveLabel);
+                     int baseMin = BiotakTrigger.this.atrStructureMin;
+                     double baseAtrPrice = BiotakTrigger.this.atrStructurePrice; // 1× ATR price
+
+                     if (lowMin > 0 && highMin > lowMin && baseMin > 0 && baseAtrPrice > 0) {
+                         while (highMin - lowMin > 1) {
+                             int mid = (lowMin + highMin) / 2;
+                             double atrPriceMid = 3.0 * baseAtrPrice * Math.sqrt((double)mid / baseMin);
+                             double atrPipsMid  = Math.round(atrPriceMid / tick * 10.0) / 10.0;
+
+                             if (atrPipsMid >= legPip) {
+                                 highMin = mid;
+                                 bestATRAboveDiff  = atrPipsMid - legPip;
+                                 bestATRAbovePips  = atrPipsMid;
+                                 bestATRAboveLabel = compoundTimeframe(mid);
+                             } else {
+                                 lowMin = mid;
+                                 bestATRBelowDiff  = legPip - atrPipsMid;
+                                 bestATRBelowPips  = atrPipsMid;
+                                 bestATRBelowLabel = compoundTimeframe(mid);
+                             }
+
+                             if (Math.abs(atrPipsMid - legPip) <= 0.05) break; // stop when ≤0.05 pip
+                         }
+
+                         // choose closest
+                         if (bestATRAboveDiff < bestATRBelowDiff) {
+                             bestATRLabel = bestATRAboveLabel; bestATRBasePips = bestATRAbovePips; bestATRDiff = bestATRAboveDiff;
+                         } else {
+                             bestATRLabel = bestATRBelowLabel; bestATRBasePips = bestATRBelowPips; bestATRDiff = bestATRBelowDiff;
+                         }
+                     }
+                 }
+
                  long nowInfo = System.currentTimeMillis();
                  if (nowInfo - lastRulerInfoLog > RULER_LOG_INTERVAL_MS) {
-                     Logger.info(String.format("[Ruler] Leg=%.1f pips, Best base=%s (%.1f pips), diff=%.1f", legPip, bestLabel, bestBasePips, bestDiff));
+                     Logger.info(String.format("[Ruler] Leg=%.1f pips, M→%s (%.1f pips, d=%.1f) | ATR×3→%s (%.1f pips, d=%.1f)",
+                         legPip, bestLabel, bestBasePips, bestDiff, bestATRLabel, bestATRBasePips, bestATRDiff));
                      lastRulerInfoLog = nowInfo;
                  }
 
@@ -1072,7 +1196,10 @@ public class BiotakTrigger extends Study {
                 if (hours > 0) timeSB.append(hours).append("h ");
                 if (minutes > 0 || timeSB.length() == 6) timeSB.append(minutes).append("min");
                 String timeStr = timeSB.toString();
-                String[] lines = { pctStr, pipsStr, barsStr, angleStr, timeStr, matchStr1, matchStr2 };
+                 String atrStr1 = String.format("ATR×3:%s", bestATRLabel);
+                 String atrStr2 = String.format("%.1f p", bestATRBasePips);
+
+                 String[] lines = { pctStr, pipsStr, barsStr, angleStr, timeStr, matchStr1, matchStr2, atrStr1, atrStr2 };
 
                 // Calculate max width and total height
                 java.awt.font.FontRenderContext frc = gc.getFontRenderContext();
@@ -1095,15 +1222,22 @@ public class BiotakTrigger extends Study {
                     boxY = (int) midY;
                 }
 
-                // Draw semi-transparent white background box
-                gc.setColor(new java.awt.Color(255, 255, 255, 200)); // Semi-transparent white
+                // Draw background box using user-selected color (with transparency)
+                java.awt.Color baseBg = getSettings().getColor(S_RULER_BG_COLOR);
+                if (baseBg == null) baseBg = java.awt.Color.WHITE;
+                java.awt.Color bgCol = new java.awt.Color(baseBg.getRed(), baseBg.getGreen(), baseBg.getBlue(), 200);
+                gc.setColor(bgCol);
                 gc.fillRoundRect(boxX, boxY, boxWidth, boxHeight, 8, 8);
 
-                // Optional: draw border
-                gc.setColor(java.awt.Color.GRAY);
+                // Optional: draw border using user-selected color
+                java.awt.Color borderCol = getSettings().getColor(S_RULER_BORDER_COLOR);
+                if (borderCol == null) borderCol = java.awt.Color.GRAY;
+                gc.setColor(borderCol);
                 gc.drawRoundRect(boxX, boxY, boxWidth, boxHeight, 8, 8);
 
-                gc.setColor(java.awt.Color.BLACK); // Black text for contrast
+                java.awt.Color txtCol = getSettings().getColor(S_RULER_TEXT_COLOR);
+                if (txtCol == null) txtCol = java.awt.Color.BLACK;
+                gc.setColor(txtCol);
                 gc.setFont(getSettings().getFont(S_FONT).getFont()); // Use existing font setting
                 // Draw each line centered
                 java.awt.font.LineMetrics lm = gc.getFont().getLineMetrics("A", frc);
@@ -1119,7 +1253,7 @@ public class BiotakTrigger extends Study {
     }
 
     // Helper methods inside RulerFigure
-    private int parseMinutesFromLabel(String tf) {
+    private static int parseMinutesFromLabel(String tf) {
             if (tf == null || tf.isEmpty()) return -1;
             if (tf.equalsIgnoreCase("MN")) return 43200;
 
