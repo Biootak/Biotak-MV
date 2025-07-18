@@ -9,7 +9,6 @@ import com.biotak.util.Constants;
 import com.biotak.util.Logger.LogLevel;
 import com.motivewave.platform.sdk.common.*;
 import com.motivewave.platform.sdk.common.desc.*;
-import com.motivewave.platform.sdk.common.Enums;
 import com.motivewave.platform.sdk.common.menu.MenuDescriptor;
 import com.motivewave.platform.sdk.common.menu.MenuItem;
 import com.motivewave.platform.sdk.common.menu.MenuSeparator;
@@ -18,21 +17,12 @@ import com.motivewave.platform.sdk.draw.Figure;
 import com.motivewave.platform.sdk.draw.ResizePoint;
 import com.motivewave.platform.sdk.study.Study;
 import com.motivewave.platform.sdk.study.StudyHeader;
-import java.awt.Color;
+
 import java.awt.Font;
-import java.awt.Graphics2D;
+
 import java.awt.Point;
-import java.awt.Rectangle;
-import java.awt.BasicStroke;
-import java.awt.Stroke;
-import java.awt.geom.Point2D;
-import java.awt.FontMetrics;
-import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
-import java.util.HashMap;
 
 import com.motivewave.platform.sdk.common.Enums.ResizeType;
 import static com.biotak.util.Constants.*;
@@ -40,7 +30,6 @@ import com.biotak.enums.StepCalculationMode;
 import com.biotak.enums.SSLSBasisType;
 import com.biotak.ui.InfoPanel;
 import com.biotak.ui.PriceLabel;
-import com.biotak.ui.LevelLabel;
 import com.biotak.core.FractalCalculator;
 import com.biotak.ui.LevelDrawer;
 
@@ -75,8 +64,7 @@ public class BiotakTrigger extends Study {
 
     private long lastClickTime = 0;              // for double-click detection
     private long lastCustomMoveTime = 0;         // for fade-in highlight
-    private static final long HIGHLIGHT_DURATION_MS = 1000; // 1-second highlight
-
+   
     private InfoPanel infoPanel;
     private ResizePoint customPricePoint; // draggable point for custom price
     private PriceLabel customPriceLabel; // displays the numeric value next to the custom price line
