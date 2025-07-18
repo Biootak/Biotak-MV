@@ -12,6 +12,7 @@ import com.motivewave.platform.sdk.common.desc.*;
 import com.motivewave.platform.sdk.common.Enums;
 import com.motivewave.platform.sdk.common.menu.MenuDescriptor;
 import com.motivewave.platform.sdk.common.menu.MenuItem;
+import com.motivewave.platform.sdk.common.menu.MenuSeparator;
 import com.motivewave.platform.sdk.draw.Line;
 import com.motivewave.platform.sdk.draw.Figure;
 import com.motivewave.platform.sdk.draw.ResizePoint;
@@ -58,6 +59,24 @@ public class BiotakTrigger extends Study {
     public static final String S_CUSTOM_PRICE   = "customPrice"; // stores user-defined custom price
     public final static String S_HISTORICAL_BARS = "historicalBars";
 
+    // ---------------- New Constants ----------------
+    private static final String S_P_LEVEL_PATH  = "pLevelPath";
+    private static final String S_S_LEVEL_PATH  = "sLevelPath";
+    private static final String S_SS_LEVEL_PATH = "ssLevelPath";
+    private static final String S_C_LEVEL_PATH  = "cLevelPath";
+    private static final String S_LS_LEVEL_PATH = "lsLevelPath";
+    // Add constants for Leg Ruler
+    private static final String S_SHOW_LEG_RULER = "showLegRuler";
+    private static final String S_LEG_RULER_PATH = "legRulerPath";
+    private static final String S_LEG_EXT_LEFT   = "legExtLeft";
+    private static final String S_LEG_EXT_RIGHT  = "legExtRight";
+    private static final String S_LEG_START     = "legStart";   // stores "price|time"
+    private static final String S_LEG_END       = "legEnd";     // stores "price|time"
+
+    private long lastClickTime = 0;              // for double-click detection
+    private long lastCustomMoveTime = 0;         // for fade-in highlight
+    private static final long HIGHLIGHT_DURATION_MS = 1000; // 1-second highlight
+
     private InfoPanel infoPanel;
     private ResizePoint customPricePoint; // draggable point for custom price
     private PriceLabel customPriceLabel; // displays the numeric value next to the custom price line
@@ -74,6 +93,12 @@ public class BiotakTrigger extends Study {
     private static final long LOG_INTERVAL_MS = 60_000;      // 1 minute
     private static long lastCalcTableLogTime = 0;             // Tracks last time the calc table was printed
     private static long lastHighLowLogTime = 0;             // Tracks last time historical high/low was logged
+
+    // ----------- Leg Ruler Fields -------------
+    private ResizePoint legPointA;    // first endpoint
+    private ResizePoint legPointB;    // second endpoint
+    private Figure      legLine;      // connecting line
+    private boolean     legInitialized = false;
 
     public BiotakTrigger() {
         super();
@@ -92,6 +117,8 @@ public class BiotakTrigger extends Study {
         grp = tab.addGroup("Visual");
         grp.addRow(new FontDescriptor(S_FONT, "Label Font", defaults.getFont()));
         grp.addRow(new PathDescriptor(S_CUSTOM_PRICE_PATH, "Custom Price Line", X11Colors.GOLD, 2.0f, new float[]{2f,2f}, true, false, false));
+        // Add Leg Ruler options
+       
 
         grp = tab.addGroup("Historical Lines");
         grp.addRow(new BooleanDescriptor(S_SHOW_HIGH_LINE, "Show High Line", true));
@@ -175,6 +202,7 @@ public class BiotakTrigger extends Study {
         tab = sd.addTab("Display");
         grp = tab.addGroup("Display Options");
         grp.addRow(new BooleanDescriptor(S_SHOW_MIDPOINT, "Show Midpoint Line", true));
+        grp.addRow(new BooleanDescriptor(Constants.S_SHOW_LEVEL_LABELS, "Show Level Labels", true));
         
         // -----------------  NEW SS/LS STEP OPTIONS -----------------
         tab = sd.addTab("Step Mode");
@@ -193,10 +221,19 @@ public class BiotakTrigger extends Study {
         grp.addRow(new BooleanDescriptor(Constants.S_LOCK_SSLS_LEVELS, "Lock SS/LS Levels", false));
         // Quick settings could be added later if desired
         
-        // Quick Settings: Allow rapid toggling of TH Start Point from toolbar / popup editor
+        // Quick Settings: Allow rapid toggling of TH Start Point and Leg Ruler visibility from toolbar / popup editor
         sd.addQuickSettings(S_START_POINT);
+        
         // Quick Settings toolbar icons for rapid access
         sd.addQuickSettings(S_STEP_MODE, S_SSLS_BASIS, S_LS_FIRST, Constants.S_LOCK_SSLS_LEVELS);
+
+        // ------------------ Control Level Style -------------------
+        grp = tab.addGroup("Control Level Paths");
+        grp.addRow(new PathDescriptor(S_P_LEVEL_PATH , "P Level Path" , X11Colors.GOLD          , 1.5f, null, true, false, false));
+        grp.addRow(new PathDescriptor(S_S_LEVEL_PATH , "S Level Path" , X11Colors.CADET_BLUE    , 1.5f, null, true, false, false));
+        grp.addRow(new PathDescriptor(S_SS_LEVEL_PATH, "SS Level Path", X11Colors.MEDIUM_VIOLET_RED, 1.5f, null, true, false, false));
+        grp.addRow(new PathDescriptor(S_C_LEVEL_PATH , "C Level Path" , X11Colors.ORANGE        , 1.5f, null, true, false, false));
+        grp.addRow(new PathDescriptor(S_LS_LEVEL_PATH, "LS Level Path", X11Colors.LIGHT_GRAY     , 1.5f, null, true, false, false));
     }
 
     @Override
@@ -214,18 +251,63 @@ public class BiotakTrigger extends Study {
             // Suppress any context menu inside panel completely
             return new MenuDescriptor(null, true);
         }
-        return null;
+
+        // Outside info panel → provide "Reset Custom Price" option in context menu
+        java.util.List<MenuItem> items = new java.util.ArrayList<>();
+        items.add(new MenuSeparator());
+        items.add(new MenuItem("Reset Custom Price", false, () -> {
+            DataSeries ds = ctx.getDataContext().getDataSeries();
+            if (ds.size() == 0) return;
+            double lastClose = ds.getClose(ds.size() - 1);
+            getSettings().setDouble(S_CUSTOM_PRICE, lastClose);
+            lastCustomMoveTime = System.currentTimeMillis();
+            drawFigures(ds.size() - 1, ctx.getDataContext());
+        }));
+        items.add(new MenuItem("Reset Leg Ruler", false, () -> {
+            // Reposition ruler points to default near last bar
+            DataSeries ds = ctx.getDataContext().getDataSeries();
+            if (ds.size() == 0) return;
+            long timeB = ds.getStartTime(ds.size()-1);
+            long timeA = ds.getStartTime(Math.max(0, ds.size()-11));
+            double price = ds.getClose(ds.size()-1);
+            if (legPointA == null) {
+                legPointA = new ResizePoint(ResizeType.ALL, true);
+                legPointA.setSnapToLocation(true);
+            }
+            if (legPointB == null) {
+                legPointB = new ResizePoint(ResizeType.ALL, true);
+                legPointB.setSnapToLocation(true);
+            }
+            legPointA.setLocation(timeA, price);
+            legPointB.setLocation(timeB, price);
+            legInitialized = true;
+            drawFigures(ds.size()-1, ctx.getDataContext());
+        }));
+        return new MenuDescriptor(items, true);
     }
 
     // Toggle panel on any left-click (generic mouse down) within its bounds
     public void onMouseDown(Point loc, DrawContext ctx) {
         if (infoPanel != null && infoPanel.contains(loc.x, loc.y, ctx)) {
+            // Detect double-click inside panel to reset Custom Price quickly
+            long nowClick = System.currentTimeMillis();
+            if (nowClick - lastClickTime < 350) {
+                DataSeries series = ctx.getDataContext().getDataSeries();
+                if (series.size() > 0) {
+                    double lc = series.getClose(series.size() - 1);
+                    getSettings().setDouble(S_CUSTOM_PRICE, lc);
+                    lastCustomMoveTime = nowClick;
+                    drawFigures(series.size() - 1, ctx.getDataContext());
+                }
+            }
+            lastClickTime = nowClick;
             boolean newState = !getSettings().getBoolean(S_PANEL_MINIMIZED, false);
             getSettings().setBoolean(S_PANEL_MINIMIZED, newState);
             infoPanel.setMinimized(newState);
             DataContext dc = ctx.getDataContext();
             int lastIdx = dc.getDataSeries().size() - 1;
             drawFigures(lastIdx, dc);
+            return; // suppress other handling when clicking panel
         }
     }
 
@@ -365,7 +447,7 @@ public class BiotakTrigger extends Study {
             drawHistoricalLines(startTime, endTime, finalHigh, finalLow);
             }
             double midpointPrice;
-            if (currentMode == StepCalculationMode.SS_LS_STEP) {
+            if (currentMode == StepCalculationMode.SS_LS_STEP || currentMode == StepCalculationMode.CONTROL_STEP) {
                 // Force use of custom price as anchor; if not set, default to last close
                 double cp = getSettings().getDouble(S_CUSTOM_PRICE, Double.NaN);
                 if (Double.isNaN(cp) || cp == 0) {
@@ -377,10 +459,16 @@ public class BiotakTrigger extends Study {
                 midpointPrice = determineMidpointPrice(finalHigh, finalLow);
             }
             Logger.debug("BiotakTrigger: Midpoint price calculated: " + midpointPrice);
-            // Handle interactive custom price point
+            // Handle interactive custom price baseline
             String startTypeStr = getSettings().getString(S_START_POINT, THStartPointType.MIDPOINT.name());
             THStartPointType spType = THStartPointType.valueOf(startTypeStr);
-            if (spType == THStartPointType.CUSTOM_PRICE) {
+
+            // Always need custom-price anchor when mode is SS_LS_STEP or CONTROL_STEP (baseline)
+            boolean needCustomAnchor = (currentMode == StepCalculationMode.SS_LS_STEP ||
+                                        currentMode == StepCalculationMode.CONTROL_STEP ||
+                                        spType == THStartPointType.CUSTOM_PRICE);
+
+            if (needCustomAnchor) {
                 long anchorTime = endTime; // stick to last bar's time so point on right edge
 
                 // --- draggable point ---
@@ -461,77 +549,88 @@ public class BiotakTrigger extends Study {
             drawInfoPanel(series, thValue, startTime, shortStep, longStep, atrValue, liveAtrValue);
             
             // ------------------------------------------------------------------
-            // Draw either TH-based or SS/LS-based horizontal levels now that all
-            // required fractal values are available.
+            // Draw horizontal levels according to selected Step Mode
             // ------------------------------------------------------------------
-            if (currentMode == StepCalculationMode.TH_STEP) {
-                if (getSettings().getBoolean(S_SHOW_TH_LEVELS, true)) {
-                    drawTHLevels(series, midpointPrice, finalHigh, finalLow, thBasePrice, startTime, endTime);
+            switch (currentMode) {
+                case TH_STEP -> {
+                    if (getSettings().getBoolean(S_SHOW_TH_LEVELS, true)) {
+                        drawTHLevels(series, midpointPrice, finalHigh, finalLow, thBasePrice, startTime, endTime);
+                    }
                 }
-            } else {
-                // انتخاب مبنای TH بر اساس تنظیم کاربر
-                String basisStr = getSettings().getString(S_SSLS_BASIS, SSLSBasisType.STRUCTURE.name());
-                SSLSBasisType basis;
-                try {
-                    basis = SSLSBasisType.valueOf(basisStr);
-                } catch (IllegalArgumentException e) {
-                    // Legacy value (e.g., HIGHER_STRUCTURE) or corrupt entry – fall back
-                    basis = SSLSBasisType.STRUCTURE;
-                    getSettings().setString(S_SSLS_BASIS, SSLSBasisType.STRUCTURE.name());
-                }
+                case SS_LS_STEP -> {
+                    // انتخاب مبنای TH بر اساس تنظیم کاربر
+                    String basisStr = getSettings().getString(S_SSLS_BASIS, SSLSBasisType.STRUCTURE.name());
+                    SSLSBasisType basis;
+                    try {
+                        basis = SSLSBasisType.valueOf(basisStr);
+                    } catch (IllegalArgumentException e) {
+                        // Legacy value (e.g., HIGHER_STRUCTURE) or corrupt entry – fall back
+                        basis = SSLSBasisType.STRUCTURE;
+                        getSettings().setString(S_SSLS_BASIS, SSLSBasisType.STRUCTURE.name());
+                    }
 
-                // Lock behaviour: if user enabled lock, we calculate baseTH only once per study session
-                boolean lockLevels = getSettings().getBoolean(Constants.S_LOCK_SSLS_LEVELS, false);
+                    // Lock behaviour: if user enabled lock, we calculate baseTH only once per study session
+                    boolean lockLevels = getSettings().getBoolean(Constants.S_LOCK_SSLS_LEVELS, false);
 
-                double baseTHForSession;
+                    double baseTHForSession;
 
-                if (lockLevels && !Double.isNaN(lockedBaseTH)) {
-                    // Already locked, use stored value
-                    baseTHForSession = lockedBaseTH;
-                } else {
-                    double baseTHCalc;
-                    switch (basis) {
-                        case PATTERN:
-                            baseTHCalc = patternValue;
-                            break;
-                        case TRIGGER:
-                            baseTHCalc = triggerValue;
-                            break;
-                        case AUTO:
-                            // حالت Auto (هوشمند): بزرگ‌ترین مبنایی را انتخاب می‌کنیم که Long-Step آن (۲ × BaseTH)
-                            // در هر دو سمت میدلاین جا شود تا سطوح قابل رؤیت باقی بمانند.
-                            double rangeAbove  = finalHigh   - midpointPrice;
-                            double rangeBelow  = midpointPrice - finalLow;
-                            double allowedRange = Math.min(rangeAbove, rangeBelow);
-
-                            // Candidates ordered large→small
-                            double[] candidates = new double[] { structureValue, patternValue, triggerValue };
-                            baseTHCalc = triggerValue; // default smallest
-                            for (double candidate : candidates) {
-                                if (2.0 * candidate <= allowedRange) {
-                                    baseTHCalc = candidate;
-                                    break;
+                    if (lockLevels && !Double.isNaN(lockedBaseTH)) {
+                        // Already locked, use stored value
+                        baseTHForSession = lockedBaseTH;
+                    } else {
+                        double baseTHCalc;
+                        switch (basis) {
+                            case PATTERN -> baseTHCalc = patternValue;
+                            case TRIGGER -> baseTHCalc = triggerValue;
+                            case AUTO -> {
+                                // حالت Auto (هوشمند)
+                                double rangeAbove  = finalHigh   - midpointPrice;
+                                double rangeBelow  = midpointPrice - finalLow;
+                                double allowedRange = Math.min(rangeAbove, rangeBelow);
+                                double[] candidates = new double[] { structureValue, patternValue, triggerValue };
+                                baseTHCalc = triggerValue;
+                                for (double candidate : candidates) {
+                                    if (2.0 * candidate <= allowedRange) { baseTHCalc = candidate; break; }
                                 }
                             }
-                            break;
-                        case STRUCTURE:
-                        default:
-                            baseTHCalc = structureValue;
+                            case STRUCTURE -> baseTHCalc = structureValue;
+                            default -> baseTHCalc = structureValue;
+                        }
+                        baseTHForSession = baseTHCalc;
+                        if (lockLevels) lockedBaseTH = baseTHForSession;
                     }
 
-                    baseTHForSession = baseTHCalc;
+                    double ssValue = baseTHForSession * 1.5;
+                    double lsValue = baseTHForSession * 2.0;
+                    boolean drawLsFirst = getSettings().getBoolean(S_LS_FIRST, true);
 
-                    if (lockLevels) {
-                        lockedBaseTH = baseTHForSession; // store for future calls
-                    }
+                    drawSSLSLevels(series, midpointPrice, finalHigh, finalLow, ssValue, lsValue, drawLsFirst, startTime, endTime);
                 }
+                case CONTROL_STEP -> {
+                    // Draw levels based on the new fractal sequence  P → S → SS → C → LS
+                    // (LS corresponds to the movement capacity of the next higher fractal timeframe)
 
-                double ssValue = baseTHForSession * 1.5;
-                double lsValue = baseTHForSession * 2.0;
-                boolean drawLsFirst = getSettings().getBoolean(S_LS_FIRST, true);
+                    // Calculate Control (C) value as the midpoint between SS and LS (7 T for the current TF)
+                    double controlValue = (shortStep + longStep) / 2.0;
 
-                drawSSLSLevels(series, midpointPrice, finalHigh, finalLow, ssValue, lsValue, drawLsFirst, startTime, endTime);
+                    drawControlLevels(
+                        series,
+                        midpointPrice,
+                        finalHigh,
+                        finalLow,
+                        patternValue,
+                        structureValue,
+                        shortStep,
+                        controlValue,
+                        longStep,
+                        startTime,
+                        endTime
+                    );
+                }
             }
+
+            // ------------------- LEG RULER -------------------
+            drawLegRuler(index, ctx, startTime, endTime);
         } finally {
             // Restore previous log level
             Logger.setLogLevel(LogLevel.WARN);
@@ -543,6 +642,12 @@ public class BiotakTrigger extends Study {
         if (rp != null && rp == customPricePoint) {
             double newPrice = rp.getValue();
             getSettings().setDouble(S_CUSTOM_PRICE, newPrice);
+            lastCustomMoveTime = System.currentTimeMillis();
+        }
+        if (rp != null && (rp == legPointA || rp == legPointB)) {
+            DataContext dc = ctx.getDataContext();
+            int lastIdx = dc.getDataSeries().size() - 1;
+            drawFigures(lastIdx, dc);
         }
     }
 
@@ -565,6 +670,14 @@ public class BiotakTrigger extends Study {
             if (customPriceLine != null) removeFigure(customPriceLine);
             customPriceLine = new Line(new Coordinate(startT, rp.getValue()), new Coordinate(endT, rp.getValue()), cpPathLive);
             addFigure(customPriceLine);
+        }
+        // Live feedback for Leg Ruler dragging
+        if (rp != null && (rp == legPointA || rp == legPointB)) {
+            DataContext dc = ctx.getDataContext();
+            DataSeries ds = dc.getDataSeries();
+            long startT = ds.getStartTime(0);
+            long endT   = ds.getStartTime(ds.size()-1);
+            drawLegRuler(ds.size()-1, dc, startT, endT);
         }
     }
 
@@ -1024,7 +1137,7 @@ public class BiotakTrigger extends Study {
 
             // Helper lambda to format TH and C together to avoid clutter
             java.util.function.BiFunction<Double, Double, String> formatThC = (th, pipMult) -> {
-                double cVal = th * 7.0; // C = 7T for the given timeframe (T == TH)
+                double cVal = th * 1.75; // Adjusted to 1.75 * TH ≈ 7T where T = TH / 4
                 return String.format("%.1f", th * pipMult) + "  (C:" + String.format("%.1f", cVal * pipMult) + ")";
             };
 
@@ -1608,6 +1721,39 @@ public class BiotakTrigger extends Study {
     }
 
     /**
+     * Simple label figure used for Control-Step level names (P, S, SS, C, LS).
+     */
+    private class LevelLabel extends Figure {
+        private long time;
+        private double price;
+        private String text;
+        private final Font font = new Font("Arial", Font.BOLD, 11);
+
+        public LevelLabel(long time, double price, String text) {
+            this.time = time;
+            this.price = price;
+            this.text = text;
+        }
+
+        @Override
+        public void draw(Graphics2D gc, DrawContext ctx) {
+            if (time == 0 || text == null) return;
+            Point2D p = ctx.translate(new Coordinate(time, price));
+            gc.setFont(font);
+            FontMetrics fm = gc.getFontMetrics();
+            int textW = fm.stringWidth(text);
+            int textH = fm.getAscent();
+            gc.setColor(new Color(0,0,0,180));
+            gc.fillRoundRect((int)p.getX()+4, (int)(p.getY()-textH/2-2), textW+6, textH+4, 8, 8);
+            gc.setColor(Color.WHITE);
+            gc.drawString(text, (int)p.getX()+7, (int)(p.getY()+textH/2-2));
+        }
+
+        @Override
+        public boolean contains(double x, double y, DrawContext ctx) { return false; }
+    }
+
+    /**
      * Draws variable-distance levels alternating between Short Step (SS) and Long Step (LS).
      *
      * @param series         Data series (for instrument/tick size if needed)
@@ -1668,4 +1814,112 @@ public class BiotakTrigger extends Study {
             }
         }
     }
+
+    /**
+     * Draws levels based on the harmonic T–P–S–SS–C–LS sequence described by user.
+     * The distance pattern (multiples of T) between consecutive levels is: 1,1,2,2,1,1 (then repeats).
+     *
+     * @param series        Data series for instrument info
+     * @param midpointPrice Reference price (anchor)
+     * @param highestHigh   Upper bound to stop drawing
+     * @param lowestLow     Lower bound to stop drawing
+     * @param tValue        Trigger value (T) expressed in price units
+     * @param startTime     Start timestamp for lines
+     * @param endTime       End timestamp for lines
+     */
+    private void drawControlLevels(
+            DataSeries series,
+            double midpointPrice,
+            double highestHigh,
+            double lowestLow,
+            double patternValue,
+            double structureValue,
+            double shortStepValue,
+            double controlValue,
+            double longStepValue,
+            long startTime,
+            long endTime) {
+
+        // Validate inputs
+        if (patternValue <= 0 || structureValue <= 0 || shortStepValue <= 0 || controlValue <= 0 || longStepValue <= 0) {
+            Logger.warn("BiotakTrigger: Invalid fractal values – cannot draw Control-Based levels.");
+            return;
+        }
+
+        // Convert distances to 'pip-scaled' price distances (to match TH & SS/LS rendering)
+        double pipMultiplier = getPipMultiplier(series.getInstrument());
+
+        double[] valueSequence  = new double[]{patternValue, structureValue, shortStepValue, controlValue, longStepValue};
+        String[] labelSequence  = new String[]{"P", "S", "SS", "C", "LS"};
+
+        boolean showLabels = getSettings().getBoolean(Constants.S_SHOW_LEVEL_LABELS, true);
+
+        for (int i = 0; i < valueSequence.length; i++) {
+            double distPrice = valueSequence[i] * pipMultiplier;
+            double priceAbove = midpointPrice + distPrice;
+            double priceBelow = midpointPrice - distPrice;
+
+            int stepCount = i + 1; // Re-use for getPathForLevel()
+            PathInfo path = getPathForLevel(stepCount);
+
+            if (path != null) {
+                // Draw above midpoint
+                if (priceAbove <= highestHigh) {
+                    addFigure(new Line(new Coordinate(startTime, priceAbove), new Coordinate(endTime, priceAbove), path));
+                    if (showLabels) addFigure(new LevelLabel(endTime, priceAbove, labelSequence[i]));
+                }
+
+                // Draw below midpoint
+                if (priceBelow >= lowestLow) {
+                    addFigure(new Line(new Coordinate(startTime, priceBelow), new Coordinate(endTime, priceBelow), path));
+                    if (showLabels) addFigure(new LevelLabel(endTime, priceBelow, labelSequence[i]));
+                }
+            }
+        }
+    }
+
+    /**
+     * Returns the path (color/width) configured for a Control-Step label.
+     */
+    private PathInfo getControlLevelPath(String lbl) {
+        return switch (lbl) {
+            case "P"  -> getSettings().getPath(S_P_LEVEL_PATH);
+            case "S"  -> getSettings().getPath(S_S_LEVEL_PATH);
+            case "SS" -> getSettings().getPath(S_SS_LEVEL_PATH);
+            case "C"  -> getSettings().getPath(S_C_LEVEL_PATH);
+            case "LS" -> getSettings().getPath(S_LS_LEVEL_PATH);
+            default    -> null;
+        };
+    }
+
+    /**
+     * LEG RULER REMOVED – this stub prevents compilation errors while ensuring that
+     * no drawing or logic related to the old Leg Ruler is executed.
+     *
+     * @param index     last bar index (ignored)
+     * @param ctx       data context (ignored)
+     * @param startTime chart start time (ignored)
+     * @param endTime   chart end time (ignored)
+     */
+    private void drawLegRuler(int index, DataContext ctx, long startTime, long endTime) {
+        // No-op (feature deleted)
+    }
+
+    // Custom line that can optionally extend to left/right chart edges (adapted from TrendLine example)
+    private class RulerLine extends Figure {
+        private final boolean extLeft, extRight; private final PathInfo path;
+        private java.awt.geom.Line2D line;
+        RulerLine(boolean extLeft, boolean extRight, PathInfo p){this.extLeft=extLeft;this.extRight=extRight;this.path=p;}
+        @Override public boolean contains(double x,double y,DrawContext ctx){return line!=null && com.motivewave.platform.sdk.common.Util.distanceFromLine(x,y,line)<6;}
+        @Override public void layout(DrawContext ctx){
+            java.awt.geom.Point2D start=ctx.translate(legPointA.getLocation());
+            java.awt.geom.Point2D end  =ctx.translate(legPointB.getLocation());
+            if(start.getX()>end.getX()){var tmp=end;end=start;start=tmp;}
+            java.awt.Rectangle gb=ctx.getBounds(); double m=com.motivewave.platform.sdk.common.Util.slope(start,end);
+            if(extLeft)  start=calcPoint(m,end,gb.getX(),gb);
+            if(extRight) end  =calcPoint(m,start,gb.getMaxX(),gb);
+            line=new java.awt.geom.Line2D.Double(start,end);
+        }
+        private java.awt.geom.Point2D calcPoint(double m,java.awt.geom.Point2D p,double x,java.awt.Rectangle gb){double y; if(Double.isInfinite(m)){y=(m==Double.POSITIVE_INFINITY)?gb.getMaxY():gb.getMinY();x=p.getX();}else{double b=p.getY()-(m*p.getX());y=m*x+b;}return new java.awt.geom.Point2D.Double(x,y);}        
+        @Override public void draw(Graphics2D gc,DrawContext ctx){gc.setStroke(ctx.isSelected()?path.getSelectedStroke():path.getStroke());gc.setColor(path.getColor());gc.draw(line);}    }
 } 

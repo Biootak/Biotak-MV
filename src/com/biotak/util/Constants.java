@@ -90,6 +90,8 @@ public final class Constants {
     public final static String S_STRUCT_L5_PATH = "structL5Path";
     // Display
     public final static String S_SHOW_MIDPOINT = "showMidpoint";
+    // Level Labels
+    public final static String S_SHOW_LEVEL_LABELS = "showLevelLabels";
     // Custom Price Line
     public final static String S_CUSTOM_PRICE_PATH = "customPricePath";
     // ------------------  SS / LS Step Mode ------------------
