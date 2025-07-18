@@ -66,12 +66,7 @@ public class BiotakTrigger extends Study {
     private static final String S_C_LEVEL_PATH  = "cLevelPath";
     private static final String S_LS_LEVEL_PATH = "lsLevelPath";
     // Add constants for Leg Ruler
-    private static final String S_SHOW_LEG_RULER = "showLegRuler";
-    private static final String S_LEG_RULER_PATH = "legRulerPath";
-    private static final String S_LEG_EXT_LEFT   = "legExtLeft";
-    private static final String S_LEG_EXT_RIGHT  = "legExtRight";
-    private static final String S_LEG_START     = "legStart";   // stores "price|time"
-    private static final String S_LEG_END       = "legEnd";     // stores "price|time"
+    // (Leg Ruler constants removed)
 
     private long lastClickTime = 0;              // for double-click detection
     private long lastCustomMoveTime = 0;         // for fade-in highlight
@@ -94,11 +89,7 @@ public class BiotakTrigger extends Study {
     private static long lastCalcTableLogTime = 0;             // Tracks last time the calc table was printed
     private static long lastHighLowLogTime = 0;             // Tracks last time historical high/low was logged
 
-    // ----------- Leg Ruler Fields -------------
-    private ResizePoint legPointA;    // first endpoint
-    private ResizePoint legPointB;    // second endpoint
-    private Figure      legLine;      // connecting line
-    private boolean     legInitialized = false;
+    // (Leg Ruler fields removed)
 
     public BiotakTrigger() {
         super();
@@ -263,26 +254,7 @@ public class BiotakTrigger extends Study {
             lastCustomMoveTime = System.currentTimeMillis();
             drawFigures(ds.size() - 1, ctx.getDataContext());
         }));
-        items.add(new MenuItem("Reset Leg Ruler", false, () -> {
-            // Reposition ruler points to default near last bar
-            DataSeries ds = ctx.getDataContext().getDataSeries();
-            if (ds.size() == 0) return;
-            long timeB = ds.getStartTime(ds.size()-1);
-            long timeA = ds.getStartTime(Math.max(0, ds.size()-11));
-            double price = ds.getClose(ds.size()-1);
-            if (legPointA == null) {
-                legPointA = new ResizePoint(ResizeType.ALL, true);
-                legPointA.setSnapToLocation(true);
-            }
-            if (legPointB == null) {
-                legPointB = new ResizePoint(ResizeType.ALL, true);
-                legPointB.setSnapToLocation(true);
-            }
-            legPointA.setLocation(timeA, price);
-            legPointB.setLocation(timeB, price);
-            legInitialized = true;
-            drawFigures(ds.size()-1, ctx.getDataContext());
-        }));
+        // (Reset Leg Ruler menu item removed)
         return new MenuDescriptor(items, true);
     }
 
@@ -630,7 +602,7 @@ public class BiotakTrigger extends Study {
             }
 
             // ------------------- LEG RULER -------------------
-            drawLegRuler(index, ctx, startTime, endTime);
+            // (Leg Ruler logic removed)
         } finally {
             // Restore previous log level
             Logger.setLogLevel(LogLevel.WARN);
@@ -644,11 +616,7 @@ public class BiotakTrigger extends Study {
             getSettings().setDouble(S_CUSTOM_PRICE, newPrice);
             lastCustomMoveTime = System.currentTimeMillis();
         }
-        if (rp != null && (rp == legPointA || rp == legPointB)) {
-            DataContext dc = ctx.getDataContext();
-            int lastIdx = dc.getDataSeries().size() - 1;
-            drawFigures(lastIdx, dc);
-        }
+        // (Leg Ruler resize handling removed)
     }
 
     // Provide live feedback while dragging the custom price point
@@ -672,13 +640,7 @@ public class BiotakTrigger extends Study {
             addFigure(customPriceLine);
         }
         // Live feedback for Leg Ruler dragging
-        if (rp != null && (rp == legPointA || rp == legPointB)) {
-            DataContext dc = ctx.getDataContext();
-            DataSeries ds = dc.getDataSeries();
-            long startT = ds.getStartTime(0);
-            long endT   = ds.getStartTime(ds.size()-1);
-            drawLegRuler(ds.size()-1, dc, startT, endT);
-        }
+        // (Leg Ruler live feedback removed)
     }
 
     @Override
@@ -1907,19 +1869,8 @@ public class BiotakTrigger extends Study {
 
     // Custom line that can optionally extend to left/right chart edges (adapted from TrendLine example)
     private class RulerLine extends Figure {
-        private final boolean extLeft, extRight; private final PathInfo path;
-        private java.awt.geom.Line2D line;
-        RulerLine(boolean extLeft, boolean extRight, PathInfo p){this.extLeft=extLeft;this.extRight=extRight;this.path=p;}
-        @Override public boolean contains(double x,double y,DrawContext ctx){return line!=null && com.motivewave.platform.sdk.common.Util.distanceFromLine(x,y,line)<6;}
-        @Override public void layout(DrawContext ctx){
-            java.awt.geom.Point2D start=ctx.translate(legPointA.getLocation());
-            java.awt.geom.Point2D end  =ctx.translate(legPointB.getLocation());
-            if(start.getX()>end.getX()){var tmp=end;end=start;start=tmp;}
-            java.awt.Rectangle gb=ctx.getBounds(); double m=com.motivewave.platform.sdk.common.Util.slope(start,end);
-            if(extLeft)  start=calcPoint(m,end,gb.getX(),gb);
-            if(extRight) end  =calcPoint(m,start,gb.getMaxX(),gb);
-            line=new java.awt.geom.Line2D.Double(start,end);
-        }
-        private java.awt.geom.Point2D calcPoint(double m,java.awt.geom.Point2D p,double x,java.awt.Rectangle gb){double y; if(Double.isInfinite(m)){y=(m==Double.POSITIVE_INFINITY)?gb.getMaxY():gb.getMinY();x=p.getX();}else{double b=p.getY()-(m*p.getX());y=m*x+b;}return new java.awt.geom.Point2D.Double(x,y);}        
-        @Override public void draw(Graphics2D gc,DrawContext ctx){gc.setStroke(ctx.isSelected()?path.getSelectedStroke():path.getStroke());gc.setColor(path.getColor());gc.draw(line);}    }
+        @Override public boolean contains(double x, double y, DrawContext ctx) { return false; }
+        @Override public void layout(DrawContext ctx) {}
+        @Override public void draw(Graphics2D gc, DrawContext ctx) {}
+    }
 } 
