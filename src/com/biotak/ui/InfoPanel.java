@@ -110,6 +110,9 @@ public class InfoPanel extends Figure {
         coreLines.add("SS: "   + String.format("%.1f", shortStep    * pipMultiplier));
         coreLines.add("LS: "   + String.format("%.1f", longStep     * pipMultiplier));
         coreLines.add("C: "    + String.format("%.1f", controlValue * pipMultiplier));
+        // Calculate M = SS + C + LS and add to core lines
+        double mValue = shortStep + controlValue + longStep;
+        coreLines.add("M: "    + String.format("%.1f", mValue * pipMultiplier));
         coreLines.add("Live: " + String.format("%.1f", liveAtrValue * pipMultiplier));
 
         //---------------------------  HIERARCHY VALUES  --------------------------------

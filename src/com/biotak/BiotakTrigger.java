@@ -61,6 +61,12 @@ public class BiotakTrigger extends Study {
     private static final String S_LS_LEVEL_PATH = "lsLevelPath";
     // Add constants for Leg Ruler
     // (Leg Ruler constants removed)
+    public static final String S_SHOW_RULER = "showRuler";
+    public static final String S_RULER_PATH = "rulerPath";
+    public static final String S_RULER_EXT_RIGHT = "rulerExtRight";
+    public static final String S_RULER_EXT_LEFT = "rulerExtLeft";
+    public static final String S_RULER_START = "rulerStart";
+    public static final String S_RULER_END = "rulerEnd";
 
     private long lastClickTime = 0;              // for double-click detection
     private long lastCustomMoveTime = 0;         // for fade-in highlight
@@ -77,11 +83,24 @@ public class BiotakTrigger extends Study {
 
     // Stores SS/LS base TH when lock option is enabled
     private double lockedBaseTH = Double.NaN;
+    private double thValue;
+    private double patternTH;
+    private double triggerTH;
+    private double structureTH;
+    private double higherPatternTH;
+
+    // Human-readable labels for each TH value (Current, Pattern, Trigger, Structure, Higher)
+    private String[] tfLabels = {"", "", "", "", ""};
 
     private static final long LOG_INTERVAL_MS = 60_000;      // 1 minute
     private static long lastCalcTableLogTime = 0;             // Tracks last time the calc table was printed
     private static long lastHighLowLogTime = 0;             // Tracks last time historical high/low was logged
 
+    // (Leg Ruler fields removed)
+    private ResizePoint rulerStartResize, rulerEndResize;
+    private RulerFigure rulerFigure; // Custom inner class
+
+    // Add fields at class level
     // (Leg Ruler fields removed)
 
     public BiotakTrigger() {
@@ -218,6 +237,10 @@ public class BiotakTrigger extends Study {
         grp.addRow(new PathDescriptor(S_SS_LEVEL_PATH, "SS Level Path", X11Colors.MEDIUM_VIOLET_RED, 1.5f, null, true, false, false));
         grp.addRow(new PathDescriptor(S_C_LEVEL_PATH , "C Level Path" , X11Colors.ORANGE        , 1.5f, null, true, false, false));
         grp.addRow(new PathDescriptor(S_LS_LEVEL_PATH, "LS Level Path", X11Colors.LIGHT_GRAY     , 1.5f, null, true, false, false));
+        grp.addRow(new BooleanDescriptor(S_SHOW_RULER, "Show Ruler", false));
+        grp.addRow(new PathDescriptor(S_RULER_PATH, "Ruler", X11Colors.GREEN, 1.0f, null, true, false, false));
+        grp.addRow(new BooleanDescriptor(S_RULER_EXT_RIGHT, "Extend Right", false));
+        grp.addRow(new BooleanDescriptor(S_RULER_EXT_LEFT, "Extend Left", false));
     }
 
     @Override
@@ -484,8 +507,25 @@ public class BiotakTrigger extends Study {
             double thStepInPoints = THCalculator.calculateTHPoints(series.getInstrument(), thBasePrice, timeframePercentage);
             double pointValue = series.getInstrument().getTickSize();
             double thValue = thStepInPoints * pointValue;
-            
-            // Calculate LS (Long Step) and SS (Short Step) values based on the fractal bit model
+            // Calculate fractal TH for matching
+            BarSize patternBarSize = TimeframeUtil.getPatternBarSize(series.getBarSize());
+            double patternTFPercent = TimeframeUtil.getTimeframePercentage(patternBarSize);
+            double patternTH = THCalculator.calculateTHPoints(series.getInstrument(), thBasePrice, patternTFPercent) * series.getInstrument().getTickSize();
+            BarSize triggerBarSize = TimeframeUtil.getTriggerBarSize(series.getBarSize());
+            double triggerTFPercent = TimeframeUtil.getTimeframePercentage(triggerBarSize);
+            double triggerTH = THCalculator.calculateTHPoints(series.getInstrument(), thBasePrice, triggerTFPercent) * series.getInstrument().getTickSize();
+            BarSize structureBarSize = TimeframeUtil.getStructureBarSize(series.getBarSize());
+            double structureTFPercent = TimeframeUtil.getTimeframePercentage(structureBarSize);
+            double structureTH = THCalculator.calculateTHPoints(series.getInstrument(), thBasePrice, structureTFPercent) * series.getInstrument().getTickSize();
+            BarSize higherPatternBarSize = TimeframeUtil.getPatternBarSize(structureBarSize);
+            double higherPatternPercent = TimeframeUtil.getTimeframePercentage(higherPatternBarSize);
+            double higherPatternTH = THCalculator.calculateTHPoints(series.getInstrument(), thBasePrice, higherPatternPercent) * series.getInstrument().getTickSize();
+            // Set instance fields
+            this.thValue = thValue;
+            this.patternTH = patternTH;
+            this.triggerTH = triggerTH;
+            this.structureTH = structureTH;
+            this.higherPatternTH = higherPatternTH;
             double[] fractalValues = FractalCalculator.calculateFractalValues(series.getBarSize(), thValue);
             double structureValue = fractalValues[0]; // S value
             double patternValue = fractalValues[1];   // P value
@@ -589,6 +629,42 @@ public class BiotakTrigger extends Study {
 
             // ------------------- LEG RULER -------------------
             // (Leg Ruler logic removed)
+            if (settings.getBoolean(S_SHOW_RULER, false)) {
+                // Initialize resize points and line if null
+                if (rulerStartResize == null) {
+                    rulerStartResize = new ResizePoint(ResizeType.ALL, true);
+                    rulerStartResize.setSnapToLocation(true);
+                }
+                if (rulerEndResize == null) {
+                    rulerEndResize = new ResizePoint(ResizeType.ALL, true);
+                    rulerEndResize.setSnapToLocation(true);
+                }
+                if (rulerFigure == null) rulerFigure = new RulerFigure();
+
+                // Load or set default positions
+                String startStr = settings.getString(S_RULER_START);
+                String endStr = settings.getString(S_RULER_END);
+                long rulerStartTime = series.getStartTime(series.size() - 41);
+                double rulerStartPrice = series.getDouble(series.size() - 41, Enums.BarInput.MIDPOINT);
+                long rulerEndTime = series.getStartTime(series.size() - 1);
+                double rulerEndPrice = series.getDouble(series.size() - 1, Enums.BarInput.MIDPOINT);
+                if (startStr != null) {
+                    String[] parts = startStr.split("\\|");
+                    rulerStartPrice = Double.parseDouble(parts[0]);
+                    rulerStartTime = Long.parseLong(parts[1]);
+                }
+                if (endStr != null) {
+                    String[] parts = endStr.split("\\|");
+                    rulerEndPrice = Double.parseDouble(parts[0]);
+                    rulerEndTime = Long.parseLong(parts[1]);
+                }
+                rulerStartResize.setLocation(rulerStartTime, rulerStartPrice);
+                rulerEndResize.setLocation(rulerEndTime, rulerEndPrice);
+
+                addFigure(rulerFigure);
+                addFigure(rulerStartResize);
+                addFigure(rulerEndResize);
+            }
         } finally {
             // Restore previous log level
             Logger.setLogLevel(LogLevel.WARN);
@@ -597,36 +673,21 @@ public class BiotakTrigger extends Study {
 
     @Override
     public void onEndResize(ResizePoint rp, DrawContext ctx) {
-        if (rp != null && rp == customPricePoint) {
-            double newPrice = rp.getValue();
-            getSettings().setDouble(S_CUSTOM_PRICE, newPrice);
-            lastCustomMoveTime = System.currentTimeMillis();
+        super.onEndResize(rp, ctx);
+        if (rp == rulerStartResize) {
+            getSettings().setString(S_RULER_START, rp.getValue() + "|" + rp.getTime());
+        } else if (rp == rulerEndResize) {
+            getSettings().setString(S_RULER_END, rp.getValue() + "|" + rp.getTime());
         }
-        // (Leg Ruler resize handling removed)
     }
 
     // Provide live feedback while dragging the custom price point
     @Override
     public void onResize(ResizePoint rp, DrawContext ctx) {
-        if (rp != null && rp == customPricePoint) {
-            var series = ctx.getDataContext().getDataSeries();
-            // Update price label live (value might be rounded by native snap)
-            if (customPriceLabel == null) customPriceLabel = new PriceLabel();
-            String txt = series.getInstrument().format(rp.getValue());
-            customPriceLabel.setData(rp.getTime(), rp.getValue(), txt);
-            addFigure(customPriceLabel);
-
-            // خط افقی را در لحظه جابه‌جا می‌کنیم تا بازخورد بصری فوری باشد.
-            DataSeries dsLive = ctx.getDataContext().getDataSeries();
-            long startT = dsLive.getStartTime(0);
-            long endT = dsLive.getStartTime(dsLive.size()-1);
-            PathInfo cpPathLive = getSettings().getPath(S_CUSTOM_PRICE_PATH);
-            if (customPriceLine != null) removeFigure(customPriceLine);
-            customPriceLine = new Line(new Coordinate(startT, rp.getValue()), new Coordinate(endT, rp.getValue()), cpPathLive);
-            addFigure(customPriceLine);
+        super.onResize(rp, ctx);
+        if (rp == rulerStartResize || rp == rulerEndResize) {
+            rulerFigure.layout(ctx);
         }
-        // Live feedback for Leg Ruler dragging
-        // (Leg Ruler live feedback removed)
     }
 
     @Override
@@ -674,6 +735,190 @@ public class BiotakTrigger extends Study {
         double higherPatternPercent = TimeframeUtil.getTimeframePercentage(higherPatternBarSize);
         double higherPatternTH = THCalculator.calculateTHPoints(instrument, basePrice, higherPatternPercent) * instrument.getTickSize();
         infoPanel.setUpwardFractalInfo(FractalCalculator.formatTimeframeString(higherPatternBarSize), FractalCalculator.formatTimeframeString(structureBarSize), higherPatternTH, structureTH);
+        // Set instance fields
+        this.thValue = thValue;
+        this.patternTH = patternTH;
+        this.triggerTH = triggerTH;
+        this.structureTH = structureTH;
+        this.higherPatternTH = higherPatternTH;
         addFigure(this.infoPanel);
+    }
+
+    private class RulerFigure extends Figure {
+        private java.awt.geom.Line2D line;
+
+        @Override
+        public boolean contains(double x, double y, DrawContext ctx) {
+            return line != null && Util.distanceFromLine(x, y, line) < 6;
+        }
+
+        @Override
+        public void layout(DrawContext ctx) {
+            var start = ctx.translate(rulerStartResize.getLocation());
+            var end = ctx.translate(rulerEndResize.getLocation());
+            if (start.getX() > end.getX()) {
+                var tmp = end;
+                end = start;
+                start = tmp;
+            }
+            var gb = ctx.getBounds();
+            double m = Util.slope(start, end);
+            if (getSettings().getBoolean(S_RULER_EXT_LEFT)) start = calcPoint(m, end, gb.getX(), gb);
+            if (getSettings().getBoolean(S_RULER_EXT_RIGHT)) end = calcPoint(m, start, gb.getMaxX(), gb);
+            line = new java.awt.geom.Line2D.Double(start, end);
+        }
+
+        private java.awt.geom.Point2D calcPoint(double m, java.awt.geom.Point2D p, double x, java.awt.Rectangle gb) {
+            double y = 0;
+            if (m == Double.POSITIVE_INFINITY) {
+                y = gb.getMaxY();
+                x = p.getX();
+            } else if (m == Double.NEGATIVE_INFINITY) {
+                y = gb.getMinY();
+                x = p.getX();
+            } else {
+                double b = p.getY() - (m * p.getX());
+                y = m * x + b;
+            }
+            return new java.awt.geom.Point2D.Double(x, y);
+        }
+
+        @Override
+        public void draw(java.awt.Graphics2D gc, DrawContext ctx) {
+            var path = getSettings().getPath(S_RULER_PATH);
+            gc.setStroke(ctx.isSelected() ? path.getSelectedStroke() : path.getStroke());
+            gc.setColor(path.getColor());
+            gc.draw(line);
+
+            // Add label in the middle
+            if (line != null) {
+                double midX = (line.getX1() + line.getX2()) / 2;
+                double midY = (line.getY1() + line.getY2()) / 2;
+
+                // Get real values for info
+                DataSeries series = ctx.getDataContext().getDataSeries();
+                double startPrice = rulerStartResize.getValue();
+                double endPrice = rulerEndResize.getValue();
+                long startTime = rulerStartResize.getTime();
+                long endTime = rulerEndResize.getTime();
+
+                // Swap if start > end
+                boolean swapped = false;
+                if (startTime > endTime) {
+                    swapped = true;
+                    long tmpTime = startTime;
+                    startTime = endTime;
+                    endTime = tmpTime;
+                    double tmpPrice = startPrice;
+                    startPrice = endPrice;
+                    endPrice = tmpPrice;
+                }
+
+                double priceDiff = endPrice - startPrice;
+                double pctChange = (priceDiff / startPrice) * 100;
+                double timeDiffMs = Math.abs(endTime - startTime);
+                int startIdx = series.findIndex(startTime);
+                int endIdx = series.findIndex(endTime);
+                double bars = Math.abs(endIdx - startIdx) + 1;
+                // Pixel-based angle
+                double pixelDX = line.getX2() - line.getX1();
+                double pixelDY = line.getY2() - line.getY1();
+                double angle = Math.toDegrees(Math.atan2(-pixelDY, pixelDX));
+                if (swapped) angle += 180; // Adjust for direction
+
+                // Split info into lines
+                String pctStr = String.format("%.2f%%", pctChange);
+                String barsStr = String.format("%.0f bars", bars);
+                String angleStr = String.format("%.1f°", Math.abs(angle));
+                long diffMs = Math.abs(endTime - startTime);
+                long minutes = (diffMs / (1000 * 60)) % 60;
+                double pips = Math.abs(endPrice - startPrice) / series.getInstrument().getTickSize();
+                String pipsStr = String.format("Pips: %.1f", pips);
+                 // --- Determine best matching MOVE across ALL timeframes ---
+                 double tick = series.getInstrument().getTickSize();
+                 long legPips = Math.round(pips);
+
+                 // Candidates: current, pattern, trigger, structure, higher
+                 double[] thValues = { thValue, patternTH, triggerTH, structureTH, higherPatternTH };
+                 String[] labels    = tfLabels; // same length 5
+                 long bestDiff = Long.MAX_VALUE;
+                 String bestLabel = "-";
+
+                 for (int i = 0; i < thValues.length; i++) {
+                     double mvP = thValues[i];
+                     if (mvP <= 0) continue;
+                     long movePip = Math.round(mvP / tick);
+                     if (movePip == 0) continue;
+
+                     for (int k = 1; k <= 12; k++) {
+                         long candidate = k * movePip;
+                         long diff = Math.abs(legPips - candidate);
+                         if (diff < bestDiff) {
+                             bestDiff = diff;
+                             String base = (labels[i]==null || labels[i].isBlank()) ? ("TF"+i) : labels[i];
+                             bestLabel = (k > 1 ? k + "×" + base : base);
+                             if (diff == 0) break;
+                         }
+                     }
+                     if (bestDiff == 0) break;
+                 }
+
+                 String matchStr = bestLabel;
+                 Logger.debug("Ruler Match -> legPips=" + legPips + ", bestLabel=" + bestLabel + ", diff=" + bestDiff);
+                long hours = (diffMs / (1000 * 60 * 60)) % 24;
+                long days = (diffMs / (1000 * 60 * 60 * 24)) % 30; // Approximate months
+                long months = (diffMs / (1000L * 60 * 60 * 24 * 30)) % 12;
+                long years = (diffMs / (1000L * 60 * 60 * 24 * 365));
+                StringBuilder timeSB = new StringBuilder("Time: ");
+                if (years > 0) timeSB.append(years).append("y ");
+                if (months > 0) timeSB.append(months).append("m ");
+                if (days > 0) timeSB.append(days).append("d ");
+                if (hours > 0) timeSB.append(hours).append("h ");
+                if (minutes > 0 || timeSB.length() == 6) timeSB.append(minutes).append("min");
+                String timeStr = timeSB.toString();
+                String[] lines = { pctStr, pipsStr, barsStr, angleStr, timeStr, matchStr };
+
+                // Calculate max width and total height
+                java.awt.font.FontRenderContext frc = gc.getFontRenderContext();
+                double maxWidth = 0;
+                double lineHeight = gc.getFont().getLineMetrics("A", frc).getHeight();
+                for (String ln : lines) {
+                    double w = gc.getFont().getStringBounds(ln, frc).getWidth();
+                    if (w > maxWidth) maxWidth = w;
+                }
+                int padding = 5;
+                int boxWidth = (int) maxWidth + 2 * padding;
+                int boxHeight = (int) (lineHeight * lines.length) + 2 * padding;
+
+                int boxX = (int) (midX - boxWidth / 2);
+                // Position box touching the line at midpoint
+                int boxY;
+                if (pixelDY > 0) { // Descending: box above, bottom touches line
+                    boxY = (int) midY - boxHeight;
+                } else { // Ascending: box below, top touches line
+                    boxY = (int) midY;
+                }
+
+                // Draw semi-transparent white background box
+                gc.setColor(new java.awt.Color(255, 255, 255, 200)); // Semi-transparent white
+                gc.fillRoundRect(boxX, boxY, boxWidth, boxHeight, 8, 8);
+
+                // Optional: draw border
+                gc.setColor(java.awt.Color.GRAY);
+                gc.drawRoundRect(boxX, boxY, boxWidth, boxHeight, 8, 8);
+
+                gc.setColor(java.awt.Color.BLACK); // Black text for contrast
+                gc.setFont(getSettings().getFont(S_FONT).getFont()); // Use existing font setting
+                // Draw each line centered
+                java.awt.font.LineMetrics lm = gc.getFont().getLineMetrics("A", frc);
+                int y = boxY + (int) lm.getAscent() + padding;
+                for (String ln : lines) {
+                    java.awt.geom.Rectangle2D bounds = gc.getFont().getStringBounds(ln, frc);
+                    int x = boxX + (boxWidth - (int) bounds.getWidth()) / 2;
+                    gc.drawString(ln, x, y);
+                    y += lineHeight;
+                }
+            }
+        }
     }
 } 
