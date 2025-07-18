@@ -141,6 +141,39 @@ public final class TimeframeUtil {
         // Private constructor to prevent instantiation
     }
 
+    /* ------------------------------------------------------------------
+     *  PUBLIC HELPERS (exposed for Ruler matching and other utilities)
+     * ------------------------------------------------------------------ */
+
+    /**
+     * Unmodifiable view of the underlying power-of-2 fractal minute map.
+     * Key = minutes, Value = formatted timeframe label (e.g. "M4", "H4+M16").
+     */
+    public static Map<Integer, String> getFractalMinutesMap() {
+        return java.util.Collections.unmodifiableMap(FRACTAL_MINUTES_MAP);
+    }
+
+    /**
+     * Unmodifiable view of the underlying power-of-3 fractal minute map.
+     * Key = minutes, Value = formatted timeframe label (e.g. "M9", "H1+M21").
+     */
+    public static Map<Integer, String> getPower3MinutesMap() {
+        return java.util.Collections.unmodifiableMap(POWER3_MINUTES_MAP);
+    }
+
+    /**
+     * Convenience wrapper to obtain the timeframe percentage directly from a raw minute value.
+     * Internally constructs a minute-based BarSize and delegates to {@link #getTimeframePercentage(BarSize)}.
+     *
+     * @param minutes total minutes (must be >0)
+     * @return computed percentage for the given timeframe length
+     */
+    public static double getTimeframePercentage(int minutes) {
+        if (minutes <= 0) minutes = 1;
+        com.motivewave.platform.sdk.common.BarSize bs = com.motivewave.platform.sdk.common.BarSize.getBarSize(minutes);
+        return getTimeframePercentage(bs);
+    }
+
     /**
      * Gets the corresponding percentage for a given bar size based on a predefined fractal mapping.
      * For non-fractal timeframes, it interpolates between the closest fractal timeframes.
@@ -457,8 +490,6 @@ public final class TimeframeUtil {
     }
     
     /**
-<<<<<<< HEAD
-=======
      * Gets the relative position of a non-fractal timeframe between its neighboring fractal timeframes.
      * This helps understand where a timeframe like M20 sits between M16 and M64.
      * 
@@ -599,7 +630,6 @@ public final class TimeframeUtil {
     }
     
     /**
->>>>>>> 722ba07644c2ccf9e8a54d5e43c2003d41cb74f2
      * Converts minutes to a timeframe string
      */
     private static String getTimeframeString(int minutes) {

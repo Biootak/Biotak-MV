@@ -89,12 +89,26 @@ public class BiotakTrigger extends Study {
     private double structureTH;
     private double higherPatternTH;
 
+    // --- M values (SS + C + LS) for each fractal level ---
+    private double mValue;           // current timeframe
+    private double patternM;
+    private double triggerM;
+    private double structureM;
+    private double higherPatternM;
+
     // Human-readable labels for each TH value (Current, Pattern, Trigger, Structure, Higher)
     private String[] tfLabels = {"", "", "", "", ""};
+
+    // Holds comprehensive M values for ruler matching built during drawFigures()
+    private java.util.Map<String, Double> fullMValues = new java.util.HashMap<>();
 
     private static final long LOG_INTERVAL_MS = 60_000;      // 1 minute
     private static long lastCalcTableLogTime = 0;             // Tracks last time the calc table was printed
     private static long lastHighLowLogTime = 0;             // Tracks last time historical high/low was logged
+
+    // Throttle ruler INFO logs
+    private static long lastRulerInfoLog = 0;
+    private static final long RULER_LOG_INTERVAL_MS = 1000;
 
     // (Leg Ruler fields removed)
     private ResizePoint rulerStartResize, rulerEndResize;
@@ -521,38 +535,106 @@ public class BiotakTrigger extends Study {
             double higherPatternPercent = TimeframeUtil.getTimeframePercentage(higherPatternBarSize);
             double higherPatternTH = THCalculator.calculateTHPoints(series.getInstrument(), thBasePrice, higherPatternPercent) * series.getInstrument().getTickSize();
             // Set instance fields
-            this.thValue = thValue;
-            this.patternTH = patternTH;
-            this.triggerTH = triggerTH;
-            this.structureTH = structureTH;
-            this.higherPatternTH = higherPatternTH;
-            double[] fractalValues = FractalCalculator.calculateFractalValues(series.getBarSize(), thValue);
+            // -----------------------------  STORE VALUES FOR RULER MATCHING  -----------------------------
+            // 1) TH values
+            this.thValue          = thValue;
+            this.patternTH        = patternTH;
+            this.triggerTH        = triggerTH;
+            this.structureTH      = structureTH;
+            this.higherPatternTH  = higherPatternTH;
+
+            // 2) M values derived from TH →  M = SS + C + LS
+            //    Detailed decomposition based on Biotak fractal relationships:
+            //      • Structure  (S)  = TH (1 × TH)
+            //      • Pattern    (P)  = 0.5 × S  = 0.5 × TH
+            //      • Trigger    (T)  = 0.5 × P  = 0.25 × TH
+            //      • Short Step (SS) = (2 × S) − P          ≈ 1.5 × TH
+            //      • Long Step  (LS) = (3 × S) − (2 × P)    ≈ 2   × TH
+            //      • Control    (C)  = (SS + LS) / 2 / 7     ≈ 0.25 × TH (empirically)
+            //    Summing SS + C + LS + S + P + T gives:
+            //      1.5 + 0.25 + 2 + 1 + 0.5 + 0.25 = 5.5 × TH (but Biotak spec uses 5.25)
+            //    The original MT4 implementation uses a fixed coefficient of 5.25; we align with that.
+            double mScale = 5.25;
+            this.mValue          = mScale * thValue;
+            this.patternM        = mScale * patternTH;
+            this.triggerM        = mScale * triggerTH;
+            this.structureM      = mScale * structureTH;
+            this.higherPatternM  = mScale * higherPatternTH;
+
+            // 3) Human-readable timeframe labels for ruler pop-up
+            BarSize currBarSize = series.getBarSize();
+            this.tfLabels[0] = FractalCalculator.formatTimeframeString(currBarSize);
+            this.tfLabels[1] = FractalCalculator.formatTimeframeString(patternBarSize);
+            this.tfLabels[2] = FractalCalculator.formatTimeframeString(triggerBarSize);
+            this.tfLabels[3] = FractalCalculator.formatTimeframeString(structureBarSize);
+            this.tfLabels[4] = FractalCalculator.formatTimeframeString(higherPatternBarSize);
+
+            // -----------------------------  BUILD COMPREHENSIVE M MAP  -----------------------------
+            java.util.Map<String, Double> mMap = new java.util.HashMap<>();
+            // 1) immediate five levels
+            mMap.put(tfLabels[0], mValue);
+            mMap.put(tfLabels[1], patternM);
+            mMap.put(tfLabels[2], triggerM);
+            mMap.put(tfLabels[3], structureM);
+            mMap.put(tfLabels[4], higherPatternM);
+
+            // 2) iterate fractal maps
+            var fractalMinutes = TimeframeUtil.getFractalMinutesMap();
+            var power3Minutes  = TimeframeUtil.getPower3MinutesMap();
+
+            java.util.function.BiConsumer<Integer,String> addEntry = (mins,label) -> {
+                if (label == null || label.isEmpty()) return;
+                if (mMap.containsKey(label)) return;
+                double perc   = TimeframeUtil.getTimeframePercentage(mins);
+                double thPts  = THCalculator.calculateTHPoints(series.getInstrument(), thBasePrice, perc) * pointValue;
+                double mv     = mScale * thPts;
+                if (mv > 0) mMap.put(label, mv);
+            };
+
+            for (var e : fractalMinutes.entrySet()) addEntry.accept(e.getKey(), e.getValue());
+            for (var e : power3Minutes.entrySet())  addEntry.accept(e.getKey(), e.getValue());
+
+            // store to field for ruler access
+            this.fullMValues = mMap;
+ 
+            // Debug: log size of comprehensive M map
+            Logger.info("[MMap] size=" + mMap.size());
+
+            // Debug: list entries with M value in pips for quick inspection
+            double tickDbg = ctx.getInstrument().getTickSize();
+            StringBuilder sbM = new StringBuilder("[MMap] entries -> ");
+            mMap.entrySet().stream()
+                .sorted(java.util.Map.Entry.comparingByKey())
+                .forEach(e -> {
+                    long pipsVal = Math.round(e.getValue() / tickDbg);
+                    sbM.append(e.getKey()).append("=").append(pipsVal).append("p, ");
+                });
+            Logger.info(sbM.toString());
+
+            // ---------------------- FRACTAL METRICS & PANEL ----------------------
+            double[] fractalValues = FractalCalculator.calculateFractalValues(currBarSize, thValue);
             double structureValue = fractalValues[0]; // S value
-            double patternValue = fractalValues[1];   // P value
-            double triggerValue = fractalValues[2];   // T value
-            
-            // Calculate the long and short steps
+            double patternValue  = fractalValues[1];  // P value
+            double triggerValue  = fractalValues[2];  // T value
+
+            // Calculate SS/LS for current timeframe
             double shortStep = FractalCalculator.calculateShortStep(structureValue, patternValue);
-            double longStep = FractalCalculator.calculateLongStep(structureValue, patternValue);
-            
-            // Calculate ATR value for the full period
-            double atrValue = FractalCalculator.calculateATR(series);
-            
-            // Calculate current bar's ATR (live ATR)
+            double longStep  = FractalCalculator.calculateLongStep(structureValue, patternValue);
+
+            // ATR metrics
+            double atrValue     = FractalCalculator.calculateATR(series);
             double liveAtrValue = FractalCalculator.calculateLiveATR(series);
-            
-            // Calculate pip multiplier for display purposes
             double pipMultiplier = FractalCalculator.getPipMultiplier(series.getInstrument());
 
-            // Log detailed calculation table
             long now = System.currentTimeMillis();
             if (now - lastCalcTableLogTime > LOG_INTERVAL_MS) {
-                FractalCalculator.logCalculationTable(series, thValue, structureValue, patternValue, triggerValue, 
-                                   shortStep, longStep, atrValue, liveAtrValue, pipMultiplier, lastCalcTableLogTime, LOG_INTERVAL_MS);
+                FractalCalculator.logCalculationTable(series, thValue, structureValue, patternValue, triggerValue,
+                               shortStep, longStep, atrValue, liveAtrValue,
+                               pipMultiplier, lastCalcTableLogTime, LOG_INTERVAL_MS);
                 lastCalcTableLogTime = now;
             }
-            
-            // Draw the information panel with the new values
+
+            // Update / draw information panel
             drawInfoPanel(series, thValue, startTime, shortStep, longStep, atrValue, liveAtrValue);
             
             // ------------------------------------------------------------------
@@ -747,6 +829,12 @@ public class BiotakTrigger extends Study {
     private class RulerFigure extends Figure {
         private java.awt.geom.Line2D line;
 
+        // --- cache to reduce CPU ---
+        private double cachedLegPip = Double.NaN;
+        private String cachedBestLabel = null;
+        private double cachedBestBasePips = 0;
+        private double cachedBestDiff = 0;
+
         @Override
         public boolean contains(double x, double y, DrawContext ctx) {
             return line != null && Util.distanceFromLine(x, y, line) < 6;
@@ -785,6 +873,8 @@ public class BiotakTrigger extends Study {
 
         @Override
         public void draw(java.awt.Graphics2D gc, DrawContext ctx) {
+            // Ensure logging is at INFO so that debug/info lines get captured when ruler draws
+            Logger.setLogLevel(LogLevel.INFO);
             var path = getSettings().getPath(S_RULER_PATH);
             gc.setStroke(ctx.isSelected() ? path.getSelectedStroke() : path.getStroke());
             gc.setColor(path.getColor());
@@ -836,35 +926,141 @@ public class BiotakTrigger extends Study {
                 String pipsStr = String.format("Pips: %.1f", pips);
                  // --- Determine best matching MOVE across ALL timeframes ---
                  double tick = series.getInstrument().getTickSize();
-                 long legPips = Math.round(pips);
+                 // Round leg length to 0.1-pip precision for matching
+                 double legPip = Math.round(pips * 10.0) / 10.0;
 
-                 // Candidates: current, pattern, trigger, structure, higher
-                 double[] thValues = { thValue, patternTH, triggerTH, structureTH, higherPatternTH };
-                 String[] labels    = tfLabels; // same length 5
-                 long bestDiff = Long.MAX_VALUE;
+                 Logger.debug("[Ruler] legPip=" + legPip + ", tickSize=" + tick);
+
                  String bestLabel = "-";
+                 double bestBasePips = 0;
+                 double bestDiff = Double.MAX_VALUE;
 
-                 for (int i = 0; i < thValues.length; i++) {
-                     double mvP = thValues[i];
-                     if (mvP <= 0) continue;
-                     long movePip = Math.round(mvP / tick);
-                     if (movePip == 0) continue;
+                 // اگر لگ تغییر نکرده است از نتایج قبلی استفاده کن
+                 if (!Double.isNaN(cachedLegPip) && Math.abs(cachedLegPip - legPip) < 0.05) {
+                     bestLabel      = cachedBestLabel;
+                     bestBasePips   = cachedBestBasePips;
+                     bestDiff       = cachedBestDiff;
+                 } else {
+                     // ---------- محاسبات سنگین فقط این‌جا ----------
+                     // Candidates: comprehensive map built in outer class (fullMValues)
+                     java.util.Map<String, Double> mMapLocal = BiotakTrigger.this.fullMValues;
+                     // حجم لاگ را کم می‌کنیم: فقط زمانی که DEBUG فعال است چاپ شود
+                     Logger.debug("[Ruler] mMapLocal size=" + (mMapLocal == null ? -1 : mMapLocal.size()));
+                     double bestAboveDiff = Double.MAX_VALUE;
+                     String bestAboveLabel = null;
+                     double bestAbovePips = 0;
 
-                     for (int k = 1; k <= 12; k++) {
-                         long candidate = k * movePip;
-                         long diff = Math.abs(legPips - candidate);
-                         if (diff < bestDiff) {
-                             bestDiff = diff;
-                             String base = (labels[i]==null || labels[i].isBlank()) ? ("TF"+i) : labels[i];
-                             bestLabel = (k > 1 ? k + "×" + base : base);
-                             if (diff == 0) break;
+                     double bestBelowDiff = Double.MAX_VALUE;
+                     String bestBelowLabel = null;
+                     double bestBelowPips = 0;
+
+                     if (mMapLocal != null && !mMapLocal.isEmpty()) {
+                         for (var entry : mMapLocal.entrySet()) {
+                             String label = entry.getKey();
+                             double baseMove = entry.getValue();
+                             if (baseMove <= 0) continue;
+                             double basePip = Math.round(baseMove / tick * 10.0) / 10.0;
+                             if (basePip >= legPip) {
+                                 double diff = basePip - legPip;
+                                 if (diff < bestAboveDiff) {
+                                     bestAboveDiff = diff;
+                                     bestAboveLabel = label;
+                                     bestAbovePips = basePip;
+                                 }
+                             } else { // below leg
+                                 double diff = legPip - basePip;
+                                 if (diff < bestBelowDiff) {
+                                     bestBelowDiff = diff;
+                                     bestBelowLabel = label;
+                                     bestBelowPips = basePip;
+                                 }
+                              }
+                          }
+                     }
+
+                     // Choose preferred candidate: any above leg takes priority; if none, use best below
+                     // (variables declared earlier)
+                     if (bestAboveLabel != null) {
+                         bestLabel = bestAboveLabel;
+                         bestBasePips = bestAbovePips;
+                         bestDiff = bestAboveDiff;
+                     } else {
+                         bestLabel = (bestBelowLabel != null ? bestBelowLabel : "-");
+                         bestBasePips = bestBelowPips;
+                         bestDiff = bestBelowDiff;
+                     }
+
+                     // ------------------------------------------------------------------
+                     //  دقیق‌سازی به روش دودویی بین دو فراکتال مجاور                         
+                     // ------------------------------------------------------------------
+                     if (bestDiff > 0.1 && bestAboveLabel != null && bestBelowLabel != null) {
+                         int lowMin  = parseMinutesFromLabel(bestBelowLabel);
+                         int highMin = parseMinutesFromLabel(bestAboveLabel);
+                         if (lowMin > 0 && highMin > lowMin) {
+                             double closePrice = series.getClose(series.size()-1);
+                             while (highMin - lowMin > 1) {
+                                 int mid = (lowMin + highMin) / 2;
+                                 double perc   = TimeframeUtil.getTimeframePercentage(mid);
+                                 double thPts  = THCalculator.calculateTHPoints(series.getInstrument(), closePrice, perc) * tick;
+                                 double mVal   = 5.25 * thPts;
+                                 double mPips  = Math.round(mVal / tick * 10.0) / 10.0;
+                                 if (mPips >= legPip) {
+                                     highMin = mid;
+                                     bestAboveDiff  = mPips - legPip;
+                                     bestAbovePips  = mPips;
+                                     bestAboveLabel = compoundTimeframe(mid);
+                                 } else {
+                                     lowMin = mid;
+                                     bestBelowDiff  = legPip - mPips;
+                                     bestBelowPips  = mPips;
+                                     bestBelowLabel = compoundTimeframe(mid);
+                                 }
+                                 if (Math.abs(mPips - legPip) <= 0.05) break; // 0.05-pip دقت
+                             }
+
+                             // انتخاب نزدیک‌ترین مورد پس از دودویی
+                             if (bestAboveDiff < bestBelowDiff) {
+                                 bestLabel = bestAboveLabel; bestBasePips = bestAbovePips; bestDiff = bestAboveDiff;
+                             } else {
+                                 bestLabel = bestBelowLabel; bestBasePips = bestBelowPips; bestDiff = bestBelowDiff;
+                             }
                          }
                      }
-                     if (bestDiff == 0) break;
+
+                     // ذخیره در کش
+                     cachedLegPip      = legPip;
+                     cachedBestLabel   = bestLabel;
+                     cachedBestBasePips= bestBasePips;
+                     cachedBestDiff    = bestDiff;
                  }
 
-                 String matchStr = bestLabel;
-                 Logger.debug("Ruler Match -> legPips=" + legPips + ", bestLabel=" + bestLabel + ", diff=" + bestDiff);
+                 long nowInfo = System.currentTimeMillis();
+                 if (nowInfo - lastRulerInfoLog > RULER_LOG_INTERVAL_MS) {
+                     Logger.info(String.format("[Ruler] Leg=%.1f pips, Best base=%s (%.1f pips), diff=%.1f", legPip, bestLabel, bestBasePips, bestDiff));
+                     lastRulerInfoLog = nowInfo;
+                 }
+
+                 long totalMinutes = -1;
+                 if (!bestLabel.equals("-")) {
+                     int baseMinutes = parseMinutesFromLabel(bestLabel);
+                     if (baseMinutes > 0) {
+                         totalMinutes = baseMinutes;
+                     }
+                 }
+
+                 String matchCompound;
+                 String matchMinutes;
+                 if (totalMinutes > 0) {
+                     matchCompound = compoundTimeframe(totalMinutes);
+                     matchMinutes = totalMinutes + "m";
+                     Logger.debug("[Ruler] Match compound=" + matchCompound + ", minutes=" + matchMinutes);
+                 } else {
+                     matchCompound = "-";
+                     matchMinutes = "-";
+                 }
+
+                 String matchStr1 = bestLabel;
+                 String matchStr2 = (totalMinutes > 0 ? matchMinutes : "-");
                 long hours = (diffMs / (1000 * 60 * 60)) % 24;
                 long days = (diffMs / (1000 * 60 * 60 * 24)) % 30; // Approximate months
                 long months = (diffMs / (1000L * 60 * 60 * 24 * 30)) % 12;
@@ -876,7 +1072,7 @@ public class BiotakTrigger extends Study {
                 if (hours > 0) timeSB.append(hours).append("h ");
                 if (minutes > 0 || timeSB.length() == 6) timeSB.append(minutes).append("min");
                 String timeStr = timeSB.toString();
-                String[] lines = { pctStr, pipsStr, barsStr, angleStr, timeStr, matchStr };
+                String[] lines = { pctStr, pipsStr, barsStr, angleStr, timeStr, matchStr1, matchStr2 };
 
                 // Calculate max width and total height
                 java.awt.font.FontRenderContext frc = gc.getFontRenderContext();
@@ -919,6 +1115,74 @@ public class BiotakTrigger extends Study {
                     y += lineHeight;
                 }
             }
+        }
+    }
+
+    // Helper methods inside RulerFigure
+    private int parseMinutesFromLabel(String tf) {
+            if (tf == null || tf.isEmpty()) return -1;
+            if (tf.equalsIgnoreCase("MN")) return 43200;
+
+            // Split by '+' OR whitespace for composite strings (e.g., "4H+47m" or "4H 47m")
+            String[] parts = tf.split("[+\\s]+");
+            int minutes = 0;
+            for (String part : parts) {
+                part = part.trim();
+                if (part.isEmpty()) continue;
+
+                // Detect pattern like "56s" (digits followed by unit) or "H4"
+                if (Character.isDigit(part.charAt(0))) {
+                    // digits first
+                    int i = 0;
+                    while (i < part.length() && Character.isDigit(part.charAt(i))) i++;
+                    String numStr = part.substring(0, i);
+                    char unit = Character.toUpperCase(part.charAt(i));
+                    try {
+                        int val = Integer.parseInt(numStr);
+                        switch (unit) {
+                            case 'M' -> minutes += val;
+                            case 'H' -> minutes += val * 60;
+                            case 'D' -> minutes += val * 1440;
+                            case 'W' -> minutes += val * 10080;
+                            case 'S' -> {
+                                // convert seconds to minutes, ensure at least 1 minute so value is non-zero
+                                minutes += Math.max(1, (int)Math.round(val / 60.0));
+                              }
+                        }
+                    } catch (NumberFormatException e) { }
+                } else {
+                    char p = Character.toUpperCase(part.charAt(0));
+                    try {
+                        int val = Integer.parseInt(part.substring(1));
+                        switch (p) {
+                            case 'M' -> minutes += val;
+                            case 'H' -> minutes += val * 60;
+                            case 'D' -> minutes += val * 1440;
+                            case 'W' -> minutes += val * 10080;
+                            case 'S' -> minutes += val / 60;
+                        }
+                    } catch (NumberFormatException e) { }
+                }
+            }
+            return minutes > 0 ? minutes : -1;
+    }
+
+    private String formatTimeframe(long minutes) {
+        if (minutes % 10080 == 0) return "W" + (minutes/10080);
+        if (minutes % 1440 == 0) return "D" + (minutes/1440);
+        if (minutes % 60 == 0)   return "H" + (minutes/60);
+        if (minutes == 43200)    return "MN"; // approx 1 month
+        return "M" + minutes;
+    }
+
+    private String compoundTimeframe(long minutes) {
+        long hrs = minutes / 60;
+        long rem = minutes % 60;
+        if (hrs > 0) {
+            if (rem > 0) return hrs + "H" + rem + "m";
+            else return hrs + "H";
+        } else {
+            return minutes + "m";
         }
     }
 } 
