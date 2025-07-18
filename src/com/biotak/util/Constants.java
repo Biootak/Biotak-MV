@@ -99,4 +99,11 @@ public final class Constants {
     public final static String S_LS_FIRST = "lsFirst";            // If true → draw LS before SS
     public final static String S_SSLS_BASIS = "sslsBasis";        // Structure / Pattern / Trigger / Auto / Higher
     public final static String S_LOCK_SSLS_LEVELS = "lockSsLsLevels"; // If true, keep SS/LS levels fixed when switching timeframes
+    public static final String S_CUSTOM_PRICE = "customPrice";
+    public static final String S_P_LEVEL_PATH = "pLevelPath";
+    public static final String S_S_LEVEL_PATH = "sLevelPath";
+    public static final String S_SS_LEVEL_PATH = "ssLevelPath";
+    public static final String S_C_LEVEL_PATH = "cLevelPath";
+    public static final String S_LS_LEVEL_PATH = "lsLevelPath";
+    public static final String S_PANEL_MINIMIZED = "panelMinimized";
 } 

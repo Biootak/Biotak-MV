@@ -38,6 +38,11 @@ import com.motivewave.platform.sdk.common.Enums.ResizeType;
 import static com.biotak.util.Constants.*;
 import com.biotak.enums.StepCalculationMode;
 import com.biotak.enums.SSLSBasisType;
+import com.biotak.ui.InfoPanel;
+import com.biotak.ui.PriceLabel;
+import com.biotak.ui.LevelLabel;
+import com.biotak.core.FractalCalculator;
+import com.biotak.ui.LevelDrawer;
 
 /**
  * Biotak Trigger TH3 Indicator for MotiveWave.
@@ -416,7 +421,8 @@ public class BiotakTrigger extends Study {
     
             // Draw the components of the indicator.
             if (currentMode == StepCalculationMode.TH_STEP) {
-            drawHistoricalLines(startTime, endTime, finalHigh, finalLow);
+                List<Figure> histFigures = LevelDrawer.drawHistoricalLines(getSettings(), startTime, endTime, finalHigh, finalLow);
+                for (Figure f : histFigures) addFigure(f);
             }
             double midpointPrice;
             if (currentMode == StepCalculationMode.SS_LS_STEP || currentMode == StepCalculationMode.CONTROL_STEP) {
@@ -428,7 +434,7 @@ public class BiotakTrigger extends Study {
                 }
                 midpointPrice = cp;
             } else {
-                midpointPrice = determineMidpointPrice(finalHigh, finalLow);
+                midpointPrice = LevelDrawer.determineMidpointPrice(getSettings(), finalHigh, finalLow);
             }
             Logger.debug("BiotakTrigger: Midpoint price calculated: " + midpointPrice);
             // Handle interactive custom price baseline
@@ -479,7 +485,8 @@ public class BiotakTrigger extends Study {
             
             // Draw midpoint line only if not in SS/LS mode (where custom price acts as anchor)
             if (currentMode == StepCalculationMode.TH_STEP) {
-            drawMidpointLine(startTime, endTime, midpointPrice);
+                List<Figure> midFigures = LevelDrawer.drawMidpointLine(getSettings(), startTime, endTime, midpointPrice);
+                for (Figure f : midFigures) addFigure(f);
             }
     
             // Step lines (TH or SS/LS) will be drawn below once all required values are calculated.
@@ -491,29 +498,29 @@ public class BiotakTrigger extends Study {
             double thValue = thStepInPoints * pointValue;
             
             // Calculate LS (Long Step) and SS (Short Step) values based on the fractal bit model
-            double[] fractalValues = calculateFractalValues(series.getBarSize(), thValue);
+            double[] fractalValues = FractalCalculator.calculateFractalValues(series.getBarSize(), thValue);
             double structureValue = fractalValues[0]; // S value
             double patternValue = fractalValues[1];   // P value
             double triggerValue = fractalValues[2];   // T value
             
             // Calculate the long and short steps
-            double shortStep = calculateShortStep(structureValue, patternValue);
-            double longStep = calculateLongStep(structureValue, patternValue);
+            double shortStep = FractalCalculator.calculateShortStep(structureValue, patternValue);
+            double longStep = FractalCalculator.calculateLongStep(structureValue, patternValue);
             
             // Calculate ATR value for the full period
-            double atrValue = calculateATR(series);
+            double atrValue = FractalCalculator.calculateATR(series);
             
             // Calculate current bar's ATR (live ATR)
-            double liveAtrValue = calculateLiveATR(series);
+            double liveAtrValue = FractalCalculator.calculateLiveATR(series);
             
             // Calculate pip multiplier for display purposes
-            double pipMultiplier = getPipMultiplier(series.getInstrument());
+            double pipMultiplier = FractalCalculator.getPipMultiplier(series.getInstrument());
 
             // Log detailed calculation table
             long now = System.currentTimeMillis();
             if (now - lastCalcTableLogTime > LOG_INTERVAL_MS) {
-                logCalculationTable(series, thValue, structureValue, patternValue, triggerValue, 
-                                   shortStep, longStep, atrValue, liveAtrValue, pipMultiplier);
+                FractalCalculator.logCalculationTable(series, thValue, structureValue, patternValue, triggerValue, 
+                                   shortStep, longStep, atrValue, liveAtrValue, pipMultiplier, lastCalcTableLogTime, LOG_INTERVAL_MS);
                 lastCalcTableLogTime = now;
             }
             
@@ -526,7 +533,8 @@ public class BiotakTrigger extends Study {
             switch (currentMode) {
                 case TH_STEP -> {
                     if (getSettings().getBoolean(S_SHOW_TH_LEVELS, true)) {
-                        drawTHLevels(series, midpointPrice, finalHigh, finalLow, thBasePrice, startTime, endTime);
+                        List<Figure> thFigures = LevelDrawer.drawTHLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, thBasePrice, startTime, endTime);
+                        for (Figure f : thFigures) addFigure(f);
                     }
                 }
                 case SS_LS_STEP -> {
@@ -576,7 +584,8 @@ public class BiotakTrigger extends Study {
                     double lsValue = baseTHForSession * 2.0;
                     boolean drawLsFirst = getSettings().getBoolean(S_LS_FIRST, true);
 
-                    drawSSLSLevels(series, midpointPrice, finalHigh, finalLow, ssValue, lsValue, drawLsFirst, startTime, endTime);
+                    List<Figure> sslsFigures = LevelDrawer.drawSSLSLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, ssValue, lsValue, drawLsFirst, startTime, endTime);
+                    for (Figure f : sslsFigures) addFigure(f);
                 }
                 case CONTROL_STEP -> {
                     // Draw levels based on the new fractal sequence  P → S → SS → C → LS
@@ -585,19 +594,8 @@ public class BiotakTrigger extends Study {
                     // Calculate Control (C) value as the midpoint between SS and LS (7 T for the current TF)
                     double controlValue = (shortStep + longStep) / 2.0;
 
-                    drawControlLevels(
-                        series,
-                        midpointPrice,
-                        finalHigh,
-                        finalLow,
-                        patternValue,
-                        structureValue,
-                        shortStep,
-                        controlValue,
-                        longStep,
-                        startTime,
-                        endTime
-                    );
+                    List<Figure> controlFigures = LevelDrawer.drawControlLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, patternValue, structureValue, shortStep, controlValue, longStep, startTime, endTime);
+                    for (Figure f : controlFigures) addFigure(f);
                 }
             }
 
@@ -648,738 +646,10 @@ public class BiotakTrigger extends Study {
         return getSettings().getInteger(S_HISTORICAL_BARS, 100000);
     }
 
-    /**
-     * Logs a detailed table showing all calculations across different fractal timeframes
-     */
-    private void logCalculationTable(DataSeries series, double thValue, double structureValue, 
-                                    double patternValue, double triggerValue, double shortStep, 
-                                    double longStep, double atrValue, double liveAtrValue,
-                                    double pipMultiplier) {
-        // Force log level to INFO for this method
-        Logger.setLogLevel(LogLevel.INFO);
-        
-        try {
-            StringBuilder sb = new StringBuilder();
-            String currentTimeframe = series.getBarSize().toString();
-            String structureTimeframe = currentTimeframe; // Current timeframe is Structure
-            String patternTimeframe = getPatternTimeframeString(series.getBarSize());
-            String triggerTimeframe = getTriggerTimeframeString(series.getBarSize());
-            
-            // Get ATR periods for each level
-            int structureAtrPeriod = TimeframeUtil.getAtrPeriod(series.getBarSize());
-            int patternAtrPeriod = getPatternAtrPeriod(series.getBarSize());
-            int triggerAtrPeriod = getTriggerAtrPeriod(series.getBarSize());
-            
-            // Calculate ATR values for each timeframe level
-            double structureAtr = atrValue; // Current timeframe ATR
-            
-            // Get pattern and trigger timeframes as BarSize objects
-            BarSize patternBarSize = TimeframeUtil.getPatternBarSize(series.getBarSize());
-            BarSize triggerBarSize = TimeframeUtil.getTriggerBarSize(series.getBarSize());
-            
-            // Calculate pattern ATR (approximate using the ratio of timeframes)
-            double patternAtr = atrValue / Math.sqrt(4.0);
-            
-            // Calculate trigger ATR (approximate using the ratio of timeframes)
-            double triggerAtr = atrValue / Math.sqrt(16.0);
-            
-            // Get TH percentages for each level
-            double structureTFPercentage = TimeframeUtil.getTimeframePercentage(series.getBarSize());
-            double patternTFPercentage = TimeframeUtil.getTimeframePercentage(patternBarSize);
-            double triggerTFPercentage = TimeframeUtil.getTimeframePercentage(triggerBarSize);
-            
-            // Calculate TH values (in price) based on these percentages
-            double basePrice = series.getClose(series.size() - 2);
-            double structureTHValue = (basePrice * structureTFPercentage) / 100.0;
-            double patternTHValue = (basePrice * patternTFPercentage) / 100.0;
-            double triggerTHValue = (basePrice * triggerTFPercentage) / 100.0;
-            
-            // Format header for log table
-            sb.append("\n+----------------------------------------------------------------------------------------+\n");
-            sb.append("| BIOTAK TRIGGER CALCULATION TABLE                                                       |\n");
-            sb.append("+----------------------------------------------------------------------------------------+\n");
-            sb.append(String.format("| Base Price: %.5f | Point Value: %.5f | Pip Multiplier: %.1f                     |\n", 
-                    basePrice, series.getInstrument().getTickSize(), pipMultiplier));
-            sb.append("+----------------------------------------------------------------------------------------+\n");
-            sb.append(String.format("| %-12s | %-12s | %-12s | %-12s | %-12s |\n", 
-                    "Timeframe", "Type", "Value", "Value (pips)", "ATR Period"));
-            sb.append("+----------------------------------------------------------------------------------------+\n");
-            
-            // Add Structure row (current timeframe)
-            sb.append(String.format("| %-12s | %-12s | %12.5f | %12.1f | %12d |\n", 
-                    structureTimeframe, "Structure (S)", structureValue, structureValue * pipMultiplier, structureAtrPeriod));
-            
-            // Add Pattern row (one level down)
-            sb.append(String.format("| %-12s | %-12s | %12.5f | %12.1f | %12d |\n", 
-                    patternTimeframe, "Pattern (P)", patternValue, patternValue * pipMultiplier, patternAtrPeriod));
-            
-            // Add Trigger row (two levels down)
-            sb.append(String.format("| %-12s | %-12s | %12.5f | %12.1f | %12d |\n", 
-                    triggerTimeframe, "Trigger (T)", triggerValue, triggerValue * pipMultiplier, triggerAtrPeriod));
-            
-            // Add TH, Short Step, Long Step, ATR rows
-            sb.append("+----------------------------------------------------------------------------------------+\n");
-            sb.append("| TH CALCULATIONS FROM FRACTAL TIMEFRAME PERCENTAGES                                     |\n");
-            sb.append("+----------------------------------------------------------------------------------------+\n");
-            sb.append(String.format("| %-12s | %-12s | %12.5f | %12.1f | %12.2f%% |\n", 
-                    structureTimeframe, "Structure TH", structureTHValue, structureTHValue * pipMultiplier, structureTFPercentage));
-            sb.append(String.format("| %-12s | %-12s | %12.5f | %12.1f | %12.2f%% |\n", 
-                    patternTimeframe, "Pattern TH", patternTHValue, patternTHValue * pipMultiplier, patternTFPercentage));
-            sb.append(String.format("| %-12s | %-12s | %12.5f | %12.1f | %12.2f%% |\n", 
-                    triggerTimeframe, "Trigger TH", triggerTHValue, triggerTHValue * pipMultiplier, triggerTFPercentage));
-                    
-            sb.append("+----------------------------------------------------------------------------------------+\n");
-            sb.append(String.format("| %-12s | %-12s | %12.5f | %12.1f | %12s |\n", 
-                    currentTimeframe, "TH", thValue, thValue * pipMultiplier, "-"));
-            sb.append(String.format("| %-12s | %-12s | %12.5f | %12.1f | %12s |\n", 
-                    currentTimeframe, "Short Step (SS)", shortStep, shortStep * pipMultiplier, "-"));
-            sb.append(String.format("| %-12s | %-12s | %12.5f | %12.1f | %12s |\n", 
-                    currentTimeframe, "Long Step (LS)", longStep, longStep * pipMultiplier, "-"));
-            
-            // Add ATR values for each level
-            sb.append("+----------------------------------------------------------------------------------------+\n");
-            sb.append("| ATR VALUES BY TIMEFRAME LEVEL                                                          |\n");
-            sb.append("+----------------------------------------------------------------------------------------+\n");
-            sb.append(String.format("| %-12s | %-12s | %12.5f | %12.1f | %12d |\n", 
-                    structureTimeframe, "Structure ATR", structureAtr, structureAtr * pipMultiplier, structureAtrPeriod));
-            sb.append(String.format("| %-12s | %-12s | %12.5f | %12.1f | %12d |\n", 
-                    patternTimeframe, "Pattern ATR", patternAtr, patternAtr * pipMultiplier, patternAtrPeriod));
-            sb.append(String.format("| %-12s | %-12s | %12.5f | %12.1f | %12d |\n", 
-                    triggerTimeframe, "Trigger ATR", triggerAtr, triggerAtr * pipMultiplier, triggerAtrPeriod));
-            sb.append(String.format("| %-12s | %-12s | %12.5f | %12.1f | %12s |\n", 
-                    currentTimeframe, "Live ATR", liveAtrValue, liveAtrValue * pipMultiplier, "-"));
-            
-            sb.append("+----------------------------------------------------------------------------------------+\n");
-            
-            // Formula verification
-            sb.append("| Formula Verification:                                                                  |\n");
-            sb.append(String.format("| SS = (2 * S) - P = (2 * %.1f) - %.1f = %.1f                                         |\n", 
-                    structureValue * pipMultiplier, patternValue * pipMultiplier, shortStep * pipMultiplier));
-            sb.append(String.format("| LS = (3 * S) - (2 * P) = (3 * %.1f) - (2 * %.1f) = %.1f                             |\n", 
-                    structureValue * pipMultiplier, patternValue * pipMultiplier, longStep * pipMultiplier));
-            sb.append(String.format("| Control = (LS + SS) / 2 / 7 ≈ T = (%.1f + %.1f) / 2 / 7 = %.1f ≈ %.1f                      |\n",
-                    longStep * pipMultiplier, shortStep * pipMultiplier, 
-                    ((longStep + shortStep) / 2 / 7) * pipMultiplier, triggerValue * pipMultiplier));
-            
-            // ATR verification
-            sb.append(String.format("| ATR Relation: Structure:Pattern:Trigger = 1:1/√4:1/√16 = 1:%.2f:%.2f                      |\n",
-                    1.0/Math.sqrt(4.0), 1.0/Math.sqrt(16.0)));
-            
-            // Add timeframe mapping info for debugging
-            sb.append("+----------------------------------------------------------------------------------------+\n");
-            sb.append("| TIMEFRAME MAPPING DEBUG INFO:                                                          |\n");
-            sb.append(String.format("| Current: %-59s |\n", currentTimeframe));
-            sb.append(String.format("| Pattern: %-59s |\n", 
-                    patternTimeframe + " (via " + TimeframeUtil.getPatternTimeframeString(series.getBarSize()) + ")"));
-            sb.append(String.format("| Trigger: %-59s |\n", 
-                    triggerTimeframe + " (via " + TimeframeUtil.getTriggerTimeframeString(series.getBarSize()) + ")"));
-            
-            // Calculate and display timeframe percentages for extra verification
-            sb.append(String.format("| TF Percentages - Structure: %.2f%% | Pattern: %.2f%% | Trigger: %.2f%%            |\n", 
-                    structureTFPercentage, patternTFPercentage, triggerTFPercentage));
-            
-            sb.append("+----------------------------------------------------------------------------------------+\n");
-            
-            // Log the entire table
-            Logger.info(sb.toString());
-        } finally {
-            // Restore the previous log level
-            Logger.setLogLevel(LogLevel.WARN);
-        }
-    }
-    
-    /**
-     * Gets the pattern timeframe string representation (one fractal level down)
-     * for the given timeframe.
-     */
-    private String getPatternTimeframeString(BarSize barSize) {
-        return TimeframeUtil.getPatternTimeframeString(barSize);
-    }
-    
-    /**
-     * Gets the trigger timeframe string representation (two fractal levels down)
-     * for the given timeframe.
-     */
-    private String getTriggerTimeframeString(BarSize barSize) {
-        return TimeframeUtil.getTriggerTimeframeString(barSize);
-    }
-    
-    /**
-     * Gets the ATR period for the pattern timeframe (one level below current)
-     */
-    private int getPatternAtrPeriod(BarSize barSize) {
-        // Get the pattern timeframe as a string
-        String patternTimeframe = TimeframeUtil.getPatternTimeframeString(barSize);
-        
-        // Convert this to a standard format and get the ATR period
-        if (patternTimeframe.startsWith("M")) {
-            // Simple minute timeframes
-            try {
-                int minutes = Integer.parseInt(patternTimeframe.substring(1));
-                if (minutes <= 1) return 24; // M1
-                else if (minutes <= 5) return 24; // M5 
-                else if (minutes <= 15) return 24; // M15
-                else if (minutes <= 30) return 24; // M30
-                else return 24; // M45, etc.
-            } catch (NumberFormatException e) {
-                return 24; // Default to minute timeframe ATR period
-            }
-        }
-        else if (patternTimeframe.startsWith("H")) {
-            try {
-                int hours = Integer.parseInt(patternTimeframe.substring(1));
-                if (hours <= 1) return 24; // H1
-                else if (hours <= 4) return 30; // H4
-                else return 30; // H8, etc.
-            } catch (NumberFormatException e) {
-                return 24; // Default
-            }
-        }
-        else if (patternTimeframe.equals("D1")) return 22;
-        else if (patternTimeframe.equals("W1")) return 52;
-        else if (patternTimeframe.equals("MN")) return 12;
-        
-        // For complex fractal timeframes or unrecognized formats, use the original period
-        return TimeframeUtil.getAtrPeriod(barSize);
-    }
-    
-    /**
-     * Gets the ATR period for the trigger timeframe (two levels below current)
-     */
-    private int getTriggerAtrPeriod(BarSize barSize) {
-        // Get the trigger timeframe as a string
-        String triggerTimeframe = TimeframeUtil.getTriggerTimeframeString(barSize);
-        
-        // Convert this to a standard format and get the ATR period
-        if (triggerTimeframe.startsWith("M")) {
-            // Simple minute timeframes
-            try {
-                int minutes = Integer.parseInt(triggerTimeframe.substring(1));
-                if (minutes <= 1) return 24; // M1
-                else if (minutes <= 5) return 24; // M5 
-                else if (minutes <= 15) return 24; // M15
-                else if (minutes <= 30) return 24; // M30
-                else return 24; // M45, etc.
-            } catch (NumberFormatException e) {
-                return 24; // Default to minute timeframe ATR period
-            }
-        }
-        else if (triggerTimeframe.startsWith("H")) {
-            try {
-                int hours = Integer.parseInt(triggerTimeframe.substring(1));
-                if (hours <= 1) return 24; // H1
-                else if (hours <= 4) return 30; // H4
-                else return 30; // H8, etc.
-            } catch (NumberFormatException e) {
-                return 24; // Default
-            }
-        }
-        else if (triggerTimeframe.equals("D1")) return 22;
-        else if (triggerTimeframe.equals("W1")) return 52;
-        else if (triggerTimeframe.equals("MN")) return 12;
-        
-        // For complex fractal timeframes or unrecognized formats, use the original period
-        return TimeframeUtil.getAtrPeriod(barSize);
-    }
-
-    /**
-     * Calculates the Structure (S), Pattern (P), and Trigger (T) values based on the current timeframe.
-     * 
-     * @param barSize The current chart's bar size
-     * @param thValue The base TH value
-     * @return An array containing [Structure value, Pattern value, Trigger value]
-     */
-    private double[] calculateFractalValues(BarSize barSize, double thValue) {
-        // Get the current timeframe percentage
-        double currentPercentage = TimeframeUtil.getTimeframePercentage(barSize);
-        
-        // Structure value is based on the current timeframe
-        double structureValue = thValue;
-        
-        // Pattern value is typically half of the structure value (one fractal level down)
-        double patternValue = structureValue / 2.0;
-        
-        // Trigger value is half of the pattern value (two fractal levels down from structure)
-        double triggerValue = patternValue / 2.0;
-        
-        return new double[] {structureValue, patternValue, triggerValue};
-    }
-    
-    /**
-     * Calculates the Short Step (SS) value using the formula: SS = (2 * S) - P
-     * 
-     * @param structureValue The Structure (S) value
-     * @param patternValue The Pattern (P) value
-     * @return The calculated Short Step value
-     */
-    private double calculateShortStep(double structureValue, double patternValue) {
-        return (2 * structureValue) - patternValue;
-    }
-    
-    /**
-     * Calculates the Long Step (LS) value using the formula: LS = (3 * S) - (2 * P)
-     * 
-     * @param structureValue The Structure (S) value
-     * @param patternValue The Pattern (P) value
-     * @return The calculated Long Step value
-     */
-    private double calculateLongStep(double structureValue, double patternValue) {
-        return (3 * structureValue) - (2 * patternValue);
-    }
-
-    /**
-     * Calculates the Average True Range (ATR) for the current timeframe.
-     * 
-     * @param series The data series
-     * @return The ATR value
-     */
-    private double calculateATR(DataSeries series) {
-        // Get the appropriate ATR period for this timeframe
-        int period = TimeframeUtil.getAtrPeriod(series.getBarSize());
-        Logger.debug("BiotakTrigger: Using ATR period " + period + " for timeframe " + series.getBarSize().toString());
-        
-        // Calculate ATR using the standard formula
-        int size = series.size();
-        if (size <= period) {
-            Logger.warn("BiotakTrigger: Not enough data to calculate ATR. Need " + period + " bars, but only have " + size);
-            return 0.0;
-        }
-        
-        // Calculate first TR
-        double sumTR = 0;
-        for (int i = size - period; i < size; i++) {
-            double high = series.getHigh(i);
-            double low = series.getLow(i);
-            double prevClose = (i > 0) ? series.getClose(i-1) : series.getOpen(i);
-            
-            // True Range = max(high - low, abs(high - prevClose), abs(low - prevClose))
-            double tr = Math.max(high - low, Math.max(
-                Math.abs(high - prevClose),
-                Math.abs(low - prevClose)
-            ));
-            
-            sumTR += tr;
-        }
-        
-        return sumTR / period;
-    }
-    
-    /**
-     * Calculates the "Live ATR" - the true range of the current bar
-     */
-    private double calculateLiveATR(DataSeries series) {
-        int lastIndex = series.size() - 1;
-        if (lastIndex < 0) return 0.0;
-        
-        double high = series.getHigh(lastIndex);
-        double low = series.getLow(lastIndex);
-        double prevClose = (lastIndex > 0) ? series.getClose(lastIndex - 1) : series.getOpen(lastIndex);
-        
-        // True Range = max(high - low, abs(high - prevClose), abs(low - prevClose))
-        return Math.max(high - low, Math.max(
-            Math.abs(high - prevClose),
-            Math.abs(low - prevClose)
-        ));
-    }
-
-    /**
-     * Draws the historical high and low lines on the chart if they are enabled in the settings.
-     */
-    private void drawHistoricalLines(long startTime, long endTime, double high, double low) {
-        Logger.debug("BiotakTrigger: drawHistoricalLines called. High: " + high + ", Low: " + low);
-
-        boolean showHigh = getSettings().getBoolean(S_SHOW_HIGH_LINE, true);
-        Logger.debug("BiotakTrigger: Show High Line setting is " + showHigh);
-        if (showHigh) {
-            PathInfo highPath = getSettings().getPath(S_HIGH_LINE_PATH);
-            Logger.debug("BiotakTrigger: Drawing High Line at " + high);
-            addFigure(new Line(new Coordinate(startTime, high), new Coordinate(endTime, high), highPath));
-        }
-
-        boolean showLow = getSettings().getBoolean(S_SHOW_LOW_LINE, true);
-        Logger.debug("BiotakTrigger: Show Low Line setting is " + showLow);
-        if (showLow) {
-            PathInfo lowPath = getSettings().getPath(S_LOW_LINE_PATH);
-            Logger.debug("BiotakTrigger: Drawing Low Line at " + low);
-            addFigure(new Line(new Coordinate(startTime, low), new Coordinate(endTime, low), lowPath));
-        }
-    }
-
-    /**
-     * Custom figure class to draw the information panel
-     */
-    private class InfoPanel extends Figure {
-        // General Info
-        private String timeframe;
-        private double pipMultiplier;
-        private Font contentFont;
-        private Font titleFont;
-        private PanelPosition position;
-        private int marginX, marginY, transparency;
-        private boolean isSecondsBased; // Is the timeframe in seconds
-
-        // Main Values
-        private double thValue, shortStep, longStep, atrValue, liveAtrValue;
-
-        // Fractal Hierarchy Values
-        private String lowerPatternTF, lowerTriggerTF;
-        private double lowerPatternTH, lowerTriggerTH;
-
-        private String higherPatternTF, higherStructureTF;
-        private double higherPatternTH, higherStructureTH;
-        private boolean isMinimized;
-        private Rectangle panelBounds;
-        private Rectangle minimizeButtonRect; // Stores bounds of minimize/restore button
-        // Added constant to control vertical padding after separator lines inside the panel
-        private static final int SEPARATOR_PADDING = 25; // was previously 15 – gives text more breathing room
-        
-        public InfoPanel(String timeframe, double thValue, double pipMultiplier, 
-                        Font contentFont, Font titleFont, PanelPosition position, 
-                        int marginX, int marginY, int transparency, 
-                        double shortStep, double longStep, double atrValue, double liveAtrValue, boolean isSecondsBased, boolean isMinimized) {
-            this.timeframe = timeframe;
-            this.thValue = thValue;
-            this.pipMultiplier = pipMultiplier;
-            this.contentFont = contentFont;
-            this.titleFont = titleFont;
-            this.position = position;
-            this.marginX = marginX;
-            this.marginY = marginY;
-            this.transparency = Math.max(0, Math.min(255, transparency));
-            this.shortStep = shortStep;
-            this.longStep = longStep;
-            this.atrValue = atrValue;
-            this.liveAtrValue = liveAtrValue;
-            this.isSecondsBased = isSecondsBased;
-            this.isMinimized = isMinimized;
-        }
-        
-        public void setDownwardFractalInfo(String pattern, String trigger, double patternTH, double triggerTH) {
-            this.lowerPatternTF = pattern;
-            this.lowerTriggerTF = trigger;
-            this.lowerPatternTH = patternTH;
-            this.lowerTriggerTH = triggerTH;
-        }
-        
-        public void setUpwardFractalInfo(String pattern, String structure, double patternTH, double structureTH) {
-            this.higherPatternTF = pattern;
-            this.higherStructureTF = structure;
-            this.higherPatternTH = patternTH;
-            this.higherStructureTH = structureTH;
-        }
-
-        public void setMinimized(boolean value) { this.isMinimized = value; }
-        
-        @Override
-        public void draw(Graphics2D gc, DrawContext ctx) {
-            // Save original settings
-            Color origColor = gc.getColor();
-            Font origFont = gc.getFont();
-            Stroke origStroke = gc.getStroke();
-            
-            // Get chart bounds
-            Rectangle bounds = ctx.getBounds();
-            
-            // Prepare content for each section
-            // -----------------------------  CORE VALUES  ---------------------------------
-            // Calculate Control (C) as the average of SS and LS => 7T.
-            double controlValue = (shortStep + longStep) / 2.0; // C = (SS + LS) / 2
-
-            List<String> coreLines = new ArrayList<>();
-            // Format numbers to one decimal place (in pips)
-            coreLines.add("TH: "   + String.format("%.1f", thValue      * pipMultiplier));
-            coreLines.add("ATR: "  + String.format("%.1f", atrValue     * pipMultiplier));
-            coreLines.add("SS: "   + String.format("%.1f", shortStep    * pipMultiplier));
-            coreLines.add("LS: "   + String.format("%.1f", longStep     * pipMultiplier));
-            coreLines.add("C: "    + String.format("%.1f", controlValue * pipMultiplier));
-            coreLines.add("Live: " + String.format("%.1f", liveAtrValue * pipMultiplier));
-
-            //---------------------------  HIERARCHY VALUES  --------------------------------
-            List<String> hierarchyLines = new ArrayList<>();
-
-            // Helper lambda to format TH and C together to avoid clutter
-            java.util.function.BiFunction<Double, Double, String> formatThC = (th, pipMult) -> {
-                double cVal = th * 1.75; // Adjusted to 1.75 * TH ≈ 7T where T = TH / 4
-                return String.format("%.1f", th * pipMult) + "  (C:" + String.format("%.1f", cVal * pipMult) + ")";
-            };
-
-            if (higherStructureTF != null && !higherStructureTF.isEmpty()) {
-                hierarchyLines.add("▲ S [" + higherStructureTF + "]: " + formatThC.apply(higherStructureTH, pipMultiplier));
-            }
-            if (higherPatternTF != null && !higherPatternTF.isEmpty()) {
-                hierarchyLines.add("▲ P [" + higherPatternTF + "]: " + formatThC.apply(higherPatternTH, pipMultiplier));
-            }
-
-            // Current timeframe – include star marker
-            hierarchyLines.add("■ [" + timeframe + "]: " + formatThC.apply(thValue, pipMultiplier) + " *");
-
-            if (lowerPatternTF != null && !lowerPatternTF.isEmpty()) {
-                hierarchyLines.add("▼ P [" + lowerPatternTF + "]: " + formatThC.apply(lowerPatternTH, pipMultiplier));
-            }
-            if (lowerTriggerTF != null && !lowerTriggerTF.isEmpty()) {
-                hierarchyLines.add("▼ T [" + lowerTriggerTF + "]: " + formatThC.apply(lowerTriggerTH, pipMultiplier));
-            }
-
-            // Calculate panel dimensions
-            gc.setFont(titleFont);
-            FontMetrics titleMetrics = gc.getFontMetrics();
-            int titleHeight = titleMetrics.getHeight();
-            int titleWidth = titleMetrics.stringWidth(timeframe);
-            
-            gc.setFont(contentFont);
-            FontMetrics contentMetrics = gc.getFontMetrics();
-            int contentLineHeight = contentMetrics.getHeight();
-            int lineSpacing = 7; // Increased line spacing for better readability
-            
-            // Dynamically determine maximum width needed for the two-column core section
-            int coreWidth = 0;
-            for (int i = 0; i + 1 < coreLines.size(); i += 2) {
-                int pairWidth = contentMetrics.stringWidth(coreLines.get(i)) + contentMetrics.stringWidth(coreLines.get(i + 1)) + 50;
-                if (pairWidth > coreWidth) coreWidth = pairWidth;
-            }
-            // In case of an odd leftover (should not happen with current list size), include its width
-            if (coreLines.size() % 2 == 1) {
-                coreWidth = Math.max(coreWidth, contentMetrics.stringWidth(coreLines.get(coreLines.size() - 1)));
-            }
-
-            // Determine maximum width of hierarchy section as well
-            int hierarchyWidth = 0;
-            for (String line : hierarchyLines) {
-                hierarchyWidth = Math.max(hierarchyWidth, contentMetrics.stringWidth(line));
-            }
-
-            int panelWidth = Math.max(coreWidth, hierarchyWidth) + 40; // Increased panel width
-
-            // Adjusted padding after the separator using constant
-            int coreRows = ((coreLines.size() + 1) / 2); // rows = pairs + possible leftover
-            int coreSectionHeight = (coreRows * (contentLineHeight + lineSpacing)) + SEPARATOR_PADDING;
-            int hierarchySectionHeight = isMinimized ? 0 : (hierarchyLines.size() * (contentLineHeight + lineSpacing)) + SEPARATOR_PADDING;
-            int panelHeight = (titleHeight + SEPARATOR_PADDING) + coreSectionHeight + hierarchySectionHeight;
-
-            // Calculate panel position
-            int x, y;
-            switch (position) {
-                case TOP_LEFT: x = bounds.x + marginX; y = bounds.y + marginY; break;
-                case TOP_RIGHT: x = bounds.x + bounds.width - panelWidth - marginX; y = bounds.y + marginY; break;
-                case BOTTOM_LEFT: x = bounds.x + marginX; y = bounds.y + bounds.height - panelHeight - marginY; break;
-                case CENTER: x = bounds.x + (bounds.width - panelWidth) / 2; y = bounds.y + (bounds.height - panelHeight) / 2; break;
-                default: x = bounds.x + bounds.width - panelWidth - marginX; y = bounds.y + bounds.height - panelHeight - marginY; break;
-            }
-            
-            this.panelBounds = new Rectangle(x, y, panelWidth, panelHeight);
-
-            // Draw panel background (with transparency)
-            Color panelBg = new Color(30, 30, 30, transparency);
-            gc.setColor(panelBg);
-            gc.fillRoundRect(x, y, panelWidth, panelHeight, 8, 8);
-            // Draw minimize/restore button (top-right corner)
-            int btnSize = 20; // enlarged for easier click
-            int btnPadding = 4;
-            int btnX = x + panelWidth - btnSize - btnPadding;
-            int btnY = y + btnPadding;
-            minimizeButtonRect = new Rectangle(btnX, btnY, btnSize, btnSize);
-            // Button background hover state not tracked; draw simple grey box
-            gc.setColor(Color.DARK_GRAY);
-            gc.fillRect(btnX, btnY, btnSize, btnSize);
-            gc.setColor(Color.WHITE);
-            // Draw symbol: '-' if not minimized, '+' if minimized
-            if (isMinimized) {
-                gc.drawLine(btnX + 3, btnY + btnSize/2, btnX + btnSize - 3, btnY + btnSize/2);
-                gc.drawLine(btnX + btnSize/2, btnY + 3, btnX + btnSize/2, btnY + btnSize - 3);
-            } else {
-                gc.drawLine(btnX + 3, btnY + btnSize/2, btnX + btnSize - 3, btnY + btnSize/2);
-            }
-
-            // Draw title (centered)
-            gc.setFont(titleFont);
-            gc.setColor(Color.WHITE);
-            
-            int currentY = y + titleHeight + 5;
-            gc.drawString(timeframe, x + (panelWidth - titleWidth) / 2, currentY);
-            
-            currentY += 10; // Add space below the title before the separator
-            
-            // Draw sections without section titles
-            drawSection(gc, x, currentY, panelWidth, "", coreLines, contentMetrics, contentFont, lineSpacing, true);
-            if (!isMinimized) {
-                currentY += coreSectionHeight;
-                drawHierarchySection(gc, x, currentY, panelWidth, hierarchyLines, contentMetrics, contentFont, lineSpacing);
-            }
-            
-            // Restore graphics settings
-            gc.setColor(origColor);
-            gc.setFont(origFont);
-            gc.setStroke(origStroke);
-        }
-
-        public boolean isInMinimizeButton(double x, double y) {
-            return minimizeButtonRect != null && minimizeButtonRect.contains(x, y);
-        }
-
-        private void drawHierarchySection(Graphics2D gc, int x, int y, int panelWidth, List<String> lines, 
-                                         FontMetrics fm, Font font, int spacing) {
-            int currentY = y;
-            
-            // Separator line
-            gc.setColor(new Color(60, 60, 70, 200));
-            gc.setStroke(new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, new float[]{3.0f}, 0.0f));
-            gc.drawLine(x + 10, currentY, x + panelWidth - 10, currentY);
-            currentY += SEPARATOR_PADDING; // Increased padding after separator line
-            
-            // Section Content - Centered single-column layout with special handling for current timeframe
-            gc.setFont(font);
-            for (String line : lines) {
-                // Extract the timeframe from the string
-                String timeframeStr = extractTimeframeFromLine(line);
-                
-                // Check if this is the current timeframe (contains the * marker)
-                boolean isCurrentTimeframe = line.contains("*");
-                
-                int lineWidth = fm.stringWidth(line);
-                int textX = x + (panelWidth - lineWidth) / 2;
-                
-                // Only highlight the current timeframe in yellow
-                if (isCurrentTimeframe) {
-                    // Use a very distinct background color for current timeframe
-                    int padding = 6;
-                    
-                    // Use yellow for current timeframe
-                    gc.setColor(new Color(120, 100, 0, 180)); // Dark gold background
-                    gc.fillRoundRect(textX - padding, currentY - fm.getAscent(), lineWidth + (padding * 2), fm.getHeight(), 8, 8);
-                    
-                    // Draw the text with a bright yellow color
-                    gc.setColor(new Color(255, 255, 0)); // Bright yellow for maximum visibility
-                    gc.drawString(line, textX, currentY);
-                } else {
-                    // Check if the line contains an arrow symbol
-                    if (line.contains("▲")) {
-                        // Draw the arrow in light green and the rest of the text in white
-                        String beforeArrow = line.substring(0, line.indexOf("▲"));
-                        String arrow = "▲";
-                        String afterArrow = line.substring(line.indexOf("▲") + 1);
-                        
-                        int beforeWidth = fm.stringWidth(beforeArrow);
-                        int arrowWidth = fm.stringWidth(arrow);
-                        
-                        // Draw the text before the arrow in white
-                        gc.setColor(Color.WHITE);
-                        gc.drawString(beforeArrow, textX, currentY);
-                        
-                        // Draw the arrow in light green
-                        gc.setColor(new Color(144, 238, 144)); // Light green
-                        gc.drawString(arrow, textX + beforeWidth, currentY);
-                        
-                        // Draw the text after the arrow in white
-                        gc.setColor(Color.WHITE);
-                        gc.drawString(afterArrow, textX + beforeWidth + arrowWidth, currentY);
-                    } 
-                    else if (line.contains("▼")) {
-                        // Draw the arrow in red and the rest of the text in white
-                        String beforeArrow = line.substring(0, line.indexOf("▼"));
-                        String arrow = "▼";
-                        String afterArrow = line.substring(line.indexOf("▼") + 1);
-                        
-                        int beforeWidth = fm.stringWidth(beforeArrow);
-                        int arrowWidth = fm.stringWidth(arrow);
-                        
-                        // Draw the text before the arrow in white
-                        gc.setColor(Color.WHITE);
-                        gc.drawString(beforeArrow, textX, currentY);
-                        
-                        // Draw the arrow in red
-                        gc.setColor(new Color(255, 99, 71)); // Tomato red
-                        gc.drawString(arrow, textX + beforeWidth, currentY);
-                        
-                        // Draw the text after the arrow in white
-                        gc.setColor(Color.WHITE);
-                        gc.drawString(afterArrow, textX + beforeWidth + arrowWidth, currentY);
-                    }
-                    else {
-                        // No arrows, draw the entire line in white
-                        gc.setColor(Color.WHITE);
-                        gc.drawString(line, textX, currentY);
-                    }
-                }
-                
-                currentY += fm.getHeight() + spacing;
-            }
-        }
-        
-        /**
-         * Extracts timeframe string from a line in the hierarchy panel
-         */
-        private String extractTimeframeFromLine(String line) {
-            try {
-                // Lines are formatted like: "▲ S [M1]: 6.7" or "■ [S16]: 1.0 *"
-                int startBracket = line.indexOf('[');
-                int endBracket = line.indexOf(']');
-                
-                if (startBracket >= 0 && endBracket > startBracket) {
-                    return line.substring(startBracket + 1, endBracket);
-                }
-            } catch (Exception e) {
-                // In case of any parsing error, return null
-            }
-            return null;
-        }
-
-        private void drawSection(Graphics2D gc, int x, int y, int panelWidth, String title, List<String> lines, FontMetrics fm, Font font, int spacing, boolean isTwoColumn) {
-            int currentY = y;
-            
-            // Separator line
-            gc.setColor(new Color(60, 60, 70, 200));
-            gc.setStroke(new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, new float[]{3.0f}, 0.0f));
-            gc.drawLine(x + 10, currentY, x + panelWidth - 10, currentY);
-            currentY += SEPARATOR_PADDING; // Increased padding after separator line
-            
-            // Section Content
-            gc.setColor(Color.WHITE);
-            gc.setFont(font);
-            if (isTwoColumn) {
-                int i = 0;
-                for (; i + 1 < lines.size(); i += 2) {
-                    String left  = lines.get(i);
-                    String right = lines.get(i + 1);
-                    int leftWidth  = fm.stringWidth(left);
-                    int rightWidth = fm.stringWidth(right);
-                    int leftX  = x + (panelWidth / 2 - leftWidth)  / 2;
-                    int rightX = x + panelWidth / 2 + (panelWidth / 2 - rightWidth) / 2;
-                    gc.drawString(left , leftX , currentY);
-                    gc.drawString(right, rightX, currentY);
-                    currentY += fm.getHeight() + spacing;
-                }
-                // If there is an unpaired line left (odd count), center it
-                if (i < lines.size()) {
-                    String lone = lines.get(i);
-                    int loneWidth = fm.stringWidth(lone);
-                    gc.drawString(lone, x + (panelWidth - loneWidth) / 2, currentY);
-                }
-            } else {
-                // Centered single-column layout
-                for(String line : lines) {
-                    int lineWidth = fm.stringWidth(line);
-                    gc.drawString(line, x + (panelWidth - lineWidth) / 2, currentY);
-                    currentY += fm.getHeight() + spacing;
-                }
-            }
-        }
-        
-        @Override
-        public boolean contains(double x, double y, DrawContext ctx) { 
-            return panelBounds != null && panelBounds.contains(x, y);
-        }
-    }
-    
-    /**
-     * Draws an information panel on the chart showing key metrics and values.
-     */
-    private void drawInfoPanel(DataSeries series, double thValue, long startTime, 
-                             double shortStep, double longStep, double atrValue, double liveAtrValue) {
+    private void drawInfoPanel(DataSeries series, double thValue, long startTime, double shortStep, double longStep, double atrValue, double liveAtrValue) {
         if (!getSettings().getBoolean(S_SHOW_INFO_PANEL, true)) return;
-        
         Instrument instrument = series.getInstrument();
         if (instrument == null) return;
-
         // Get settings for panel display
         FontInfo contentFontInfo = getSettings().getFont(S_CONTENT_FONT);
         Font contentFont = contentFontInfo != null ? contentFontInfo.getFont() : new Font("Arial", Font.PLAIN, 11);
@@ -1390,487 +660,32 @@ public class BiotakTrigger extends Study {
         int marginY = getSettings().getInteger(S_PANEL_MARGIN_Y, 10);
         int transparency = getSettings().getInteger(S_PANEL_TRANSPARENCY, 230);
         boolean isMinimized = getSettings().getBoolean(S_PANEL_MINIMIZED, false);
-
         // Get timeframe info
         BarSize barSize = series.getBarSize();
-        String timeframe = formatTimeframeString(barSize);
+        String timeframe = FractalCalculator.formatTimeframeString(barSize);
         boolean isSecondsBased = TimeframeUtil.isSecondsBasedTimeframe(barSize);
-        
-        double pipMultiplier = getPipMultiplier(instrument);
-
+        double pipMultiplier = FractalCalculator.getPipMultiplier(instrument);
         // Create the info panel and add it as a figure
-        this.infoPanel = new InfoPanel(timeframe, thValue, pipMultiplier, 
-                        contentFont, titleFont, panelPos, 
-                        marginX, marginY, transparency, 
-                        shortStep, longStep, atrValue, liveAtrValue, isSecondsBased, isMinimized);
-
+        this.infoPanel = new InfoPanel(timeframe, thValue, pipMultiplier, contentFont, titleFont, panelPos, marginX, marginY, transparency, shortStep, longStep, atrValue, liveAtrValue, isSecondsBased, isMinimized);
         // Calculate fractal TH values for hierarchy display
         double basePrice = series.getClose(series.size() - 2);
-
         // Pattern timeframe (one level down)
         BarSize patternBarSize = TimeframeUtil.getPatternBarSize(barSize);
         double patternTFPercent = TimeframeUtil.getTimeframePercentage(patternBarSize);
         double patternTH = THCalculator.calculateTHPoints(instrument, basePrice, patternTFPercent) * instrument.getTickSize();
-
         // Trigger timeframe (two levels down)
         BarSize triggerBarSize = TimeframeUtil.getTriggerBarSize(barSize);
         double triggerTFPercent = TimeframeUtil.getTimeframePercentage(triggerBarSize);
         double triggerTH = THCalculator.calculateTHPoints(instrument, basePrice, triggerTFPercent) * instrument.getTickSize();
-
-        infoPanel.setDownwardFractalInfo(
-            formatTimeframeString(patternBarSize),
-            formatTimeframeString(triggerBarSize),
-            patternTH,
-            triggerTH
-        );
-
+        infoPanel.setDownwardFractalInfo(FractalCalculator.formatTimeframeString(patternBarSize), FractalCalculator.formatTimeframeString(triggerBarSize), patternTH, triggerTH);
         // Structure timeframe (one level up) and its pattern
         BarSize structureBarSize = TimeframeUtil.getStructureBarSize(barSize);
         double structureTFPercent = TimeframeUtil.getTimeframePercentage(structureBarSize);
         double structureTH = THCalculator.calculateTHPoints(instrument, basePrice, structureTFPercent) * instrument.getTickSize();
-
         BarSize higherPatternBarSize = TimeframeUtil.getPatternBarSize(structureBarSize);
         double higherPatternPercent = TimeframeUtil.getTimeframePercentage(higherPatternBarSize);
         double higherPatternTH = THCalculator.calculateTHPoints(instrument, basePrice, higherPatternPercent) * instrument.getTickSize();
-
-        infoPanel.setUpwardFractalInfo(
-            formatTimeframeString(higherPatternBarSize),
-            formatTimeframeString(structureBarSize),
-            higherPatternTH,
-            structureTH
-        );
-
+        infoPanel.setUpwardFractalInfo(FractalCalculator.formatTimeframeString(higherPatternBarSize), FractalCalculator.formatTimeframeString(structureBarSize), higherPatternTH, structureTH);
         addFigure(this.infoPanel);
-    }
-    
-    /**
-     * Helper method to format timeframe strings with proper notation for seconds-based timeframes
-     */
-    private String formatTimeframeString(BarSize barSize) {
-        if (barSize == null) return "N/A";
-        
-        // Convert barSize to total minutes first
-        int interval = barSize.getInterval();
-        long totalMinutes;
-        switch (barSize.getIntervalType()) {
-            case SECOND:
-                // keep seconds separately if less than 60
-                if (interval < 60) return interval + "s";
-                totalMinutes = interval / 60;
-                break;
-            case MINUTE: totalMinutes = interval; break;
-            case HOUR:   totalMinutes = interval * 60L; break;
-            case DAY:    totalMinutes = interval * 24L * 60L; break;
-            case WEEK:   totalMinutes = interval * 7L * 24L * 60L; break;
-            default:     totalMinutes = interval; break;
-        }
-
-        // Build human-readable composite string in y w d h m
-        long minutes = totalMinutes;
-        long years  = minutes / (365L*24*60); minutes %= 365L*24*60;
-        long months = minutes / (30L*24*60); minutes %= 30L*24*60;
-        long weeks  = minutes / (7L*24*60);  minutes %= 7L*24*60;
-        long days   = minutes / (24*60);     minutes %= 24*60;
-        long hours  = minutes / 60;          minutes %= 60;
-
-        StringBuilder sb = new StringBuilder();
-        if (years  > 0) sb.append(years ).append("Y ");
-        if (months > 0) sb.append(months).append("M ");
-        if (weeks  > 0) sb.append(weeks ).append("W ");
-        if (days   > 0) sb.append(days  ).append("D ");
-        if (hours  > 0) sb.append(hours ).append("H ");
-        if (minutes> 0 || sb.length()==0) sb.append(minutes).append("m");
-        return sb.toString().trim();
-    }
-    
-    /**
-     * Determines the appropriate pip multiplier for a given instrument.
-     * 
-     * @param instrument The trading instrument
-     * @return The multiplier to convert from price to pips
-     */
-    private double getPipMultiplier(Instrument instrument) {
-        if (instrument == null) return 10.0; // Default multiplier
-        
-        String symbol = instrument.getSymbol();
-        double tickSize = instrument.getTickSize();
-        
-        // Determine number of decimal places in tick size
-        int decimalPlaces = 0;
-        if (tickSize > 0) {
-            String tickStr = String.valueOf(tickSize);
-            if (tickStr.contains(".")) {
-                decimalPlaces = tickStr.length() - tickStr.indexOf('.') - 1;
-            }
-        }
-        
-        // For forex pairs
-        if (symbol != null && 
-            (symbol.contains("/") || 
-             (symbol.length() >= 6 && !symbol.contains(".")))) {
-            
-            // JPY pairs typically have 2 decimal places
-            if (symbol.contains("JPY") || symbol.contains("jpy")) {
-                return 100.0;
-            }
-            
-            // Most other forex pairs have 4 decimal places, with pip being the 4th decimal
-            if (decimalPlaces >= 4) {
-                return 10.0;
-            }
-        }
-        
-        // For indices, stocks, etc. - use a multiplier based on decimal places
-        switch (decimalPlaces) {
-            case 0: return 1.0;    // No decimal places
-            case 1: return 10.0;   // 1 decimal place
-            case 2: return 100.0;  // 2 decimal places
-            case 3: return 10.0;   // 3 decimal places (unusual)
-            case 4: return 10.0;   // 4 decimal places (standard forex)
-            case 5: return 10.0;   // 5 decimal places (some brokers)
-            default: return 10.0;  // Default
-        }
-    }
-
-    /**
-     * Determines the starting price for TH levels based on user settings.
-     * @return The calculated midpoint price.
-     */
-    private double determineMidpointPrice(double high, double low) {
-        String startPointStr = getSettings().getString(S_START_POINT, THStartPointType.MIDPOINT.name());
-        THStartPointType startPointType = THStartPointType.valueOf(startPointStr);
-
-        switch (startPointType) {
-            case HISTORICAL_HIGH: return high;
-            case HISTORICAL_LOW: return low;
-            case CUSTOM_PRICE:
-                // Use stored custom price, fallback to midpoint if not set
-                double cp = getSettings().getDouble(S_CUSTOM_PRICE, 0);
-                return cp != 0 ? cp : (high + low) / 2.0;
-            case MIDPOINT:
-            default:
-                return (high + low) / 2.0;
-        }
-    }
-
-    /**
-     * Draws the midpoint line on the chart if it is enabled in the settings.
-     */
-    private void drawMidpointLine(long startTime, long endTime, double midpointPrice) {
-        if (getSettings().getBoolean(S_SHOW_MIDPOINT, true)) {
-            PathInfo path = getSettings().getPath(S_TRIGGER_PATH);
-            addFigure(new Line(new Coordinate(startTime, midpointPrice), new Coordinate(endTime, midpointPrice), path));
-        }
-    }
-
-    /**
-     * Calculates and draws all the "TH" (Trigger and Structure) levels above and below the midpoint.
-     */
-    private void drawTHLevels(DataSeries series, double midpointPrice, double highestHigh, double lowestLow, double thBasePrice, long startTime, long endTime) {
-        double timeframePercentage = TimeframeUtil.getTimeframePercentage(series.getBarSize());
-        Logger.debug("BiotakTrigger: Timeframe percentage: " + timeframePercentage);
-        
-        double thStepInPoints = THCalculator.calculateTHPoints(series.getInstrument(), thBasePrice, timeframePercentage);
-        Logger.debug("BiotakTrigger: TH step in points: " + thStepInPoints);
-
-        if (thStepInPoints <= 0) {
-            Logger.warn("BiotakTrigger: Invalid TH step value (<=0). Cannot draw TH levels.");
-            return;
-        }
-
-        double pointValue = series.getInstrument().getTickSize();
-        // Apply pip multiplier so that spacing matches MT4 (price to pips conversion)
-        double pipMultiplier = getPipMultiplier(series.getInstrument());
-        Logger.debug("BiotakTrigger: Point value (tick size): " + pointValue + ", Pip multiplier: " + pipMultiplier);
-
-        // Final price distance between consecutive TH levels
-        double stepPrice = thStepInPoints * pointValue * pipMultiplier;
-        int maxLevelsAbove = getSettings().getInteger(S_MAX_LEVELS_ABOVE);
-        int maxLevelsBelow = getSettings().getInteger(S_MAX_LEVELS_BELOW);
-
-        // Draw levels above midpoint
-        int stepCountAbove = 1;
-        int levelCountAbove = 0;
-        double priceLevelAbove = midpointPrice + stepPrice;
-        while (priceLevelAbove <= highestHigh && levelCountAbove < maxLevelsAbove) {
-            PathInfo path = getPathForLevel(stepCountAbove);
-            if (path != null) {
-                Logger.debug("BiotakTrigger: Drawing level above at " + priceLevelAbove + " (step " + stepCountAbove + ")");
-                addFigure(new Line(new Coordinate(startTime, priceLevelAbove), new Coordinate(endTime, priceLevelAbove), path));
-                levelCountAbove++;
-            }
-            priceLevelAbove += stepPrice;
-            stepCountAbove++;
-        }
-
-        // Draw levels below midpoint
-        int stepCountBelow = 1;
-        int levelCountBelow = 0;
-        double priceLevelBelow = midpointPrice - stepPrice;
-        while (priceLevelBelow >= lowestLow && levelCountBelow < maxLevelsBelow) {
-            PathInfo path = getPathForLevel(stepCountBelow);
-            if (path != null) {
-                Logger.debug("BiotakTrigger: Drawing level below at " + priceLevelBelow + " (step " + stepCountBelow + ")");
-                addFigure(new Line(new Coordinate(startTime, priceLevelBelow), new Coordinate(endTime, priceLevelBelow), path));
-                levelCountBelow++;
-            }
-            priceLevelBelow -= stepPrice;
-            stepCountBelow++;
-        }
-    }
-
-    /**
-     * Determines which PathInfo to use based on the step count.
-     * This replicates the logic of showing different lines for structure levels.
-     * @param stepCount The current step/level number from the midpoint.
-     * @return PathInfo for the correct line type, or null if this level should not be drawn.
-     */
-    private PathInfo getPathForLevel(int stepCount) {
-        if (getSettings().getBoolean(S_SHOW_STRUCTURE_LINES)) {
-            if (stepCount % 128 == 0 && getSettings().getBoolean(S_SHOW_STRUCT_L5)) return getSettings().getPath(S_STRUCT_L5_PATH);
-            if (stepCount % 64 == 0 && getSettings().getBoolean(S_SHOW_STRUCT_L4)) return getSettings().getPath(S_STRUCT_L4_PATH);
-            if (stepCount % 32 == 0 && getSettings().getBoolean(S_SHOW_STRUCT_L3)) return getSettings().getPath(S_STRUCT_L3_PATH);
-            if (stepCount % 16 == 0 && getSettings().getBoolean(S_SHOW_STRUCT_L2)) return getSettings().getPath(S_STRUCT_L2_PATH);
-            if (stepCount % 4 == 0 && getSettings().getBoolean(S_SHOW_STRUCT_L1)) return getSettings().getPath(S_STRUCT_L1_PATH);
-        }
-
-        if (getSettings().getBoolean(S_SHOW_TRIGGER_LEVELS)) {
-            return getSettings().getPath(S_TRIGGER_PATH);
-        }
-
-        return null; // Don't draw anything if neither structure nor trigger lines are enabled for this step
-    }
-
-    /**
-     * Small figure to draw price text right next to the custom price point.
-     */
-    private class PriceLabel extends Figure {
-        private long time;
-        private double price;
-        private String text;
-        private final Font font = new Font("Arial", Font.BOLD, 14);
-
-        private void setData(long time, double price, String text) {
-            this.time = time;
-            this.price = price;
-            this.text = text;
-        }
-
-        @Override
-        public void draw(Graphics2D gc, DrawContext ctx) {
-            if (time == 0 || text == null) return;
-            Point2D p = ctx.translate(new Coordinate(time, price));
-            gc.setFont(font);
-            FontMetrics fm = gc.getFontMetrics();
-            int textW = fm.stringWidth(text);
-            int textH = fm.getAscent();
-            int padding = 6;
-            Rectangle gb = ctx.getBounds();
-            int x = (int) (gb.getX() + gb.getWidth()/2 - textW/2); // center of chart
-            int y = (int) (p.getY() - textH/2); // exactly on the line
-            gc.setColor(new Color(0, 0, 0, 200)); // dark translucent background
-            gc.fillRoundRect(x - padding, y - textH, textW + 2 * padding, textH + padding, 10, 10);
-            gc.setColor(new Color(255, 215, 0)); // gold border
-            gc.drawRoundRect(x - padding, y - textH, textW + 2 * padding, textH + padding, 10, 10);
-            gc.setColor(Color.WHITE);
-            gc.drawString(text, x, y);
-        }
-
-        @Override
-        public boolean contains(double x, double y, DrawContext ctx) {
-            return false;
-        }
-    }
-
-    /**
-     * Simple label figure used for Control-Step level names (P, S, SS, C, LS).
-     */
-    private class LevelLabel extends Figure {
-        private long time;
-        private double price;
-        private String text;
-        private final Font font = new Font("Arial", Font.BOLD, 11);
-
-        public LevelLabel(long time, double price, String text) {
-            this.time = time;
-            this.price = price;
-            this.text = text;
-        }
-
-        @Override
-        public void draw(Graphics2D gc, DrawContext ctx) {
-            if (time == 0 || text == null) return;
-            Point2D p = ctx.translate(new Coordinate(time, price));
-            gc.setFont(font);
-            FontMetrics fm = gc.getFontMetrics();
-            int textW = fm.stringWidth(text);
-            int textH = fm.getAscent();
-            gc.setColor(new Color(0,0,0,180));
-            gc.fillRoundRect((int)p.getX()+4, (int)(p.getY()-textH/2-2), textW+6, textH+4, 8, 8);
-            gc.setColor(Color.WHITE);
-            gc.drawString(text, (int)p.getX()+7, (int)(p.getY()+textH/2-2));
-        }
-
-        @Override
-        public boolean contains(double x, double y, DrawContext ctx) { return false; }
-    }
-
-    /**
-     * Draws variable-distance levels alternating between Short Step (SS) and Long Step (LS).
-     *
-     * @param series         Data series (for instrument/tick size if needed)
-     * @param midpointPrice  Center reference price
-     * @param highestHigh    Upper bound for drawing
-     * @param lowestLow      Lower bound for drawing
-     * @param ssValue        Short-Step distance (price units)
-     * @param lsValue        Long-Step distance  (price units)
-     * @param lsFirst        If true, first step after midpoint uses LS, otherwise SS
-     * @param startTime      Start timestamp for horizontal lines
-     * @param endTime        End timestamp for horizontal lines
-     */
-    private void drawSSLSLevels(DataSeries series, double midpointPrice, double highestHigh, double lowestLow,
-                                double ssValue, double lsValue, boolean lsFirst,
-                                long startTime, long endTime) {
-        if (ssValue <= 0 || lsValue <= 0) {
-            Logger.warn("BiotakTrigger: Invalid SS/LS values – cannot draw levels.");
-            return;
-        }
-
-        // Convert to "pip" distance similar to TH logic
-        double pipMultiplier = getPipMultiplier(series.getInstrument());
-        double stepSS = ssValue * pipMultiplier;
-        double stepLS = lsValue * pipMultiplier;
-        double[] stepDistances = new double[]{lsFirst ? stepLS : stepSS, lsFirst ? stepSS : stepLS};
-
-        int drawnAbove = 0;
-        int logicalStep = 0; // counts every step (SS/LS) processed
-        double cumulative = 0;
-        int maxLevelsAbove = getSettings().getInteger(S_MAX_LEVELS_ABOVE);
-        while (drawnAbove < maxLevelsAbove) {
-            double dist = stepDistances[logicalStep % 2];
-            cumulative += dist;
-            logicalStep++;
-            double priceLevel = midpointPrice + cumulative;
-            if (priceLevel > highestHigh) break;
-            PathInfo path = getPathForLevel(logicalStep);
-            if (path != null) {
-                addFigure(new Line(new Coordinate(startTime, priceLevel), new Coordinate(endTime, priceLevel), path));
-                drawnAbove++;
-            }
-        }
-
-        int drawnBelow = 0;
-        logicalStep = 0;
-        cumulative = 0;
-        int maxLevelsBelow = getSettings().getInteger(S_MAX_LEVELS_BELOW);
-        while (drawnBelow < maxLevelsBelow) {
-            double dist = stepDistances[logicalStep % 2];
-            cumulative += dist;
-            logicalStep++;
-            double priceLevel = midpointPrice - cumulative;
-            if (priceLevel < lowestLow) break;
-            PathInfo path = getPathForLevel(logicalStep);
-            if (path != null) {
-                addFigure(new Line(new Coordinate(startTime, priceLevel), new Coordinate(endTime, priceLevel), path));
-                drawnBelow++;
-            }
-        }
-    }
-
-    /**
-     * Draws levels based on the harmonic T–P–S–SS–C–LS sequence described by user.
-     * The distance pattern (multiples of T) between consecutive levels is: 1,1,2,2,1,1 (then repeats).
-     *
-     * @param series        Data series for instrument info
-     * @param midpointPrice Reference price (anchor)
-     * @param highestHigh   Upper bound to stop drawing
-     * @param lowestLow     Lower bound to stop drawing
-     * @param tValue        Trigger value (T) expressed in price units
-     * @param startTime     Start timestamp for lines
-     * @param endTime       End timestamp for lines
-     */
-    private void drawControlLevels(
-            DataSeries series,
-            double midpointPrice,
-            double highestHigh,
-            double lowestLow,
-            double patternValue,
-            double structureValue,
-            double shortStepValue,
-            double controlValue,
-            double longStepValue,
-            long startTime,
-            long endTime) {
-
-        // Validate inputs
-        if (patternValue <= 0 || structureValue <= 0 || shortStepValue <= 0 || controlValue <= 0 || longStepValue <= 0) {
-            Logger.warn("BiotakTrigger: Invalid fractal values – cannot draw Control-Based levels.");
-            return;
-        }
-
-        // Convert distances to 'pip-scaled' price distances (to match TH & SS/LS rendering)
-        double pipMultiplier = getPipMultiplier(series.getInstrument());
-
-        double[] valueSequence  = new double[]{patternValue, structureValue, shortStepValue, controlValue, longStepValue};
-        String[] labelSequence  = new String[]{"P", "S", "SS", "C", "LS"};
-
-        boolean showLabels = getSettings().getBoolean(Constants.S_SHOW_LEVEL_LABELS, true);
-
-        for (int i = 0; i < valueSequence.length; i++) {
-            double distPrice = valueSequence[i] * pipMultiplier;
-            double priceAbove = midpointPrice + distPrice;
-            double priceBelow = midpointPrice - distPrice;
-
-            int stepCount = i + 1; // Re-use for getPathForLevel()
-            PathInfo path = getPathForLevel(stepCount);
-
-            if (path != null) {
-                // Draw above midpoint
-                if (priceAbove <= highestHigh) {
-                    addFigure(new Line(new Coordinate(startTime, priceAbove), new Coordinate(endTime, priceAbove), path));
-                    if (showLabels) addFigure(new LevelLabel(endTime, priceAbove, labelSequence[i]));
-                }
-
-                // Draw below midpoint
-                if (priceBelow >= lowestLow) {
-                    addFigure(new Line(new Coordinate(startTime, priceBelow), new Coordinate(endTime, priceBelow), path));
-                    if (showLabels) addFigure(new LevelLabel(endTime, priceBelow, labelSequence[i]));
-                }
-            }
-        }
-    }
-
-    /**
-     * Returns the path (color/width) configured for a Control-Step label.
-     */
-    private PathInfo getControlLevelPath(String lbl) {
-        return switch (lbl) {
-            case "P"  -> getSettings().getPath(S_P_LEVEL_PATH);
-            case "S"  -> getSettings().getPath(S_S_LEVEL_PATH);
-            case "SS" -> getSettings().getPath(S_SS_LEVEL_PATH);
-            case "C"  -> getSettings().getPath(S_C_LEVEL_PATH);
-            case "LS" -> getSettings().getPath(S_LS_LEVEL_PATH);
-            default    -> null;
-        };
-    }
-
-    /**
-     * LEG RULER REMOVED – this stub prevents compilation errors while ensuring that
-     * no drawing or logic related to the old Leg Ruler is executed.
-     *
-     * @param index     last bar index (ignored)
-     * @param ctx       data context (ignored)
-     * @param startTime chart start time (ignored)
-     * @param endTime   chart end time (ignored)
-     */
-    private void drawLegRuler(int index, DataContext ctx, long startTime, long endTime) {
-        // No-op (feature deleted)
-    }
-
-    // Custom line that can optionally extend to left/right chart edges (adapted from TrendLine example)
-    private class RulerLine extends Figure {
-        @Override public boolean contains(double x, double y, DrawContext ctx) { return false; }
-        @Override public void layout(DrawContext ctx) {}
-        @Override public void draw(Graphics2D gc, DrawContext ctx) {}
     }
 } 
