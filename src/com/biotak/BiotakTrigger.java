@@ -1049,13 +1049,12 @@ public class BiotakTrigger extends Study {
                 if (swapped) angle += 180; // Adjust for direction
 
                 // Split info into lines
-                String pctStr = String.format("%.2f%%", pctChange);
-                String barsStr = String.format("%.0f bars", bars);
-                String angleStr = String.format("%.1f°", Math.abs(angle));
                 long diffMs = Math.abs(endTime - startTime);
                 long minutes = (diffMs / (1000 * 60)) % 60;
                 double pips = Math.abs(endPrice - startPrice) / series.getInstrument().getTickSize();
                 String pipsStr = String.format("Pips: %.1f", pips);
+                String barsStr = String.format("Bars: %.0f", bars);
+                String angleStr = String.format("%.1f°", Math.abs(angle));
                  // --- Determine best matching MOVE across ALL timeframes ---
                  double tick = series.getInstrument().getTickSize();
                  // Round leg length to 0.1-pip precision for matching
@@ -1262,7 +1261,7 @@ public class BiotakTrigger extends Study {
                      matchMinutes = "-";
                  }
 
-                 String matchStr1 = bestLabel;
+                 String matchStr1 = "M : " + bestLabel;
                  String matchStr2 = (totalMinutes > 0 ? matchMinutes : "-");
                 long hours = (diffMs / (1000 * 60 * 60)) % 24;
                 long days = (diffMs / (1000 * 60 * 60 * 24)) % 30; // Approximate months
@@ -1275,10 +1274,24 @@ public class BiotakTrigger extends Study {
                 if (hours > 0) timeSB.append(hours).append("h ");
                 if (minutes > 0 || timeSB.length() == 6) timeSB.append(minutes).append("min");
                 String timeStr = timeSB.toString();
-                 String atrStr1 = String.format("ATR×3:%s", bestATRLabel);
-                 String atrStr2 = String.format("%.1f p", bestATRBasePips);
+                 String atrStr1 = String.format("ATR×3 : %s", bestATRLabel);
+                 int atrMinVal = parseMinutesFromLabel(bestATRLabel);
+                 String atrStr2 = (atrMinVal > 0 ? atrMinVal + "m" : "-");
 
-                 String[] lines = { pctStr, pipsStr, barsStr, angleStr, timeStr, matchStr1, matchStr2, atrStr1, atrStr2 };
+                 // Arrange lines in requested grouped order with separators
+                 String sep = "-------------";
+                 String[] lines = {
+                     pipsStr,
+                     sep,
+                     matchStr1,
+                     matchStr2,
+                     sep,
+                     barsStr,
+                     timeStr,
+                     sep,
+                     atrStr1,
+                     atrStr2
+                 };
 
                 // Calculate max width and total height
                 java.awt.font.FontRenderContext frc = gc.getFontRenderContext();
@@ -1334,59 +1347,42 @@ public class BiotakTrigger extends Study {
     // Helper methods inside RulerFigure
     private static int parseMinutesFromLabel(String tf) {
             if (tf == null || tf.isEmpty()) return -1;
-            if (tf.equalsIgnoreCase("MN")) return 43200;
+            if (tf.equalsIgnoreCase("MN")) return 43200; // Monthly (30d) special case
 
-            // Split by '+' OR whitespace for composite strings (e.g., "4H+47m" or "4H 47m")
-            String[] parts = tf.split("[+\\s]+");
             int minutes = 0;
-            for (String part : parts) {
-                part = part.trim();
-                if (part.isEmpty()) continue;
 
-                // Detect pattern like "56s" (digits followed by unit) or "H4"
-                if (Character.isDigit(part.charAt(0))) {
-                    // digits first
-                    int i = 0;
-                    while (i < part.length() && Character.isDigit(part.charAt(i))) i++;
-                    String numStr = part.substring(0, i);
-                    char unit = Character.toUpperCase(part.charAt(i));
-                    try {
-                        int val = Integer.parseInt(numStr);
-                        switch (unit) {
-                            case 'M' -> minutes += val;
-                            case 'H' -> minutes += val * 60;
-                            case 'D' -> minutes += val * 1440;
-                            case 'W' -> minutes += val * 10080;
-                            case 'S' -> {
-                                // convert seconds to minutes, ensure at least 1 minute so value is non-zero
-                                minutes += Math.max(1, (int)Math.round(val / 60.0));
-                              }
-                        }
-                    } catch (NumberFormatException e) { }
-                } else {
-                    char p = Character.toUpperCase(part.charAt(0));
-                    try {
-                        int val = Integer.parseInt(part.substring(1));
-                        switch (p) {
-                            case 'M' -> minutes += val;
-                            case 'H' -> minutes += val * 60;
-                            case 'D' -> minutes += val * 1440;
-                            case 'W' -> minutes += val * 10080;
-                            case 'S' -> minutes += val / 60;
-                        }
-                    } catch (NumberFormatException e) { }
+            // Handle composite expressions that may include '+', whitespace, or be concatenated (e.g. "6H52m")
+            // Remove delimiter characters to simplify regex processing (we will still catch all segments)
+            String cleaned = tf.replace("+", " ");
+
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(\\d+)([mMhHdDwWsS])|([mMhHdDwWsS])(\\d+)");
+            java.util.regex.Matcher matcher = pattern.matcher(cleaned);
+            while (matcher.find()) {
+                String numStr;
+                char unit;
+                if (matcher.group(1) != null) { // form: 56m / 4H etc. (digits first)
+                    numStr = matcher.group(1);
+                    unit   = Character.toUpperCase(matcher.group(2).charAt(0));
+                } else {                         // form: m56 / H4 etc. (unit first)
+                    numStr = matcher.group(4);
+                    unit   = Character.toUpperCase(matcher.group(3).charAt(0));
                 }
+                if (numStr == null || numStr.isEmpty()) continue;
+                try {
+                    int val = Integer.parseInt(numStr);
+                    switch (unit) {
+                        case 'M' -> minutes += val;
+                        case 'H' -> minutes += val * 60;
+                        case 'D' -> minutes += val * 1440;
+                        case 'W' -> minutes += val * 10080;
+                        case 'S' -> minutes += Math.max(1, (int) Math.round(val / 60.0));
+                    }
+                } catch (NumberFormatException ignore) { }
             }
             return minutes > 0 ? minutes : -1;
     }
 
-    private String formatTimeframe(long minutes) {
-        if (minutes % 10080 == 0) return "W" + (minutes/10080);
-        if (minutes % 1440 == 0) return "D" + (minutes/1440);
-        if (minutes % 60 == 0)   return "H" + (minutes/60);
-        if (minutes == 43200)    return "MN"; // approx 1 month
-        return "M" + minutes;
-    }
+
 
     private String compoundTimeframe(long minutes) {
         long hrs = minutes / 60;
