@@ -127,6 +127,9 @@ public class BiotakTrigger extends Study {
     // Add fields at class level
     // (Leg Ruler fields removed)
 
+    // Keep last DataContext for quick redraws triggered by key events
+    private DataContext lastDataContext;
+
     public BiotakTrigger() {
         super();
         Logger.info("BiotakTrigger: Constructor called. The study is being instantiated by MotiveWave.");
@@ -136,8 +139,35 @@ public class BiotakTrigger extends Study {
     public void initialize(Defaults defaults) {
         Logger.info("BiotakTrigger: initialize() called. Settings are being configured.");
         var sd = createSD();
-        var tab = sd.addTab("General");
 
+        // ---------- NEW QUICK SETUP TAB (beginner-friendly) ----------
+        // This tab collects the most essential options so that new users can configure the study without browsing all tabs.
+        var quick = sd.addTab("Quick Setup");
+
+        var qBasic = quick.addGroup("Basic");
+        qBasic.addRow(new DiscreteDescriptor(S_START_POINT, "Anchor Point", THStartPointType.MIDPOINT.name(), java.util.Arrays.asList(
+                new NVP("Midpoint (Default)", THStartPointType.MIDPOINT.name()),
+                new NVP("Historical High", THStartPointType.HISTORICAL_HIGH.name()),
+                new NVP("Historical Low", THStartPointType.HISTORICAL_LOW.name()),
+                new NVP("Custom Price", THStartPointType.CUSTOM_PRICE.name()))));
+
+        qBasic.addRow(new DiscreteDescriptor(S_STEP_MODE, "Step Mode", StepCalculationMode.TH_STEP.name(), java.util.Arrays.asList(
+                new NVP("Equal TH Steps", StepCalculationMode.TH_STEP.name()),
+                new NVP("SS / LS Steps", StepCalculationMode.SS_LS_STEP.name()),
+                new NVP("TPC / Control", StepCalculationMode.CONTROL_STEP.name()))));
+
+        var qLevels = quick.addGroup("Show / Hide Levels");
+        qLevels.addRow(new BooleanDescriptor(S_SHOW_TH_LEVELS, "TH Ladder", true));
+        qLevels.addRow(new BooleanDescriptor(S_SHOW_STRUCTURE_LINES, "Structure Highlights", true));
+        qLevels.addRow(new BooleanDescriptor(S_SHOW_TRIGGER_LEVELS, "Trigger Sub-levels", false));
+
+        var qExtras = quick.addGroup("Extras");
+        qExtras.addRow(new BooleanDescriptor(S_SHOW_HIGH_LINE, "Historical High", true));
+        qExtras.addRow(new BooleanDescriptor(S_SHOW_LOW_LINE, "Historical Low", true));
+        qExtras.addRow(new BooleanDescriptor(S_SHOW_INFO_PANEL, "Info Panel", true));
+        qExtras.addRow(new BooleanDescriptor(S_SHOW_RULER, "Leg Ruler", false));
+
+        var tab = sd.addTab("General");
         var grp = tab.addGroup("General");
         grp.addRow(new StringDescriptor(S_OBJ_PREFIX, "Object Prefix", "BiotakTH3"));
         
@@ -248,11 +278,25 @@ public class BiotakTrigger extends Study {
         grp.addRow(new BooleanDescriptor(Constants.S_LOCK_SSLS_LEVELS, "Lock SS/LS Levels", false));
         // Quick settings could be added later if desired
         
-        // Quick Settings: Allow rapid toggling of TH Start Point and Leg Ruler visibility from toolbar / popup editor
-        sd.addQuickSettings(S_START_POINT);
-        
-        // Quick Settings toolbar icons for rapid access
-        sd.addQuickSettings(S_STEP_MODE, S_SSLS_BASIS, S_LS_FIRST, Constants.S_LOCK_SSLS_LEVELS);
+        // ----------------- QUICK SETTINGS (Toolbar/Panels) -----------------
+        // Provide the most commonly toggled options for new users so they don't have to open all tabs.
+        // 1) Anchor & Mode
+        sd.addQuickSettings(S_START_POINT,                 // Midpoint / High / Low / Custom
+                            S_STEP_MODE);                  // TH-Step / SS-LS / TPC
+
+        // 2) Level Visibility
+        sd.addQuickSettings(S_SHOW_TH_LEVELS,              // Classic TH ladder
+                            S_SHOW_STRUCTURE_LINES,        // Structure fractal highlights
+                            S_SHOW_TRIGGER_LEVELS);        // Trigger sub-levels
+
+        // 3) Historical extremes and ruler helpers
+        sd.addQuickSettings(S_SHOW_HIGH_LINE, S_SHOW_LOW_LINE, // Historical high/low toggle
+                            S_SHOW_RULER, S_RULER_EXT_LEFT, S_RULER_EXT_RIGHT); // Ruler toggles
+
+        // 4) SS/LS options when users switch mode
+        sd.addQuickSettings(S_SSLS_BASIS,  // Basis for SS/LS (Structure/Pattern/Trigger)
+                            S_LS_FIRST,    // Draw LS before SS?
+                            Constants.S_LOCK_SSLS_LEVELS);
 
         // ------------------ Control Level Style -------------------
         grp = tab.addGroup("Control Level Paths");
@@ -261,13 +305,17 @@ public class BiotakTrigger extends Study {
         grp.addRow(new PathDescriptor(S_SS_LEVEL_PATH, "SS Level Path", X11Colors.MEDIUM_VIOLET_RED, 1.5f, null, true, false, false));
         grp.addRow(new PathDescriptor(S_C_LEVEL_PATH , "C Level Path" , X11Colors.ORANGE        , 1.5f, null, true, false, false));
         grp.addRow(new PathDescriptor(S_LS_LEVEL_PATH, "LS Level Path", X11Colors.LIGHT_GRAY     , 1.5f, null, true, false, false));
-        grp.addRow(new BooleanDescriptor(S_SHOW_RULER, "Show Ruler", false));
-        grp.addRow(new PathDescriptor(S_RULER_PATH, "Ruler", X11Colors.GREEN, 1.0f, null, true, false, false));
-        grp.addRow(new BooleanDescriptor(S_RULER_EXT_RIGHT, "Extend Right", false));
-        grp.addRow(new BooleanDescriptor(S_RULER_EXT_LEFT, "Extend Left", false));
-        grp.addRow(new ColorDescriptor(S_RULER_TEXT_COLOR, "Ruler Text Color", java.awt.Color.BLACK));
-        grp.addRow(new ColorDescriptor(S_RULER_BG_COLOR,   "Ruler Background Color", new java.awt.Color(255,255,255)));
-        grp.addRow(new ColorDescriptor(S_RULER_BORDER_COLOR,"Ruler Border Color", java.awt.Color.GRAY));
+
+        // --------------------------- RULER TAB ---------------------------
+        var tabR = sd.addTab("Ruler");
+        var grpR = tabR.addGroup("Ruler Settings");
+        grpR.addRow(new BooleanDescriptor(S_SHOW_RULER, "Show Ruler", false));
+        grpR.addRow(new PathDescriptor(S_RULER_PATH, "Ruler Line Path", X11Colors.GREEN, 1.0f, null, true, false, false));
+        grpR.addRow(new BooleanDescriptor(S_RULER_EXT_LEFT, "Extend Left", false));
+        grpR.addRow(new BooleanDescriptor(S_RULER_EXT_RIGHT, "Extend Right", false));
+        grpR.addRow(new ColorDescriptor(S_RULER_TEXT_COLOR, "Text Color", java.awt.Color.BLACK));
+        grpR.addRow(new ColorDescriptor(S_RULER_BG_COLOR,   "Background Color", new java.awt.Color(255,255,255)));
+        grpR.addRow(new ColorDescriptor(S_RULER_BORDER_COLOR, "Border Color", java.awt.Color.GRAY));
         // Logging
         java.util.List<NVP> levelOpts = new java.util.ArrayList<>();
         for (Logger.LogLevel lv : Logger.LogLevel.values()) levelOpts.add(new NVP(lv.name(), lv.name()));
@@ -299,6 +347,27 @@ public class BiotakTrigger extends Study {
             double lastClose = ds.getClose(ds.size() - 1);
             getSettings().setDouble(S_CUSTOM_PRICE, lastClose);
             lastCustomMoveTime = System.currentTimeMillis();
+            drawFigures(ds.size() - 1, ctx.getDataContext());
+        }));
+        // ---- Ruler context toggles ----
+        boolean showRuler = getSettings().getBoolean(S_SHOW_RULER, false);
+        items.add(new MenuItem(showRuler ? "Hide Ruler" : "Show Ruler", false, () -> {
+            getSettings().setBoolean(S_SHOW_RULER, !showRuler);
+            DataSeries ds = ctx.getDataContext().getDataSeries();
+            drawFigures(ds.size() - 1, ctx.getDataContext());
+        }));
+
+        boolean extLeft = getSettings().getBoolean(S_RULER_EXT_LEFT, false);
+        items.add(new MenuItem("Extend Left", extLeft, () -> {
+            getSettings().setBoolean(S_RULER_EXT_LEFT, !extLeft);
+            DataSeries ds = ctx.getDataContext().getDataSeries();
+            drawFigures(ds.size() - 1, ctx.getDataContext());
+        }));
+
+        boolean extRight = getSettings().getBoolean(S_RULER_EXT_RIGHT, false);
+        items.add(new MenuItem("Extend Right", extRight, () -> {
+            getSettings().setBoolean(S_RULER_EXT_RIGHT, !extRight);
+            DataSeries ds = ctx.getDataContext().getDataSeries();
             drawFigures(ds.size() - 1, ctx.getDataContext());
         }));
         // (Reset Leg Ruler menu item removed)
@@ -813,6 +882,11 @@ public class BiotakTrigger extends Study {
             getSettings().setString(S_RULER_START, rp.getValue() + "|" + rp.getTime());
         } else if (rp == rulerEndResize) {
             getSettings().setString(S_RULER_END, rp.getValue() + "|" + rp.getTime());
+        } else if (rp == customPricePoint) {
+            // Persist the new custom price and redraw levels based on it
+            getSettings().setDouble(S_CUSTOM_PRICE, rp.getValue());
+            lastCustomMoveTime = System.currentTimeMillis();
+            drawFigures(ctx.getDataContext().getDataSeries().size() - 1, ctx.getDataContext());
         }
     }
 
@@ -822,6 +896,11 @@ public class BiotakTrigger extends Study {
         super.onResize(rp, ctx);
         if (rp == rulerStartResize || rp == rulerEndResize) {
             rulerFigure.layout(ctx);
+        }
+        else if (rp == customPricePoint) {
+            // As the user drags the golden point, update the custom price and refresh figures for live feedback
+            getSettings().setDouble(S_CUSTOM_PRICE, rp.getValue());
+            drawFigures(ctx.getDataContext().getDataSeries().size() - 1, ctx.getDataContext());
         }
     }
 
@@ -1317,6 +1396,24 @@ public class BiotakTrigger extends Study {
             else return hrs + "H";
         } else {
             return minutes + "m";
+        }
+    }
+
+    // ----------------------- KEYBOARD SHORTCUTS -----------------------
+    public void onKey(java.awt.event.KeyEvent e) {
+        Logger.info("BiotakTrigger: Key pressed code=" + e.getKeyCode());
+        if (e.getKeyCode() == java.awt.event.KeyEvent.VK_R) {
+            Logger.info("BiotakTrigger: Toggling ruler visibility");
+            boolean show = getSettings().getBoolean(S_SHOW_RULER, false);
+            getSettings().setBoolean(S_SHOW_RULER, !show);
+            Logger.info("BiotakTrigger: Ruler now " + (!show ? "ON" : "OFF"));
+            if (lastDataContext != null) {
+                DataSeries ds = lastDataContext.getDataSeries();
+                if (ds != null && ds.size() > 0) {
+                    drawFigures(ds.size() - 1, lastDataContext);
+                }
+            }
+            e.consume(); // prevent further propagation if supported
         }
     }
 } 

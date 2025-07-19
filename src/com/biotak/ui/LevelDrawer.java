@@ -199,6 +199,11 @@ public class LevelDrawer {
             double priceLevel = midpointPrice + cumulative;
             if (priceLevel > highestHigh) break;
             PathInfo path = getPathForLevel(settings, logicalStep);
+            if (path == null) {
+                // Fall back to specific SS/LS paths when structure/trigger paths are disabled
+                boolean isSS = ((logicalStep % 2 == 0) == lsFirst); // logicalStep starts at 1 after ++, so evaluate before use
+                path = isSS ? settings.getPath(S_SS_LEVEL_PATH) : settings.getPath(S_LS_LEVEL_PATH);
+            }
             if (path != null) {
                 figures.add(new Line(new Coordinate(startTime, priceLevel), new Coordinate(endTime, priceLevel), path));
                 drawnAbove++;
@@ -216,6 +221,10 @@ public class LevelDrawer {
             double priceLevel = midpointPrice - cumulative;
             if (priceLevel < lowestLow) break;
             PathInfo path = getPathForLevel(settings, logicalStep);
+            if (path == null) {
+                boolean isSS = ((logicalStep % 2 == 0) == lsFirst);
+                path = isSS ? settings.getPath(S_SS_LEVEL_PATH) : settings.getPath(S_LS_LEVEL_PATH);
+            }
             if (path != null) {
                 figures.add(new Line(new Coordinate(startTime, priceLevel), new Coordinate(endTime, priceLevel), path));
                 drawnBelow++;
@@ -271,7 +280,15 @@ public class LevelDrawer {
             double priceBelow = midpointPrice - distPrice;
 
             int stepCount = i + 1; // Re-use for getPathForLevel()
-            PathInfo path = getPathForLevel(settings, stepCount);
+            PathInfo path = null;
+            // If user has enabled Structure or Trigger lines, use those definitions first
+            if (settings.getBoolean(S_SHOW_STRUCTURE_LINES) || settings.getBoolean(S_SHOW_TRIGGER_LEVELS)) {
+                path = getPathForLevel(settings, stepCount);
+            }
+            // Otherwise (or if still null) use dedicated Control-Step paths
+            if (path == null) {
+                path = getControlLevelPath(settings, labelSequence[i]);
+            }
 
             if (path != null) {
                 // Draw above midpoint
