@@ -1402,18 +1402,6 @@ public class BiotakTrigger extends Study {
     // ----------------------- KEYBOARD SHORTCUTS -----------------------
     public void onKey(java.awt.event.KeyEvent e) {
         Logger.info("BiotakTrigger: Key pressed code=" + e.getKeyCode());
-        if (e.getKeyCode() == java.awt.event.KeyEvent.VK_R) {
-            Logger.info("BiotakTrigger: Toggling ruler visibility");
-            boolean show = getSettings().getBoolean(S_SHOW_RULER, false);
-            getSettings().setBoolean(S_SHOW_RULER, !show);
-            Logger.info("BiotakTrigger: Ruler now " + (!show ? "ON" : "OFF"));
-            if (lastDataContext != null) {
-                DataSeries ds = lastDataContext.getDataSeries();
-                if (ds != null && ds.size() > 0) {
-                    drawFigures(ds.size() - 1, lastDataContext);
-                }
-            }
-            e.consume(); // prevent further propagation if supported
-        }
+        // Shortcut key 'R' has been removed per user request; no key actions are currently defined.
     }
 } 
