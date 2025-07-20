@@ -29,7 +29,7 @@ import com.biotak.enums.PanelPosition;
 public class InfoPanel extends Figure {
     // General Info
     private String timeframe;
-    private double pipMultiplier;
+    private com.motivewave.platform.sdk.common.Instrument instrument;
     private Font contentFont;
     private Font titleFont;
     private PanelPosition position;
@@ -51,13 +51,13 @@ public class InfoPanel extends Figure {
     // Added constant to control vertical padding after separator lines inside the panel
     private static final int SEPARATOR_PADDING = 25; // was previously 15 – gives text more breathing room
     
-    public InfoPanel(String timeframe, double thValue, double pipMultiplier, 
+    public InfoPanel(String timeframe, double thValue, com.motivewave.platform.sdk.common.Instrument instrument, 
                     Font contentFont, Font titleFont, PanelPosition position, 
                     int marginX, int marginY, int transparency, 
                     double shortStep, double longStep, double atrValue, double liveAtrValue, boolean isSecondsBased, boolean isMinimized) {
         this.timeframe = timeframe;
         this.thValue = thValue;
-        this.pipMultiplier = pipMultiplier;
+        this.instrument = instrument;
         this.contentFont = contentFont;
         this.titleFont = titleFont;
         this.position = position;
@@ -105,40 +105,42 @@ public class InfoPanel extends Figure {
 
         List<String> coreLines = new ArrayList<>();
         // Format numbers to one decimal place (in pips)
-        coreLines.add("TH: "   + String.format("%.1f", thValue      * pipMultiplier));
-        coreLines.add("ATR: "  + String.format("%.1f", atrValue     * pipMultiplier));
-        coreLines.add("SS: "   + String.format("%.1f", shortStep    * pipMultiplier));
-        coreLines.add("LS: "   + String.format("%.1f", longStep     * pipMultiplier));
-        coreLines.add("C: "    + String.format("%.1f", controlValue * pipMultiplier));
+        coreLines.add("TH: "   + String.format("%.1f", com.biotak.util.UnitConverter.priceToPip(thValue, instrument)));
+        coreLines.add("ATR: "  + String.format("%.1f", com.biotak.util.UnitConverter.priceToPip(atrValue, instrument)));
+        coreLines.add("SS: "   + String.format("%.1f", com.biotak.util.UnitConverter.priceToPip(shortStep, instrument)));
+        coreLines.add("LS: "   + String.format("%.1f", com.biotak.util.UnitConverter.priceToPip(longStep, instrument)));
+        coreLines.add("C: "    + String.format("%.1f", com.biotak.util.UnitConverter.priceToPip(controlValue, instrument)));
         // Calculate M = SS + C + LS and add to core lines
         double mValue = shortStep + controlValue + longStep;
-        coreLines.add("M: "    + String.format("%.1f", mValue * pipMultiplier));
-        coreLines.add("Live: " + String.format("%.1f", liveAtrValue * pipMultiplier));
+        coreLines.add("M: "    + String.format("%.1f", com.biotak.util.UnitConverter.priceToPip(mValue, instrument)));
+        coreLines.add("Live: " + String.format("%.1f", com.biotak.util.UnitConverter.priceToPip(liveAtrValue, instrument)));
 
         //---------------------------  HIERARCHY VALUES  --------------------------------
         List<String> hierarchyLines = new ArrayList<>();
 
         // Helper lambda to format TH and C together to avoid clutter
-        java.util.function.BiFunction<Double, Double, String> formatThC = (th, pipMult) -> {
-            double cVal = th * 1.75; // Adjusted to 1.75 * TH ≈ 7T where T = TH / 4
-            return String.format("%.1f", th * pipMult) + "  (C:" + String.format("%.1f", cVal * pipMult) + ")";
+        java.util.function.Function<Double, String> formatThC = (th) -> {
+            double cVal = th * 1.75; // C-tier value
+            double thPip = com.biotak.util.UnitConverter.priceToPip(th, instrument);
+            double cPip  = com.biotak.util.UnitConverter.priceToPip(cVal, instrument);
+            return String.format("%.1f", thPip) + "  (C:" + String.format("%.1f", cPip) + ")";
         };
 
         if (higherStructureTF != null && !higherStructureTF.isEmpty()) {
-            hierarchyLines.add("▲ S [" + higherStructureTF + "]: " + formatThC.apply(higherStructureTH, pipMultiplier));
+            hierarchyLines.add("▲ S [" + higherStructureTF + "]: " + formatThC.apply(higherStructureTH));
         }
         if (higherPatternTF != null && !higherPatternTF.isEmpty()) {
-            hierarchyLines.add("▲ P [" + higherPatternTF + "]: " + formatThC.apply(higherPatternTH, pipMultiplier));
+            hierarchyLines.add("▲ P [" + higherPatternTF + "]: " + formatThC.apply(higherPatternTH));
         }
 
         // Current timeframe – include star marker
-        hierarchyLines.add("■ [" + timeframe + "]: " + formatThC.apply(thValue, pipMultiplier) + " *");
+        hierarchyLines.add("■ [" + timeframe + "]: " + formatThC.apply(thValue) + " *");
 
         if (lowerPatternTF != null && !lowerPatternTF.isEmpty()) {
-            hierarchyLines.add("▼ P [" + lowerPatternTF + "]: " + formatThC.apply(lowerPatternTH, pipMultiplier));
+            hierarchyLines.add("▼ P [" + lowerPatternTF + "]: " + formatThC.apply(lowerPatternTH));
         }
         if (lowerTriggerTF != null && !lowerTriggerTF.isEmpty()) {
-            hierarchyLines.add("▼ T [" + lowerTriggerTF + "]: " + formatThC.apply(lowerTriggerTH, pipMultiplier));
+            hierarchyLines.add("▼ T [" + lowerTriggerTF + "]: " + formatThC.apply(lowerTriggerTH));
         }
 
         // Calculate panel dimensions

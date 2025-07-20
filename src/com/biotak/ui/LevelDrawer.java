@@ -101,7 +101,8 @@ public class LevelDrawer {
         Logger.debug("BiotakTrigger: Point value (tick size): " + pointValue + ", Pip multiplier: " + pipMultiplier);
 
         // Final price distance between consecutive TH levels
-        double stepPrice = thStepInPoints * pointValue * pipMultiplier;
+        // Removed pipMultiplier scaling: keep distance in price units
+        double stepPrice = thStepInPoints * pointValue;
         int maxLevelsAbove = settings.getInteger(S_MAX_LEVELS_ABOVE);
         int maxLevelsBelow = settings.getInteger(S_MAX_LEVELS_BELOW);
 
@@ -181,10 +182,10 @@ public class LevelDrawer {
             return new ArrayList<>();
         }
 
-        // Convert to "pip" distance similar to TH logic
-        double pipMultiplier = FractalCalculator.getPipMultiplier(series.getInstrument());
-        double stepSS = ssValue * pipMultiplier;
-        double stepLS = lsValue * pipMultiplier;
+        double pipMultiplier = FractalCalculator.getPipMultiplier(series.getInstrument()); // retained for potential debug logs
+        // Removed pipMultiplier scaling: ssValue/lsValue are already in price units
+        double stepSS = ssValue;
+        double stepLS = lsValue;
         double[] stepDistances = new double[]{lsFirst ? stepLS : stepSS, lsFirst ? stepSS : stepLS};
 
         int drawnAbove = 0;
@@ -265,9 +266,9 @@ public class LevelDrawer {
             return new ArrayList<>();
         }
 
-        // Convert distances to 'pip-scaled' price distances (to match TH & SS/LS rendering)
-        double pipMultiplier = FractalCalculator.getPipMultiplier(series.getInstrument());
+        double pipMultiplier = FractalCalculator.getPipMultiplier(series.getInstrument()); // retained for consistency/logging
 
+        // Distances are already in price units; remove extra scaling
         double[] valueSequence  = new double[]{patternValue, structureValue, shortStepValue, controlValue, longStepValue};
         String[] labelSequence  = new String[]{"P", "S", "SS", "C", "LS"};
 
@@ -275,7 +276,7 @@ public class LevelDrawer {
 
         List<Figure> figures = new ArrayList<>();
         for (int i = 0; i < valueSequence.length; i++) {
-            double distPrice = valueSequence[i] * pipMultiplier;
+            double distPrice = valueSequence[i];
             double priceAbove = midpointPrice + distPrice;
             double priceBelow = midpointPrice - distPrice;
 

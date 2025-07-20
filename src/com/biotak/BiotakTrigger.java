@@ -84,6 +84,7 @@ public class BiotakTrigger extends Study {
     private double cachedHigh = Double.NEGATIVE_INFINITY;
     private double cachedLow  = Double.POSITIVE_INFINITY;
     private boolean extremesInitialized = false; // ensures we load stored extremes once
+    private boolean firstBarDrawn = false; // prevents repeated first-bar drawing/logging
 
     // Stores SS/LS base TH when lock option is enabled
     private double lockedBaseTH = Double.NaN;
@@ -445,9 +446,10 @@ public class BiotakTrigger extends Study {
         boolean isFirstBar = (index == 0);
         boolean isLastBar = (index == series.size() - 1);
         
-        if (isFirstBar) {
+        if (isFirstBar && !firstBarDrawn) {
             Logger.info("BiotakTrigger: First bar detected. Drawing initial figures...");
             drawFigures(index, ctx);
+            firstBarDrawn = true;
         }
         else if (isLastBar) {
             long nowHL = System.currentTimeMillis();
@@ -706,7 +708,7 @@ public class BiotakTrigger extends Study {
             // ATR metrics
             double atrValue     = FractalCalculator.calculateATR(series);
             double liveAtrValue = FractalCalculator.calculateLiveATR(series);
-            double pipMultiplier = FractalCalculator.getPipMultiplier(series.getInstrument());
+            // pipMultiplier is now handled internally via UnitConverter; variable removed.
 
             // --------------------- BUILD 3×ATR MAP (after ATR value ready) ---------------------
             java.util.Map<String, Double> atrMap = new java.util.HashMap<>();
@@ -750,6 +752,7 @@ public class BiotakTrigger extends Study {
 
             long now = System.currentTimeMillis();
             if (now - lastCalcTableLogTime > LOG_INTERVAL_MS) {
+                double pipMultiplier = FractalCalculator.getPipMultiplier(series.getInstrument());
                 FractalCalculator.logCalculationTable(series, thValue, structureValue, patternValue, triggerValue,
                                shortStep, longStep, atrValue, liveAtrValue,
                                pipMultiplier, lastCalcTableLogTime, LOG_INTERVAL_MS);
@@ -927,9 +930,9 @@ public class BiotakTrigger extends Study {
         BarSize barSize = series.getBarSize();
         String timeframe = FractalCalculator.formatTimeframeString(barSize);
         boolean isSecondsBased = TimeframeUtil.isSecondsBasedTimeframe(barSize);
-        double pipMultiplier = FractalCalculator.getPipMultiplier(instrument);
-        // Create the info panel and add it as a figure
-        this.infoPanel = new InfoPanel(timeframe, thValue, pipMultiplier, contentFont, titleFont, panelPos, marginX, marginY, transparency, shortStep, longStep, atrValue, liveAtrValue, isSecondsBased, isMinimized);
+        // pipMultiplier is now handled internally via UnitConverter; variable removed.
+        // Create the info panel and add it as a figure (UnitConverter now handles pips)
+        this.infoPanel = new InfoPanel(timeframe, thValue, instrument, contentFont, titleFont, panelPos, marginX, marginY, transparency, shortStep, longStep, atrValue, liveAtrValue, isSecondsBased, isMinimized);
         // Calculate fractal TH values for hierarchy display
         double basePrice = series.getClose(series.size() - 2);
         // Pattern timeframe (one level down)
@@ -1037,24 +1040,23 @@ public class BiotakTrigger extends Study {
                 }
 
                 double priceDiff = endPrice - startPrice;
-                double pctChange = (priceDiff / startPrice) * 100;
-                double timeDiffMs = Math.abs(endTime - startTime);
+
                 int startIdx = series.findIndex(startTime);
                 int endIdx = series.findIndex(endTime);
                 double bars = Math.abs(endIdx - startIdx) + 1;
-                // Pixel-based angle
+
+                // Pixel-based angle (useful for future enhancements; not displayed currently)
                 double pixelDX = line.getX2() - line.getX1();
                 double pixelDY = line.getY2() - line.getY1();
                 double angle = Math.toDegrees(Math.atan2(-pixelDY, pixelDX));
-                if (swapped) angle += 180; // Adjust for direction
+                if (swapped) angle += 180;
 
-                // Split info into lines
                 long diffMs = Math.abs(endTime - startTime);
                 long minutes = (diffMs / (1000 * 60)) % 60;
-                double pips = Math.abs(endPrice - startPrice) / series.getInstrument().getTickSize();
+
+                double pips = Math.abs(priceDiff) / series.getInstrument().getTickSize();
                 String pipsStr = String.format("Pips: %.1f", pips);
                 String barsStr = String.format("Bars: %.0f", bars);
-                String angleStr = String.format("%.1f°", Math.abs(angle));
                  // --- Determine best matching MOVE across ALL timeframes ---
                  double tick = series.getInstrument().getTickSize();
                  // Round leg length to 0.1-pip precision for matching
