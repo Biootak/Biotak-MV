@@ -487,9 +487,7 @@ public class BiotakTrigger extends Study {
         }
         
         // Temporarily set log level to INFO for important high/low calculations
-        Logger.setLogLevel(LogLevel.INFO);
-
-        try {
+        try (com.biotak.util.Logger.ScopedLogLevel scope = com.biotak.util.Logger.scoped(LogLevel.INFO)) {
             double finalHigh, finalLow;
             boolean manualMode = settings.getBoolean(S_MANUAL_HL_ENABLE, false);
 
@@ -619,32 +617,21 @@ public class BiotakTrigger extends Study {
     
             // Step lines (TH or SS/LS) will be drawn below once all required values are calculated.
             
-            // Calculate TH value for the info panel
-            double timeframePercentage = TimeframeUtil.getTimeframePercentage(series.getBarSize());
-            double thStepInPoints = THCalculator.calculateTHPoints(series.getInstrument(), thBasePrice, timeframePercentage);
+            // Consolidated TH calculations using FractalUtil
+            var thBundle = com.biotak.util.FractalUtil.calculateTHBundle(series.getInstrument(), series.getBarSize(), thBasePrice);
+            double thValue          = thBundle.th();
+            double patternTH        = thBundle.pattern();
+            double triggerTH        = thBundle.trigger();
+            double structureTH      = thBundle.structure();
+            double higherPatternTH  = thBundle.higherPattern();
+
             double pointValue = series.getInstrument().getTickSize();
-            double thValue = thStepInPoints * pointValue;
-            // Calculate fractal TH for matching
-            BarSize patternBarSize = TimeframeUtil.getPatternBarSize(series.getBarSize());
-            double patternTFPercent = TimeframeUtil.getTimeframePercentage(patternBarSize);
-            double patternTH = THCalculator.calculateTHPoints(series.getInstrument(), thBasePrice, patternTFPercent) * series.getInstrument().getTickSize();
-            BarSize triggerBarSize = TimeframeUtil.getTriggerBarSize(series.getBarSize());
-            double triggerTFPercent = TimeframeUtil.getTimeframePercentage(triggerBarSize);
-            double triggerTH = THCalculator.calculateTHPoints(series.getInstrument(), thBasePrice, triggerTFPercent) * series.getInstrument().getTickSize();
-            BarSize structureBarSize = TimeframeUtil.getStructureBarSize(series.getBarSize());
-            double structureTFPercent = TimeframeUtil.getTimeframePercentage(structureBarSize);
-            double structureTH = THCalculator.calculateTHPoints(series.getInstrument(), thBasePrice, structureTFPercent) * series.getInstrument().getTickSize();
+
+            BarSize patternBarSize     = TimeframeUtil.getPatternBarSize(series.getBarSize());
+            BarSize triggerBarSize     = TimeframeUtil.getTriggerBarSize(series.getBarSize());
+            BarSize structureBarSize   = TimeframeUtil.getStructureBarSize(series.getBarSize());
             BarSize higherPatternBarSize = TimeframeUtil.getPatternBarSize(structureBarSize);
-            double higherPatternPercent = TimeframeUtil.getTimeframePercentage(higherPatternBarSize);
-            double higherPatternTH = THCalculator.calculateTHPoints(series.getInstrument(), thBasePrice, higherPatternPercent) * series.getInstrument().getTickSize();
             // Set instance fields
-            // -----------------------------  STORE VALUES FOR RULER MATCHING  -----------------------------
-            // 1) TH values
-            this.thValue          = thValue;
-            this.patternTH        = patternTH;
-            this.triggerTH        = triggerTH;
-            this.structureTH      = structureTH;
-            this.higherPatternTH  = higherPatternTH;
 
             // 2) M values derived from TH →  M = SS + C + LS
             //    Detailed decomposition based on Biotak fractal relationships:
@@ -673,32 +660,7 @@ public class BiotakTrigger extends Study {
             this.tfLabels[4] = FractalCalculator.formatTimeframeString(higherPatternBarSize);
 
             // -----------------------------  BUILD COMPREHENSIVE M MAP  -----------------------------
-            java.util.Map<String, Double> mMap = new java.util.HashMap<>();
-            // 1) immediate five levels
-            mMap.put(tfLabels[0], mValue);
-            mMap.put(tfLabels[1], patternM);
-            mMap.put(tfLabels[2], triggerM);
-            mMap.put(tfLabels[3], structureM);
-            mMap.put(tfLabels[4], higherPatternM);
-
-            // 2) iterate fractal maps
-            var fractalMinutes = TimeframeUtil.getFractalMinutesMap();
-            var power3Minutes  = TimeframeUtil.getPower3MinutesMap();
-
-            java.util.function.BiConsumer<Integer,String> addEntry = (mins,label) -> {
-                if (label == null || label.isEmpty()) return;
-                if (mMap.containsKey(label)) return;
-                double perc   = TimeframeUtil.getTimeframePercentage(mins);
-                double thPts  = THCalculator.calculateTHPoints(series.getInstrument(), thBasePrice, perc) * pointValue;
-                double mv     = mScale * thPts;
-                if (mv > 0) mMap.put(label, mv);
-            };
-
-            for (var e : fractalMinutes.entrySet()) addEntry.accept(e.getKey(), e.getValue());
-            for (var e : power3Minutes.entrySet())  addEntry.accept(e.getKey(), e.getValue());
-
-            // store to field for ruler access
-            this.fullMValues = mMap;
+            this.fullMValues = com.biotak.util.FractalUtil.buildMMap(series, thBasePrice, mScale);
  
             // (Debug logging for M map removed in release version)
 
@@ -717,45 +679,22 @@ public class BiotakTrigger extends Study {
             double liveAtrValue = FractalCalculator.calculateLiveATR(series);
             // pipMultiplier is now handled internally via UnitConverter; variable removed.
 
-            // --------------------- BUILD 3×ATR MAP (after ATR value ready) ---------------------
-            java.util.Map<String, Double> atrMap = new java.util.HashMap<>();
-            // minutes of structure timeframe
-            int tmpMin = parseMinutesFromLabel(tfLabels[0]);
-            if (tmpMin <= 0) {
-                tmpMin = (int)(series.getBarSize().getInterval() * switch(series.getBarSize().getIntervalType()){
-                    case SECOND -> 1.0/60.0;
+            // --------------------- BUILD 3×ATR MAP ---------------------
+            int structureMin = TimeframeUtil.parseCompoundTimeframe(tfLabels[0]);
+            if (structureMin <= 0) {
+                structureMin = series.getBarSize().getInterval() * (switch(series.getBarSize().getIntervalType()){
+                    case SECOND -> 1;
                     case MINUTE -> 1;
-                    case HOUR   -> 60;
-                    case DAY    -> 1440;
-                    case WEEK   -> 10080;
+                    case HOUR -> 60;
+                    case DAY -> 1440;
+                    case WEEK -> 10080;
                     default -> 1;
                 });
             }
-            final int structureMin = tmpMin;
 
-            double structureATR_Price = atrValue;
-
-            java.util.function.BiConsumer<Integer,String> addAtrEntry = (mins,label)->{
-                if (label==null||label.isEmpty()) return;
-                if (atrMap.containsKey(label)) return;
-                double scaling = Math.sqrt((double)mins/structureMin);
-                double atrPrice = structureATR_Price * scaling;
-                atrMap.put(label, 3.0 * atrPrice);
-            };
-
-            // Add structure label first
-            addAtrEntry.accept(structureMin, tfLabels[0]);
-
-            // iterate fractal maps for more labels
-            for (var e: TimeframeUtil.getFractalMinutesMap().entrySet()) addAtrEntry.accept(e.getKey(), e.getValue());
-            for (var e: TimeframeUtil.getPower3MinutesMap().entrySet()) addAtrEntry.accept(e.getKey(), e.getValue());
-
-            // store field
-            this.fullATRValues = atrMap;
-
-            // remember base ATR scaling parameters for ruler binary search
+            this.fullATRValues = com.biotak.util.FractalUtil.buildATR3Map(structureMin, atrValue);
             this.atrStructureMin   = structureMin;
-            this.atrStructurePrice = structureATR_Price; // 1×ATR price
+            this.atrStructurePrice = atrValue;
 
             long now = System.currentTimeMillis();
             if (now - lastCalcTableLogTime > LOG_INTERVAL_MS) {
@@ -892,9 +831,6 @@ public class BiotakTrigger extends Study {
                 addFigure(rulerStartResize);
                 addFigure(rulerEndResize);
             }
-        } finally {
-            // Restore previous log level
-            Logger.setLogLevel(LogLevel.WARN);
         }
     }
 
@@ -1146,8 +1082,8 @@ public class BiotakTrigger extends Study {
                      //  دقیق‌سازی به روش دودویی بین دو فراکتال مجاور                         
                      // ------------------------------------------------------------------
                      if (bestDiff > 0.1 && bestAboveLabel != null && bestBelowLabel != null) {
-                         int lowMin  = parseMinutesFromLabel(bestBelowLabel);
-                         int highMin = parseMinutesFromLabel(bestAboveLabel);
+                         int lowMin  = TimeframeUtil.parseCompoundTimeframe(bestBelowLabel);
+                         int highMin = TimeframeUtil.parseCompoundTimeframe(bestAboveLabel);
                          if (lowMin > 0 && highMin > lowMin) {
                              double closePrice = series.getClose(series.size()-1);
                              while (highMin - lowMin > 1) {
@@ -1222,8 +1158,8 @@ public class BiotakTrigger extends Study {
 
                  // Binary refine using continuous scaling if initial diff >0.05 pip
                  if (bestATRDiff > 0.05 && bestATRAboveLabel != null && bestATRBelowLabel != null) {
-                     int lowMin  = parseMinutesFromLabel(bestATRBelowLabel);
-                     int highMin = parseMinutesFromLabel(bestATRAboveLabel);
+                     int lowMin  = TimeframeUtil.parseCompoundTimeframe(bestATRBelowLabel);
+                     int highMin = TimeframeUtil.parseCompoundTimeframe(bestATRAboveLabel);
                      int baseMin = BiotakTrigger.this.atrStructureMin;
                      double baseAtrPrice = BiotakTrigger.this.atrStructurePrice; // 1× ATR price
 
@@ -1266,7 +1202,7 @@ public class BiotakTrigger extends Study {
 
                  long totalMinutes = -1;
                  if (!bestLabel.equals("-")) {
-                     int baseMinutes = parseMinutesFromLabel(bestLabel);
+                     int baseMinutes = TimeframeUtil.parseCompoundTimeframe(bestLabel);
                      if (baseMinutes > 0) {
                          totalMinutes = baseMinutes;
                      }
@@ -1297,7 +1233,7 @@ public class BiotakTrigger extends Study {
                 if (minutes > 0 || timeSB.length() == 6) timeSB.append(minutes).append("min");
                 String timeStr = timeSB.toString();
                  String atrStr1 = String.format("ATR×3 : %s", bestATRLabel);
-                 int atrMinVal = parseMinutesFromLabel(bestATRLabel);
+                 int atrMinVal = TimeframeUtil.parseCompoundTimeframe(bestATRLabel);
                  String atrStr2 = (atrMinVal > 0 ? atrMinVal + "m" : "-");
 
                  // Arrange lines in requested grouped order with separators
@@ -1365,46 +1301,6 @@ public class BiotakTrigger extends Study {
             }
         }
     }
-
-    // Helper methods inside RulerFigure
-    private static int parseMinutesFromLabel(String tf) {
-            if (tf == null || tf.isEmpty()) return -1;
-            if (tf.equalsIgnoreCase("MN")) return 43200; // Monthly (30d) special case
-
-            int minutes = 0;
-
-            // Handle composite expressions that may include '+', whitespace, or be concatenated (e.g. "6H52m")
-            // Remove delimiter characters to simplify regex processing (we will still catch all segments)
-            String cleaned = tf.replace("+", " ");
-
-            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(\\d+)([mMhHdDwWsS])|([mMhHdDwWsS])(\\d+)");
-            java.util.regex.Matcher matcher = pattern.matcher(cleaned);
-            while (matcher.find()) {
-                String numStr;
-                char unit;
-                if (matcher.group(1) != null) { // form: 56m / 4H etc. (digits first)
-                    numStr = matcher.group(1);
-                    unit   = Character.toUpperCase(matcher.group(2).charAt(0));
-                } else {                         // form: m56 / H4 etc. (unit first)
-                    numStr = matcher.group(4);
-                    unit   = Character.toUpperCase(matcher.group(3).charAt(0));
-                }
-                if (numStr == null || numStr.isEmpty()) continue;
-                try {
-                    int val = Integer.parseInt(numStr);
-                    switch (unit) {
-                        case 'M' -> minutes += val;
-                        case 'H' -> minutes += val * 60;
-                        case 'D' -> minutes += val * 1440;
-                        case 'W' -> minutes += val * 10080;
-                        case 'S' -> minutes += Math.max(1, (int) Math.round(val / 60.0));
-                    }
-                } catch (NumberFormatException ignore) { }
-            }
-            return minutes > 0 ? minutes : -1;
-    }
-
-
 
     private String compoundTimeframe(long minutes) {
         long hrs = minutes / 60;

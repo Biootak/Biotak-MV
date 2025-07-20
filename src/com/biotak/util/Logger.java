@@ -92,6 +92,29 @@ public final class Logger {
             System.err.println("Logger I/O Error: " + ioe.getMessage());
         }
     }
+
+    // ------------------------------------------------------------------
+    //  Scoped log-level helper (try-with-resources friendly)
+    // ------------------------------------------------------------------
+    public static ScopedLogLevel scoped(LogLevel newLevel) {
+        return new ScopedLogLevel(newLevel);
+    }
+
+    /**
+     * Helper that temporarily sets the log level and restores it automatically
+     * when closed.
+     */
+    public static final class ScopedLogLevel implements AutoCloseable {
+        private final LogLevel previous;
+        private ScopedLogLevel(LogLevel lvl) {
+            this.previous = currentLogLevel;
+            setLogLevel(lvl);
+        }
+        @Override
+        public void close() {
+            setLogLevel(previous);
+        }
+    }
     
     /**
      * Debug level logging.

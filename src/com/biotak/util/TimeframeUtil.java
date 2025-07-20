@@ -918,4 +918,71 @@ public final class TimeframeUtil {
         int structureMinutes = totalMinutes * 16;
         return BarSize.getBarSize(structureMinutes);
     }
+
+    // ------------------------------------------------------------------
+    //  NEW PUBLIC UTILITY: Parse compound timeframe label to minutes
+    // ------------------------------------------------------------------
+    /**
+     * Parses a compound timeframe string (e.g. "H1", "H4+M16", "6H52m", "MN") and returns
+     * the total duration in minutes.
+     * <p>
+     * Supported units:
+     * <ul>
+     *   <li>S/s – seconds&nbsp;(rounded up to the nearest minute)</li>
+     *   <li>M/m – minutes</li>
+     *   <li>H/h – hours</li>
+     *   <li>D/d – days</li>
+     *   <li>W/w – weeks</li>
+     *   <li>Special code "MN" – monthly (treated as 30&nbsp;days)</li>
+     * </ul>
+     * The method is tolerant of whitespace and '+' separators.
+     * Examples:
+     * <pre>
+     *   parseCompoundTimeframe("H4")            == 240
+     *   parseCompoundTimeframe("H1+M15")        == 75
+     *   parseCompoundTimeframe("6H52m")         == 412
+     *   parseCompoundTimeframe("MN")            == 43200
+     * </pre>
+     *
+     * @param tf timeframe label to parse (not null)
+     * @return total minutes or -1 if the input could not be parsed
+     */
+    public static int parseCompoundTimeframe(String tf) {
+        if (tf == null || tf.isEmpty()) return -1;
+        if (tf.equalsIgnoreCase("MN")) return 60 * 24 * 30; // treat month ≈ 30 days
+
+        int minutes = 0;
+
+        // Normalize by replacing '+' with space to ease regex processing
+        String cleaned = tf.replace("+", " ");
+
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(\\d+)([mMhHdDwWsS])|([mMhHdDwWsS])(\\d+)");
+        java.util.regex.Matcher matcher = pattern.matcher(cleaned);
+        while (matcher.find()) {
+            String numStr;
+            char unit;
+            if (matcher.group(1) != null) { // form: 56m / 4H / 2d … (digits first)
+                numStr = matcher.group(1);
+                unit   = Character.toUpperCase(matcher.group(2).charAt(0));
+            } else {                       // form: m56 / H4 etc. (unit first)
+                numStr = matcher.group(4);
+                unit   = Character.toUpperCase(matcher.group(3).charAt(0));
+            }
+            if (numStr == null || numStr.isEmpty()) continue;
+            try {
+                int val = Integer.parseInt(numStr);
+                switch (unit) {
+                    case 'M' -> minutes += val;                    // minutes
+                    case 'H' -> minutes += val * 60;               // hours
+                    case 'D' -> minutes += val * 1440;             // days
+                    case 'W' -> minutes += val * 10080;            // weeks
+                    case 'S' -> minutes += Math.max(1, (int) Math.round(val / 60.0)); // seconds → ≈ minutes
+                    default -> {}
+                }
+            } catch (NumberFormatException ignore) {
+                // continue parsing other matches
+            }
+        }
+        return minutes > 0 ? minutes : -1;
+    }
 } 
