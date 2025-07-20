@@ -106,4 +106,6 @@ public final class Constants {
     public static final String S_C_LEVEL_PATH = "cLevelPath";
     public static final String S_LS_LEVEL_PATH = "lsLevelPath";
     public static final String S_PANEL_MINIMIZED = "panelMinimized";
+    public static final String S_M_LEVEL_PATH  = "mLevelPath";
+    public static final String S_MSTEP_BASIS = "mstepBasis";
 } 

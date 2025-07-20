@@ -59,6 +59,7 @@ public class BiotakTrigger extends Study {
     private static final String S_SS_LEVEL_PATH = "ssLevelPath";
     private static final String S_C_LEVEL_PATH  = "cLevelPath";
     private static final String S_LS_LEVEL_PATH = "lsLevelPath";
+    private static final String S_M_LEVEL_PATH  = "mLevelPath";
     // Add constants for Leg Ruler
     // (Leg Ruler constants removed)
     public static final String S_SHOW_RULER = "showRuler";
@@ -155,7 +156,8 @@ public class BiotakTrigger extends Study {
         qBasic.addRow(new DiscreteDescriptor(S_STEP_MODE, "Step Mode", StepCalculationMode.TH_STEP.name(), java.util.Arrays.asList(
                 new NVP("Equal TH Steps", StepCalculationMode.TH_STEP.name()),
                 new NVP("SS / LS Steps", StepCalculationMode.SS_LS_STEP.name()),
-                new NVP("TPC / Control", StepCalculationMode.CONTROL_STEP.name()))));
+                new NVP("TPC / Control", StepCalculationMode.CONTROL_STEP.name()),
+                new NVP("M (C×3) Steps", StepCalculationMode.M_STEP.name()))));
 
         var qLevels = quick.addGroup("Show / Hide Levels");
         qLevels.addRow(new BooleanDescriptor(S_SHOW_TH_LEVELS, "TH Ladder", true));
@@ -297,15 +299,12 @@ public class BiotakTrigger extends Study {
         // 4) SS/LS options when users switch mode
         sd.addQuickSettings(S_SSLS_BASIS,  // Basis for SS/LS (Structure/Pattern/Trigger)
                             S_LS_FIRST,    // Draw LS before SS?
-                            Constants.S_LOCK_SSLS_LEVELS);
+                            Constants.S_LOCK_SSLS_LEVELS,
+                            Constants.S_MSTEP_BASIS,
+                            Constants.S_M_LEVEL_PATH);
 
         // ------------------ Control Level Style -------------------
-        grp = tab.addGroup("Control Level Paths");
-        grp.addRow(new PathDescriptor(S_P_LEVEL_PATH , "P Level Path" , X11Colors.GOLD          , 1.5f, null, true, false, false));
-        grp.addRow(new PathDescriptor(S_S_LEVEL_PATH , "S Level Path" , X11Colors.CADET_BLUE    , 1.5f, null, true, false, false));
-        grp.addRow(new PathDescriptor(S_SS_LEVEL_PATH, "SS Level Path", X11Colors.MEDIUM_VIOLET_RED, 1.5f, null, true, false, false));
-        grp.addRow(new PathDescriptor(S_C_LEVEL_PATH , "C Level Path" , X11Colors.ORANGE        , 1.5f, null, true, false, false));
-        grp.addRow(new PathDescriptor(S_LS_LEVEL_PATH, "LS Level Path", X11Colors.LIGHT_GRAY     , 1.5f, null, true, false, false));
+        // Control-Level paths now reuse Trigger/Structure styles – no separate color settings needed.
 
         // --------------------------- RULER TAB ---------------------------
         var tabR = sd.addTab("Ruler");
@@ -321,6 +320,14 @@ public class BiotakTrigger extends Study {
         java.util.List<NVP> levelOpts = new java.util.ArrayList<>();
         for (Logger.LogLevel lv : Logger.LogLevel.values()) levelOpts.add(new NVP(lv.name(), lv.name()));
         grp.addRow(new DiscreteDescriptor(S_LOG_LEVEL, "Log Level", Logger.LogLevel.INFO.name(), levelOpts));
+
+        // -------------------  M-Step Options  -------------------
+        java.util.List<NVP> mbasisOptions = new java.util.ArrayList<>();
+        for (com.biotak.enums.MStepBasisType b : com.biotak.enums.MStepBasisType.values()) {
+            mbasisOptions.add(new NVP(b.toString(), b.name()));
+        }
+        grp = tab.addGroup("M-Step Basis");
+        grp.addRow(new DiscreteDescriptor(Constants.S_MSTEP_BASIS, "Distance By", com.biotak.enums.MStepBasisType.C_BASED.name(), mbasisOptions));
     }
 
     @Override
@@ -831,6 +838,19 @@ public class BiotakTrigger extends Study {
 
                     List<Figure> controlFigures = LevelDrawer.drawControlLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, patternValue, structureValue, shortStep, controlValue, longStep, startTime, endTime);
                     for (Figure f : controlFigures) addFigure(f);
+                }
+                case M_STEP -> {
+                    double controlValue = (shortStep + longStep) / 2.0;
+                    double mDistance = controlValue * 3.0;
+                    String basisStr = getSettings().getString(Constants.S_MSTEP_BASIS, com.biotak.enums.MStepBasisType.C_BASED.name());
+                    com.biotak.enums.MStepBasisType basis = com.biotak.enums.MStepBasisType.valueOf(basisStr);
+                    java.util.List<Figure> mFigures;
+                    if (basis == com.biotak.enums.MStepBasisType.C_BASED) {
+                        mFigures = LevelDrawer.drawMLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, controlValue, startTime, endTime);
+                    } else {
+                        mFigures = LevelDrawer.drawMEqualLevels(getSettings(), midpointPrice, finalHigh, finalLow, mDistance, startTime, endTime);
+                    }
+                    for (Figure f : mFigures) addFigure(f);
                 }
             }
 
