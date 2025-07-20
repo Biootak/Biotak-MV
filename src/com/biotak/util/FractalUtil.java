@@ -3,6 +3,7 @@ package com.biotak.util;
 import com.motivewave.platform.sdk.common.BarSize;
 import com.motivewave.platform.sdk.common.DataSeries;
 import com.motivewave.platform.sdk.common.Instrument;
+import com.motivewave.platform.sdk.common.Settings;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -41,6 +42,39 @@ public final class FractalUtil {
         double higherPatternTH= calcTH(instrument, higherPattern, basePrice, tick);
 
         return new THBundle(th, patternTH, triggerTH, structureTH, higherPatternTH);
+    }
+
+    /**
+     * Calculates the historical high and low for the loaded {@link DataSeries}. This logic previously
+     * تکراری در دو مکان (calculate و drawFigures) قرار داشت.
+     *
+     * @param series      داده‌های قیمت
+     * @param settings    {@link com.motivewave.platform.sdk.common.desc.Settings} شیء مربوط به اندیکاتور
+     * @param cachedHigh  بالاترین مقدار ذخیره‌شده تا این لحظه (می‌تواند {@link Double#NEGATIVE_INFINITY} باشد)
+     * @param cachedLow   کمترین مقدار ذخیره‌شده تا این لحظه (می‌تواند {@link Double#POSITIVE_INFINITY} باشد)
+     * @param manualMode  اگر فعال باشد اعداد دستی از تنظیمات خوانده می‌شود
+     * @return آرایه‌ای با دو عنصر: index 0 → high , index 1 → low
+     */
+    public static double[] getHistoricalRange(DataSeries series, Settings settings,
+                                              double cachedHigh, double cachedLow, boolean manualMode) {
+        if (manualMode) {
+            double manualHigh = settings.getDouble(com.biotak.util.Constants.S_MANUAL_HIGH, 0);
+            double manualLow  = settings.getDouble(com.biotak.util.Constants.S_MANUAL_LOW, 0);
+            return new double[]{manualHigh, manualLow};
+        }
+
+        double computedHigh = Double.NEGATIVE_INFINITY;
+        double computedLow  = Double.POSITIVE_INFINITY;
+        int sz = series.size();
+        for (int i = 0; i < sz; i++) {
+            computedHigh = Math.max(computedHigh, series.getHigh(i));
+            computedLow  = Math.min(computedLow,  series.getLow(i));
+        }
+
+        double finalHigh = (cachedHigh == Double.NEGATIVE_INFINITY) ? computedHigh : Math.max(cachedHigh, computedHigh);
+        double finalLow  = (cachedLow  == Double.POSITIVE_INFINITY) ? computedLow  : Math.min(cachedLow,  computedLow);
+
+        return new double[]{finalHigh, finalLow};
     }
 
     private static double calcTH(Instrument inst, BarSize size, double basePrice, double tick) {

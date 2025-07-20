@@ -332,10 +332,11 @@ public class BiotakTrigger extends Study {
 
     @Override
     public MenuDescriptor onMenu(String plotName, Point loc, DrawContext ctx) {
+        Settings settings = getSettings();
         if (infoPanel != null && infoPanel.contains(loc.x, loc.y, ctx)) {
             if (infoPanel.isInMinimizeButton(loc.x, loc.y)) {
-                boolean newState = !getSettings().getBoolean(S_PANEL_MINIMIZED, false);
-                getSettings().setBoolean(S_PANEL_MINIMIZED, newState);
+                boolean newState = !settings.getBoolean(S_PANEL_MINIMIZED, false);
+                settings.setBoolean(S_PANEL_MINIMIZED, newState);
                 infoPanel.setMinimized(newState);
                 // Redraw all figures to prevent levels from disappearing
                 DataContext dc = ctx.getDataContext();
@@ -353,28 +354,28 @@ public class BiotakTrigger extends Study {
             DataSeries ds = ctx.getDataContext().getDataSeries();
             if (ds.size() == 0) return;
             double lastClose = ds.getClose(ds.size() - 1);
-            getSettings().setDouble(S_CUSTOM_PRICE, lastClose);
+            settings.setDouble(S_CUSTOM_PRICE, lastClose);
             lastCustomMoveTime = System.currentTimeMillis();
             drawFigures(ds.size() - 1, ctx.getDataContext());
         }));
         // ---- Ruler context toggles ----
-        boolean showRuler = getSettings().getBoolean(S_SHOW_RULER, false);
+        boolean showRuler = settings.getBoolean(S_SHOW_RULER, false);
         items.add(new MenuItem(showRuler ? "Hide Ruler" : "Show Ruler", false, () -> {
-            getSettings().setBoolean(S_SHOW_RULER, !showRuler);
+            settings.setBoolean(S_SHOW_RULER, !showRuler);
             DataSeries ds = ctx.getDataContext().getDataSeries();
             drawFigures(ds.size() - 1, ctx.getDataContext());
         }));
 
-        boolean extLeft = getSettings().getBoolean(S_RULER_EXT_LEFT, false);
+        boolean extLeft = settings.getBoolean(S_RULER_EXT_LEFT, false);
         items.add(new MenuItem("Extend Left", extLeft, () -> {
-            getSettings().setBoolean(S_RULER_EXT_LEFT, !extLeft);
+            settings.setBoolean(S_RULER_EXT_LEFT, !extLeft);
             DataSeries ds = ctx.getDataContext().getDataSeries();
             drawFigures(ds.size() - 1, ctx.getDataContext());
         }));
 
-        boolean extRight = getSettings().getBoolean(S_RULER_EXT_RIGHT, false);
+        boolean extRight = settings.getBoolean(S_RULER_EXT_RIGHT, false);
         items.add(new MenuItem("Extend Right", extRight, () -> {
-            getSettings().setBoolean(S_RULER_EXT_RIGHT, !extRight);
+            settings.setBoolean(S_RULER_EXT_RIGHT, !extRight);
             DataSeries ds = ctx.getDataContext().getDataSeries();
             drawFigures(ds.size() - 1, ctx.getDataContext());
         }));
@@ -384,6 +385,7 @@ public class BiotakTrigger extends Study {
 
     // Toggle panel on any left-click (generic mouse down) within its bounds
     public void onMouseDown(Point loc, DrawContext ctx) {
+        Settings settings = getSettings();
         if (infoPanel != null && infoPanel.contains(loc.x, loc.y, ctx)) {
             // Detect double-click inside panel to reset Custom Price quickly
             long nowClick = System.currentTimeMillis();
@@ -391,14 +393,14 @@ public class BiotakTrigger extends Study {
                 DataSeries series = ctx.getDataContext().getDataSeries();
                 if (series.size() > 0) {
                     double lc = series.getClose(series.size() - 1);
-                    getSettings().setDouble(S_CUSTOM_PRICE, lc);
+                    settings.setDouble(S_CUSTOM_PRICE, lc);
                     lastCustomMoveTime = nowClick;
                     drawFigures(series.size() - 1, ctx.getDataContext());
                 }
             }
             lastClickTime = nowClick;
-            boolean newState = !getSettings().getBoolean(S_PANEL_MINIMIZED, false);
-            getSettings().setBoolean(S_PANEL_MINIMIZED, newState);
+            boolean newState = !settings.getBoolean(S_PANEL_MINIMIZED, false);
+            settings.setBoolean(S_PANEL_MINIMIZED, newState);
             infoPanel.setMinimized(newState);
             DataContext dc = ctx.getDataContext();
             int lastIdx = dc.getDataSeries().size() - 1;
@@ -411,10 +413,9 @@ public class BiotakTrigger extends Study {
     public void calculate(int index, DataContext ctx) {
         // Sync logger level once per bar zero
         if (index == 0) {
-            try {
-                Logger.LogLevel lvl = Logger.LogLevel.valueOf(getSettings().getString(S_LOG_LEVEL, Logger.LogLevel.INFO.name()));
-                Logger.setLogLevel(lvl);
-            } catch (IllegalArgumentException ignore) { }
+            Logger.LogLevel lvl = com.biotak.util.EnumUtil.safeEnum(Logger.LogLevel.class,
+                    getSettings().getString(S_LOG_LEVEL, Logger.LogLevel.INFO.name()), Logger.LogLevel.INFO);
+            Logger.setLogLevel(lvl);
         }
 
         DataSeries series = ctx.getDataSeries();
@@ -492,42 +493,30 @@ public class BiotakTrigger extends Study {
             boolean manualMode = settings.getBoolean(S_MANUAL_HL_ENABLE, false);
 
             if (manualMode) {
-                // Use manual values if enabled
                 finalHigh = settings.getDouble(S_MANUAL_HIGH, 0);
-                finalLow = settings.getDouble(S_MANUAL_LOW, 0);
+                finalLow  = settings.getDouble(S_MANUAL_LOW, 0);
                 Logger.info("BiotakTrigger: Using manual high/low values. High: " + finalHigh + ", Low: " + finalLow);
             } else {
+                double[] range = com.biotak.util.FractalUtil.getHistoricalRange(series, settings, cachedHigh, cachedLow, false);
+                finalHigh = range[0];
+                finalLow  = range[1];
+
                 if (index == 0) {
-                    // Calculate high/low on the fly from the entire loaded series (only once on very first bar)
-                    double computedHigh = Double.NEGATIVE_INFINITY;
-                    double computedLow  = Double.POSITIVE_INFINITY;
-                    for (int i = 0; i < series.size(); i++) {
-                        computedHigh = Math.max(computedHigh, series.getHigh(i));
-                        computedLow  = Math.min(computedLow,  series.getLow(i));
-                    }
-
-                    // Merge with stored extremes so we never shrink the range
-                    finalHigh = Math.max(cachedHigh, computedHigh);
-                    finalLow  = Math.min(cachedLow,  computedLow);
-
                     // Persist only if new extremes discovered
-                    if (finalHigh > cachedHigh) getSettings().setDouble(S_HISTORICAL_HIGH, finalHigh);
-                    if (finalLow  < cachedLow)  getSettings().setDouble(S_HISTORICAL_LOW,  finalLow);
+                    if (finalHigh > cachedHigh) settings.setDouble(S_HISTORICAL_HIGH, finalHigh);
+                    if (finalLow  < cachedLow)  settings.setDouble(S_HISTORICAL_LOW,  finalLow);
+                }
 
-                    // Update in-memory cache
-                    cachedHigh = finalHigh;
-                    cachedLow  = finalLow;
+                // Update in-memory cache for future bars
+                cachedHigh = finalHigh;
+                cachedLow  = finalLow;
 
+                if (index == 0 || index == series.size() - 1) {
                     long nowHL2 = System.currentTimeMillis();
                     if (nowHL2 - lastHighLowLogTime > LOG_INTERVAL_MS) {
                         Logger.info("BiotakTrigger: Historical High/Low calculated from " + series.getBarSize() + " timeframe (merged). High: " + cachedHigh + ", Low: " + cachedLow);
                         lastHighLowLogTime = nowHL2;
                     }
-                } else {
-                    // Use cached values, already updated incrementally in calculate()
-                    finalHigh = cachedHigh;
-                    finalLow  = cachedLow;
-                    Logger.debug("BiotakTrigger: Using cached High/Low. High: " + finalHigh + ", Low: " + finalLow);
                 }
             }
 
@@ -543,7 +532,8 @@ public class BiotakTrigger extends Study {
             Logger.debug("BiotakTrigger: Start time: " + startTime + ", End time: " + endTime);
     
             // Determine selected step mode once
-            StepCalculationMode currentMode = StepCalculationMode.valueOf(getSettings().getString(S_STEP_MODE, StepCalculationMode.TH_STEP.name()));
+            StepCalculationMode currentMode = com.biotak.util.EnumUtil.safeEnum(StepCalculationMode.class,
+                    getSettings().getString(S_STEP_MODE, StepCalculationMode.TH_STEP.name()), StepCalculationMode.TH_STEP);
     
             // Draw the components of the indicator.
             if (currentMode == StepCalculationMode.TH_STEP) {
@@ -644,7 +634,7 @@ public class BiotakTrigger extends Study {
             //    Summing SS + C + LS + S + P + T gives:
             //      1.5 + 0.25 + 2 + 1 + 0.5 + 0.25 = 5.5 × TH (but Biotak spec uses 5.25)
             //    The original MT4 implementation uses a fixed coefficient of 5.25; we align with that.
-            double mScale = 5.25;
+            double mScale = TH_TO_M_FACTOR;
             this.mValue          = mScale * thValue;
             this.patternM        = mScale * patternTH;
             this.triggerM        = mScale * triggerTH;
@@ -720,15 +710,9 @@ public class BiotakTrigger extends Study {
                 }
                 case SS_LS_STEP -> {
                     // انتخاب مبنای TH بر اساس تنظیم کاربر
-                    String basisStr = getSettings().getString(S_SSLS_BASIS, SSLSBasisType.STRUCTURE.name());
-                    SSLSBasisType basis;
-                    try {
-                        basis = SSLSBasisType.valueOf(basisStr);
-                    } catch (IllegalArgumentException e) {
-                        // Legacy value (e.g., HIGHER_STRUCTURE) or corrupt entry – fall back
-                        basis = SSLSBasisType.STRUCTURE;
-                        getSettings().setString(S_SSLS_BASIS, SSLSBasisType.STRUCTURE.name());
-                    }
+                    SSLSBasisType basis = com.biotak.util.EnumUtil.safeEnum(SSLSBasisType.class,
+                            getSettings().getString(S_SSLS_BASIS, SSLSBasisType.STRUCTURE.name()), SSLSBasisType.STRUCTURE);
+                    if (basis == null) basis = SSLSBasisType.STRUCTURE;
 
                     // Lock behaviour: if user enabled lock, we calculate baseTH only once per study session
                     boolean lockLevels = getSettings().getBoolean(Constants.S_LOCK_SSLS_LEVELS, false);
@@ -751,7 +735,7 @@ public class BiotakTrigger extends Study {
                                 double[] candidates = new double[] { structureValue, patternValue, triggerValue };
                                 baseTHCalc = triggerValue;
                                 for (double candidate : candidates) {
-                                    if (2.0 * candidate <= allowedRange) { baseTHCalc = candidate; break; }
+                                    if (LS_MULTIPLIER * candidate <= allowedRange) { baseTHCalc = candidate; break; }
                                 }
                             }
                             case STRUCTURE -> baseTHCalc = structureValue;
@@ -761,8 +745,8 @@ public class BiotakTrigger extends Study {
                         if (lockLevels) lockedBaseTH = baseTHForSession;
                     }
 
-                    double ssValue = baseTHForSession * 1.5;
-                    double lsValue = baseTHForSession * 2.0;
+                    double ssValue = baseTHForSession * SS_MULTIPLIER;
+                    double lsValue = baseTHForSession * LS_MULTIPLIER;
                     boolean drawLsFirst = getSettings().getBoolean(S_LS_FIRST, true);
 
                     List<Figure> sslsFigures = LevelDrawer.drawSSLSLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, ssValue, lsValue, drawLsFirst, startTime, endTime);
@@ -780,9 +764,11 @@ public class BiotakTrigger extends Study {
                 }
                 case M_STEP -> {
                     double controlValue = (shortStep + longStep) / 2.0;
-                    double mDistance = controlValue * 3.0;
-                    String basisStr = getSettings().getString(Constants.S_MSTEP_BASIS, com.biotak.enums.MStepBasisType.C_BASED.name());
-                    com.biotak.enums.MStepBasisType basis = com.biotak.enums.MStepBasisType.valueOf(basisStr);
+                    double mDistance = controlValue * ATR_FACTOR;
+                    com.biotak.enums.MStepBasisType basis = com.biotak.util.EnumUtil.safeEnum(com.biotak.enums.MStepBasisType.class,
+                            getSettings().getString(Constants.S_MSTEP_BASIS, com.biotak.enums.MStepBasisType.C_BASED.name()),
+                            com.biotak.enums.MStepBasisType.C_BASED);
+                    if (basis == null) basis = com.biotak.enums.MStepBasisType.C_BASED;
                     java.util.List<Figure> mFigures;
                     if (basis == com.biotak.enums.MStepBasisType.C_BASED) {
                         mFigures = LevelDrawer.drawMLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, controlValue, startTime, endTime);
@@ -1090,7 +1076,7 @@ public class BiotakTrigger extends Study {
                                  int mid = (lowMin + highMin) / 2;
                                  double perc   = TimeframeUtil.getTimeframePercentage(mid);
                                  double thPts  = THCalculator.calculateTHPoints(series.getInstrument(), closePrice, perc) * tick;
-                                 double mVal   = 5.25 * thPts;
+                                 double mVal   = TH_TO_M_FACTOR * thPts;
                                  double mPips  = Math.round(mVal / tick * 10.0) / 10.0;
                                  if (mPips >= legPip) {
                                      highMin = mid;
@@ -1166,7 +1152,7 @@ public class BiotakTrigger extends Study {
                      if (lowMin > 0 && highMin > lowMin && baseMin > 0 && baseAtrPrice > 0) {
                          while (highMin - lowMin > 1) {
                              int mid = (lowMin + highMin) / 2;
-                             double atrPriceMid = 3.0 * baseAtrPrice * Math.sqrt((double)mid / baseMin);
+                             double atrPriceMid = ATR_FACTOR * baseAtrPrice * Math.sqrt((double)mid / baseMin);
                              double atrPipsMid  = Math.round(atrPriceMid / tick * 10.0) / 10.0;
 
                              if (atrPipsMid >= legPip) {
