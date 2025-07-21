@@ -472,7 +472,7 @@ public class BiotakTrigger extends Study {
                 Logger.info("BiotakTrigger: Historical High/Low calculated from " + series.getBarSize() + " timeframe (merged). High: " + cachedHigh + ", Low: " + cachedLow);
                 lastHighLowLogTime = nowHL;
             }
-            Logger.info("BiotakTrigger: Last bar detected. Updating figures...");
+            Logger.debug("BiotakTrigger: Last bar detected. Updating figures...");
             drawFigures(index, ctx);
         }
     }
@@ -864,7 +864,7 @@ public class BiotakTrigger extends Study {
     // Enable live updates so drawing persists on chart updates
     @Override
     public void onBarUpdate(DataContext ctx) {
-        Logger.info("BiotakTrigger: onBarUpdate called");
+        Logger.debug("BiotakTrigger: onBarUpdate called");
         // Call calculate on the latest bar index for live rendering
         int lastIdx = ctx.getDataSeries().size() - 1;
         calculate(lastIdx, ctx);
