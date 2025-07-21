@@ -183,84 +183,22 @@ public final class TimeframeUtil {
      * @return The percentage value for the timeframe.
      */
     public static double getTimeframePercentage(BarSize barSize) {
-        // Special case for seconds-based timeframes
-        if (barSize.getIntervalType() == Enums.IntervalType.SECOND) {
-            int seconds = barSize.getInterval();
-            
-            // Special case for S16 only
-            if (seconds == 16) {
-                return FRACTAL_PERCENTAGES.getOrDefault("S16", 0.01);
-            }
-            
-            // For other seconds-based timeframes, convert to minutes and use the standard calculation
-            double minutesEquivalent = seconds / 60.0;
-            // Use the same logarithmic calculation as for minutes
-            double log2Minutes = Math.log(minutesEquivalent) / Math.log(2);
-            return 0.02 * Math.pow(2, log2Minutes/2);
-        }
-        
+        // Exact lookup for power-of-2 fractal timeframes to keep legacy table values
         int totalMinutes = getTotalMinutes(barSize);
-        
-        // Handle special seconds-based timeframes (marked with negative values)
-        if (totalMinutes < 0) {
-            int seconds = Math.abs(totalMinutes);
-            
-            // Special case for S16 only
-            if (seconds == 16) {
-                return FRACTAL_PERCENTAGES.getOrDefault("S16", 0.01);
-            }
-            
-            // For other seconds-based timeframes, convert to minutes and use the standard calculation
-            double minutesEquivalent = seconds / 60.0;
-            // Use the same logarithmic calculation as for minutes
-            double log2Minutes = Math.log(minutesEquivalent) / Math.log(2);
-            return 0.02 * Math.pow(2, log2Minutes/2);
+        if (totalMinutes > 0 && FRACTAL_MINUTES_MAP.containsKey(totalMinutes)) {
+            String lbl = FRACTAL_MINUTES_MAP.get(totalMinutes);
+            return FRACTAL_PERCENTAGES.getOrDefault(lbl, 0.02);
         }
-        
-        // First check if this is an exact power of 2 fractal timeframe
-        if (FRACTAL_MINUTES_MAP.containsKey(totalMinutes)) {
-            String fractalTf = FRACTAL_MINUTES_MAP.get(totalMinutes);
-            return FRACTAL_PERCENTAGES.getOrDefault(fractalTf, 0.32);
+
+        // Special case for S16 (≈1 %) used در نسخهٔ اصلی بیوتاک
+        if (barSize.getIntervalType() == Enums.IntervalType.SECOND && barSize.getInterval() == 16) {
+            return FRACTAL_PERCENTAGES.getOrDefault("S16", 0.01);
         }
-        
-        // Check if it's a power of 3 timeframe
-        if (POWER3_MINUTES_MAP.containsKey(totalMinutes)) {
-            // For powers of 3, we use the mathematical relationship:
-            // Each 3x increase in time corresponds to sqrt(2) increase in percentage
-            // log₃(minutes) gives us the power, which we multiply by log₂(sqrt(2)) to get the equivalent power of 2
-            double power3 = Math.log(totalMinutes) / Math.log(3);
-            double equivalentPower2 = power3 * (Math.log(Math.sqrt(2)) / Math.log(2));
-            return 0.02 * Math.pow(2, equivalentPower2); // 0.02 is base percentage for M1
-        }
-        
-        // For all other non-standard timeframes, find the closest fractal timeframes
-        // First try with powers of 2
-        Map.Entry<Integer, String> lowerEntry = FRACTAL_MINUTES_MAP.floorEntry(totalMinutes);
-        Map.Entry<Integer, String> higherEntry = FRACTAL_MINUTES_MAP.ceilingEntry(totalMinutes);
-        
-        // If we have both bounds, use logarithmic interpolation
-        if (lowerEntry != null && higherEntry != null) {
-            double lowerPercentage = FRACTAL_PERCENTAGES.get(lowerEntry.getValue());
-            double higherPercentage = FRACTAL_PERCENTAGES.get(higherEntry.getValue());
-            
-            // Use logarithmic interpolation since fractal timeframes follow a power pattern
-            double logLower = Math.log(lowerEntry.getKey());
-            double logHigher = Math.log(higherEntry.getKey());
-            double logCurrent = Math.log(totalMinutes);
-            
-            double factor = (logCurrent - logLower) / (logHigher - logLower);
-            double logLowerPercentage = Math.log(lowerPercentage);
-            double logHigherPercentage = Math.log(higherPercentage);
-            double interpolatedLogPercentage = logLowerPercentage + factor * (logHigherPercentage - logLowerPercentage);
-            
-            return Math.exp(interpolatedLogPercentage);
-        }
-        
-        // If we don't have both bounds, use direct calculation based on the mathematical relationship:
-        // percentage = base_percentage * 2^(log₂(minutes)/2)
-        // This follows the pattern that 4x time = 2x percentage (square root relationship)
-        double log2Minutes = Math.log(totalMinutes) / Math.log(2);
-        return 0.02 * Math.pow(2, log2Minutes/2); // 0.02 is base percentage for M1
+
+        // Generic closed-form: 0.02 × √(minutes)
+        double minutesEquivalent = getTotalSeconds(barSize) / 60.0; // supports seconds/hours/days/…
+        if (minutesEquivalent <= 0) minutesEquivalent = 1.0;
+        return 0.02 * Math.sqrt(minutesEquivalent);
     }
 
     /**
@@ -271,25 +209,22 @@ public final class TimeframeUtil {
      * @return The appropriate ATR period for the timeframe.
      */
     public static int getAtrPeriod(BarSize barSize) {
-        // Get standard string representation like "M1", "H4"
-        String standardFormat = getStandardTimeframeString(barSize);
-        
-        // If it's a standard timeframe, return the predefined period
-        if (STANDARD_ATR_PERIODS.containsKey(standardFormat)) {
-            return STANDARD_ATR_PERIODS.get(standardFormat);
+        // 1) Exact table for common/standard timeframes
+        String standard = getStandardTimeframeString(barSize);
+        if (STANDARD_ATR_PERIODS.containsKey(standard)) {
+            return STANDARD_ATR_PERIODS.get(standard);
         }
-        
-        // For non-standard timeframes, use the fractal relationship
-        int totalMinutes = getTotalMinutes(barSize);
-        
-        // Use the mathematical relationship: ATR period ≈ base_period * log₂(minutes)^(1/3)
-        // This provides a smoother curve than direct doubling, which matches empirical observations
-        double log2Minutes = Math.log(totalMinutes) / Math.log(2);
-        int baseAtrPeriod = 24; // Base period for M1
-        int calculatedPeriod = (int)(baseAtrPeriod * Math.pow(log2Minutes, 1/3.0));
-        
-        // Ensure reasonable bounds
-        return Math.max(12, Math.min(52, calculatedPeriod));
+
+        // 2) Generic rule for all other (especially non-fractal) timeframes
+        //    Goal: when timeframe ×4 ⇒ expected ATR (price) ×2, while حفظ نرمی یکنواخت.
+        //    Period ≈ 24 × √(minutesEquivalent)
+        double minutesEq = getTotalSeconds(barSize) / 60.0;
+        if (minutesEq <= 0) minutesEq = 1.0;
+
+        int period = (int) Math.round(24.0 * Math.sqrt(minutesEq));
+        // Clamp to practical bounds
+        period = Math.max(12, Math.min(52, period));
+        return period;
     }
 
     /**

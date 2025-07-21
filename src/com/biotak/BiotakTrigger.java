@@ -45,7 +45,8 @@ import com.biotak.ui.LevelDrawer;
     desc = "Replicates the Biotak Trigger TH3 indicator from MT4.",
     menu = "Biotak",
     overlay = true,
-    studyOverlay = true
+    studyOverlay = true,
+    requiresBarUpdates = true
 )
 public class BiotakTrigger extends Study {
 
@@ -141,6 +142,7 @@ public class BiotakTrigger extends Study {
     public void initialize(Defaults defaults) {
         Logger.info("BiotakTrigger: initialize() called. Settings are being configured.");
         var sd = createSD();
+        // (Bar updates are now requested via StudyHeader.requiresBarUpdates=true)
 
         // ---------- NEW QUICK SETUP TAB (beginner-friendly) ----------
         // This tab collects the most essential options so that new users can configure the study without browsing all tabs.
@@ -419,8 +421,14 @@ public class BiotakTrigger extends Study {
         }
 
         DataSeries series = ctx.getDataSeries();
-        if (!series.isBarComplete(index)) return;
-
+        // Determine if this is the last bar for live updates
+        boolean isLastBar = (index == series.size() - 1);
+        // Skip incomplete bars except for the last bar, with logging for skipped cases
+        if (!series.isBarComplete(index) && !isLastBar) {
+            Logger.info("BiotakTrigger: Skipping calculate for index " + index + " - bar incomplete and not last bar");
+            return;
+        }
+        
         // Initialize cached extremes from settings on first invocation
         if (!extremesInitialized) {
             Settings s = getSettings();
@@ -452,7 +460,6 @@ public class BiotakTrigger extends Study {
         
         // Only log and draw figures for the first and last bars to reduce excessive logging
         boolean isFirstBar = (index == 0);
-        boolean isLastBar = (index == series.size() - 1);
         
         if (isFirstBar && !firstBarDrawn) {
             Logger.info("BiotakTrigger: First bar detected. Drawing initial figures...");
@@ -852,6 +859,15 @@ public class BiotakTrigger extends Study {
     @Override
     public int getMinBars() {
         return getSettings().getInteger(S_HISTORICAL_BARS, 100000);
+    }
+
+    // Enable live updates so drawing persists on chart updates
+    @Override
+    public void onBarUpdate(DataContext ctx) {
+        Logger.info("BiotakTrigger: onBarUpdate called");
+        // Call calculate on the latest bar index for live rendering
+        int lastIdx = ctx.getDataSeries().size() - 1;
+        calculate(lastIdx, ctx);
     }
 
     private void drawInfoPanel(DataSeries series, double thValue, long startTime, double shortStep, double longStep, double atrValue, double liveAtrValue) {
