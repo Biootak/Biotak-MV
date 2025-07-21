@@ -106,4 +106,10 @@ public final class Constants {
     public static final String S_C_LEVEL_PATH = "cLevelPath";
     public static final String S_LS_LEVEL_PATH = "lsLevelPath";
     public static final String S_PANEL_MINIMIZED = "panelMinimized";
+    public static final String S_M_LEVEL_PATH  = "mLevelPath";
+    public static final String S_MSTEP_BASIS = "mstepBasis";
+    public static final double TH_TO_M_FACTOR = 5.25; // Multiplier to convert TH to M distance
+    public static final double SS_MULTIPLIER = 1.5;   // Short-Step is 1.5 × TH
+    public static final double LS_MULTIPLIER = 2.0;   // Long-Step is 2   × TH
+    public static final double ATR_FACTOR    = 3.0;   // Default factor for 3×ATR calculations
 } 

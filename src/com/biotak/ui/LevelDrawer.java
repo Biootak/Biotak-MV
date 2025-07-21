@@ -199,6 +199,10 @@ public class LevelDrawer {
             logicalStep++;
             double priceLevel = midpointPrice + cumulative;
             if (priceLevel > highestHigh) break;
+
+            if (!shouldDrawStep(settings, logicalStep)) {
+                continue;
+            }
             PathInfo path = getPathForLevel(settings, logicalStep);
             if (path == null) {
                 // Fall back to specific SS/LS paths when structure/trigger paths are disabled
@@ -221,6 +225,10 @@ public class LevelDrawer {
             logicalStep++;
             double priceLevel = midpointPrice - cumulative;
             if (priceLevel < lowestLow) break;
+
+            if (!shouldDrawStep(settings, logicalStep)) {
+                continue;
+            }
             PathInfo path = getPathForLevel(settings, logicalStep);
             if (path == null) {
                 boolean isSS = ((logicalStep % 2 == 0) == lsFirst);
@@ -232,6 +240,16 @@ public class LevelDrawer {
             }
         }
         return figures;
+    }
+
+    /**
+     * Determines if a step/level should be drawn based on Trigger visibility.
+     * If Trigger lines are enabled, all steps are drawn. Otherwise only steps
+     * that are multiples of 4 (structure highlights) are rendered.
+     */
+    private static boolean shouldDrawStep(Settings settings, int step) {
+        if (settings.getBoolean(S_SHOW_TRIGGER_LEVELS)) return true;
+        return step % 4 == 0;
     }
 
     /**
@@ -266,43 +284,74 @@ public class LevelDrawer {
             return new ArrayList<>();
         }
 
-        double pipMultiplier = FractalCalculator.getPipMultiplier(series.getInstrument()); // retained for consistency/logging
-
-        // Distances are already in price units; remove extra scaling
-        double[] valueSequence  = new double[]{patternValue, structureValue, shortStepValue, controlValue, longStepValue};
-        String[] labelSequence  = new String[]{"P", "S", "SS", "C", "LS"};
+        // ------------------------------------------------------------------
+        // Build the repeating distance/label pattern that defines the T-P-C
+        // ladder. After the first 5 distances (P,S,SS,C,LS), the sequence is
+        // repeated (cyclic) and applied cumulatively until we exceed either
+        // the chart range (highestHigh/lowestLow) or the user-defined maximum
+        // levels (S_MAX_LEVELS_ABOVE / BELOW).
+        // ------------------------------------------------------------------
+        final double[] valuePattern  = new double[]{patternValue, structureValue, shortStepValue, controlValue, longStepValue};
+        final String[] labelPattern  = new String[]{"P", "S", "SS", "C", "LS"};
+        final int patternLen = valuePattern.length;
 
         boolean showLabels = settings.getBoolean(S_SHOW_LEVEL_LABELS, true);
+        int maxLevelsAbove = settings.getInteger(S_MAX_LEVELS_ABOVE);
+        int maxLevelsBelow = settings.getInteger(S_MAX_LEVELS_BELOW);
 
         List<Figure> figures = new ArrayList<>();
-        for (int i = 0; i < valueSequence.length; i++) {
-            double distPrice = valueSequence[i];
-            double priceAbove = midpointPrice + distPrice;
-            double priceBelow = midpointPrice - distPrice;
 
-            int stepCount = i + 1; // Re-use for getPathForLevel()
-            PathInfo path = null;
-            // If user has enabled Structure or Trigger lines, use those definitions first
-            if (settings.getBoolean(S_SHOW_STRUCTURE_LINES) || settings.getBoolean(S_SHOW_TRIGGER_LEVELS)) {
-                path = getPathForLevel(settings, stepCount);
-            }
-            // Otherwise (or if still null) use dedicated Control-Step paths
-            if (path == null) {
-                path = getControlLevelPath(settings, labelSequence[i]);
-            }
+        // -------------------- ABOVE MIDPOINT --------------------
+        int drawnAbove = 0;
+        double cumulative = 0;
+        int stepCount = 0; // Logical step counter (1-based once incremented)
+        while (drawnAbove < maxLevelsAbove) {
+            double dist = valuePattern[stepCount % patternLen];
+            cumulative += dist;
+            stepCount++;
+            double priceLevel = midpointPrice + cumulative;
+            if (priceLevel > highestHigh) break;
 
+            if (!shouldDrawStep(settings, stepCount)) {
+                continue;
+            }
+            PathInfo path = getPathForLevel(settings, stepCount);
+            if (path == null && settings.getBoolean(S_SHOW_TRIGGER_LEVELS)) {
+                path = getControlLevelPath(settings, labelPattern[(stepCount-1) % patternLen]);
+            }
             if (path != null) {
-                // Draw above midpoint
-                if (priceAbove <= highestHigh) {
-                    figures.add(new Line(new Coordinate(startTime, priceAbove), new Coordinate(endTime, priceAbove), path));
-                    if (showLabels) figures.add(new LevelLabel(endTime, priceAbove, labelSequence[i]));
+                figures.add(new Line(new Coordinate(startTime, priceLevel), new Coordinate(endTime, priceLevel), path));
+                if (showLabels) {
+                    figures.add(new LevelLabel(endTime, priceLevel, labelPattern[(stepCount-1) % patternLen]));
                 }
+                drawnAbove++;
+            }
+        }
 
-                // Draw below midpoint
-                if (priceBelow >= lowestLow) {
-                    figures.add(new Line(new Coordinate(startTime, priceBelow), new Coordinate(endTime, priceBelow), path));
-                    if (showLabels) figures.add(new LevelLabel(endTime, priceBelow, labelSequence[i]));
+        // -------------------- BELOW MIDPOINT --------------------
+        int drawnBelow = 0;
+        cumulative = 0;
+        stepCount = 0;
+        while (drawnBelow < maxLevelsBelow) {
+            double dist = valuePattern[stepCount % patternLen];
+            cumulative += dist;
+            stepCount++;
+            double priceLevel = midpointPrice - cumulative;
+            if (priceLevel < lowestLow) break;
+
+            if (!shouldDrawStep(settings, stepCount)) {
+                continue;
+            }
+            PathInfo path = getPathForLevel(settings, stepCount);
+            if (path == null && settings.getBoolean(S_SHOW_TRIGGER_LEVELS)) {
+                path = getControlLevelPath(settings, labelPattern[(stepCount-1) % patternLen]);
+            }
+            if (path != null) {
+                figures.add(new Line(new Coordinate(startTime, priceLevel), new Coordinate(endTime, priceLevel), path));
+                if (showLabels) {
+                    figures.add(new LevelLabel(endTime, priceLevel, labelPattern[(stepCount-1) % patternLen]));
                 }
+                drawnBelow++;
             }
         }
         return figures;
@@ -312,13 +361,150 @@ public class LevelDrawer {
      * Returns the path (color/width) configured for a Control-Step label.
      */
     public static PathInfo getControlLevelPath(Settings settings, String lbl) {
-        return switch (lbl) {
-            case "P"  -> settings.getPath(S_P_LEVEL_PATH);
-            case "S"  -> settings.getPath(S_S_LEVEL_PATH);
-            case "SS" -> settings.getPath(S_SS_LEVEL_PATH);
-            case "C"  -> settings.getPath(S_C_LEVEL_PATH);
-            case "LS" -> settings.getPath(S_LS_LEVEL_PATH);
-            default    -> null;
-        };
+        // Use a unified appearance: fall back to Trigger path for all control labels.
+        return settings.getPath(S_TRIGGER_PATH);
+    }
+
+    /**
+     * Draws Control-increment levels (distance = C). Every third level (3C) is
+     * labeled/colored as "M" to denote reaching the Structure distance.
+     */
+    public static List<Figure> drawMLevels(
+            Settings settings,
+            DataSeries series,
+            double midpointPrice,
+            double highestHigh,
+            double lowestLow,
+            double controlDistance,
+            long startTime,
+            long endTime) {
+
+        if (controlDistance <= 0) {
+            Logger.warn("BiotakTrigger: Invalid C distance – cannot draw M ladder.");
+            return new java.util.ArrayList<>();
+        }
+
+        boolean showLabels = settings.getBoolean(S_SHOW_LEVEL_LABELS, true);
+        int maxAbove = settings.getInteger(S_MAX_LEVELS_ABOVE);
+        int maxBelow = settings.getInteger(S_MAX_LEVELS_BELOW);
+
+        java.util.List<Figure> figs = new java.util.ArrayList<>();
+
+        // ------------- ABOVE -------------
+        int logicalStep = 1; // 1 => 1×C
+        int drawnAbove = 0;
+        double priceAbove = midpointPrice + controlDistance;
+        while (priceAbove <= highestHigh && drawnAbove < maxAbove) {
+            boolean isM = (logicalStep % 3 == 0);
+            String lbl = isM ? "M" : "C";
+
+            if (!shouldDrawStep(settings, logicalStep)) {
+                logicalStep++;
+                priceAbove += controlDistance;
+                continue;
+            }
+            PathInfo path = getPathForLevel(settings, logicalStep);
+            if (path == null && settings.getBoolean(S_SHOW_TRIGGER_LEVELS)) {
+                path = getControlLevelPath(settings, lbl);
+            }
+            if (path != null) {
+                figs.add(new Line(new Coordinate(startTime, priceAbove), new Coordinate(endTime, priceAbove), path));
+                if (showLabels) figs.add(new LevelLabel(endTime, priceAbove, lbl));
+                drawnAbove++;
+            }
+
+            logicalStep++;
+            priceAbove += controlDistance;
+        }
+
+        // ------------- BELOW -------------
+        logicalStep = 1;
+        int drawnBelow = 0;
+        double priceBelow = midpointPrice - controlDistance;
+        while (priceBelow >= lowestLow && drawnBelow < maxBelow) {
+            boolean isM2 = (logicalStep % 3 == 0);
+            String lbl2 = isM2 ? "M" : "C";
+
+            if (!shouldDrawStep(settings, logicalStep)) {
+                logicalStep++;
+                priceBelow -= controlDistance;
+                continue;
+            }
+
+            PathInfo path = getPathForLevel(settings, logicalStep);
+            if (path == null && settings.getBoolean(S_SHOW_TRIGGER_LEVELS)) {
+                path = getControlLevelPath(settings, lbl2);
+            }
+            if (path != null) {
+                figs.add(new Line(new Coordinate(startTime, priceBelow), new Coordinate(endTime, priceBelow), path));
+                if (showLabels) figs.add(new LevelLabel(endTime, priceBelow, lbl2));
+                drawnBelow++;
+            }
+
+            logicalStep++;
+            priceBelow -= controlDistance;
+        }
+
+        return figs;
+    }
+
+    /**
+     * Draws levels at equal spacing of mDistance, labelling each as "M".
+     */
+    public static List<Figure> drawMEqualLevels(
+            Settings settings,
+            double midpointPrice,
+            double highestHigh,
+            double lowestLow,
+            double mDistance,
+            long startTime,
+            long endTime) {
+
+        if (mDistance <= 0) {
+            Logger.warn("BiotakTrigger: Invalid M distance – cannot draw levels.");
+            return new java.util.ArrayList<>();
+        }
+
+        boolean showLabels = settings.getBoolean(S_SHOW_LEVEL_LABELS, true);
+        int maxAbove = settings.getInteger(S_MAX_LEVELS_ABOVE);
+        int maxBelow = settings.getInteger(S_MAX_LEVELS_BELOW);
+
+        java.util.List<Figure> figs = new java.util.ArrayList<>();
+
+        // Above
+        int step = 1;
+        double price = midpointPrice + mDistance;
+        while (price <= highestHigh && step <= maxAbove) {
+            PathInfo path = getPathForLevel(settings, step);
+            if (path == null) {
+                boolean triggerOn = settings.getBoolean(S_SHOW_TRIGGER_LEVELS);
+                path = triggerOn ? getControlLevelPath(settings, "M") : settings.getPath(S_STRUCT_L1_PATH);
+            }
+            if (path != null) {
+                figs.add(new Line(new Coordinate(startTime, price), new Coordinate(endTime, price), path));
+                if (showLabels) figs.add(new LevelLabel(endTime, price, "M"));
+            }
+            step++;
+            price += mDistance;
+        }
+
+        // Below
+        step = 1;
+        price = midpointPrice - mDistance;
+        while (price >= lowestLow && step <= maxBelow) {
+            PathInfo path = getPathForLevel(settings, step);
+            if (path == null) {
+                boolean triggerOn = settings.getBoolean(S_SHOW_TRIGGER_LEVELS);
+                path = triggerOn ? getControlLevelPath(settings, "M") : settings.getPath(S_STRUCT_L1_PATH);
+            }
+            if (path != null) {
+                figs.add(new Line(new Coordinate(startTime, price), new Coordinate(endTime, price), path));
+                if (showLabels) figs.add(new LevelLabel(endTime, price, "M"));
+            }
+            step++;
+            price -= mDistance;
+        }
+
+        return figs;
     }
 } 
