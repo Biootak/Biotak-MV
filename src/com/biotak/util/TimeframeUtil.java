@@ -183,22 +183,36 @@ public final class TimeframeUtil {
      * @return The percentage value for the timeframe.
      */
     public static double getTimeframePercentage(BarSize barSize) {
+        // Create cache key
+        String cacheKey = barSize.toString();
+        Double cached = ComputationCache.getCachedPercentage(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        
+        double result;
+        
         // Exact lookup for power-of-2 fractal timeframes to keep legacy table values
         int totalMinutes = getTotalMinutes(barSize);
         if (totalMinutes > 0 && FRACTAL_MINUTES_MAP.containsKey(totalMinutes)) {
             String lbl = FRACTAL_MINUTES_MAP.get(totalMinutes);
-            return FRACTAL_PERCENTAGES.getOrDefault(lbl, 0.02);
+            result = FRACTAL_PERCENTAGES.getOrDefault(lbl, 0.02);
         }
-
         // Special case for S16 (≈1 %) used در نسخهٔ اصلی بیوتاک
-        if (barSize.getIntervalType() == Enums.IntervalType.SECOND && barSize.getInterval() == 16) {
-            return FRACTAL_PERCENTAGES.getOrDefault("S16", 0.01);
+        else if (barSize.getIntervalType() == Enums.IntervalType.SECOND && barSize.getInterval() == 16) {
+            result = FRACTAL_PERCENTAGES.getOrDefault("S16", 0.01);
         }
-
-        // Generic closed-form: 0.02 × √(minutes)
-        double minutesEquivalent = getTotalSeconds(barSize) / 60.0; // supports seconds/hours/days/…
-        if (minutesEquivalent <= 0) minutesEquivalent = 1.0;
-        return 0.02 * Math.sqrt(minutesEquivalent);
+        else {
+            // Generic closed-form: 0.02 × √(minutes)
+            double minutesEquivalent = getTotalSeconds(barSize) / 60.0; // supports seconds/hours/days/…
+            if (minutesEquivalent <= 0) minutesEquivalent = 1.0;
+            result = 0.02 * Math.sqrt(minutesEquivalent);
+        }
+        
+        // Cache the result
+        ComputationCache.cachePercentage(cacheKey, result);
+        
+        return result;
     }
 
     /**
@@ -209,22 +223,36 @@ public final class TimeframeUtil {
      * @return The appropriate ATR period for the timeframe.
      */
     public static int getAtrPeriod(BarSize barSize) {
+        // Create cache key
+        String cacheKey = barSize.toString();
+        Integer cached = ComputationCache.getCachedAtrPeriod(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        
+        int result;
+        
         // 1) Exact table for common/standard timeframes
         String standard = getStandardTimeframeString(barSize);
         if (STANDARD_ATR_PERIODS.containsKey(standard)) {
-            return STANDARD_ATR_PERIODS.get(standard);
+            result = STANDARD_ATR_PERIODS.get(standard);
         }
+        else {
+            // 2) Generic rule for all other (especially non-fractal) timeframes
+            //    Goal: when timeframe ×4 ⇒ expected ATR (price) ×2, while حفظ نرمی یکنواخت.
+            //    Period ≈ 24 × √(minutesEquivalent)
+            double minutesEq = getTotalSeconds(barSize) / 60.0;
+            if (minutesEq <= 0) minutesEq = 1.0;
 
-        // 2) Generic rule for all other (especially non-fractal) timeframes
-        //    Goal: when timeframe ×4 ⇒ expected ATR (price) ×2, while حفظ نرمی یکنواخت.
-        //    Period ≈ 24 × √(minutesEquivalent)
-        double minutesEq = getTotalSeconds(barSize) / 60.0;
-        if (minutesEq <= 0) minutesEq = 1.0;
-
-        int period = (int) Math.round(24.0 * Math.sqrt(minutesEq));
-        // Clamp to practical bounds
-        period = Math.max(12, Math.min(52, period));
-        return period;
+            int period = (int) Math.round(24.0 * Math.sqrt(minutesEq));
+            // Clamp to practical bounds
+            result = Math.max(12, Math.min(52, period));
+        }
+        
+        // Cache the result
+        ComputationCache.cacheAtrPeriod(cacheKey, result);
+        
+        return result;
     }
 
     /**

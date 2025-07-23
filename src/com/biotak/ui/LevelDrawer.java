@@ -26,22 +26,19 @@ public class LevelDrawer {
      * Draws the historical high and low lines on the chart if they are enabled in the settings.
      */
     public static List<Figure> drawHistoricalLines(Settings settings, long startTime, long endTime, double high, double low) {
-        Logger.debug("BiotakTrigger: drawHistoricalLines called. High: " + high + ", Low: " + low);
-
         boolean showHigh = settings.getBoolean(S_SHOW_HIGH_LINE, true);
-        Logger.debug("BiotakTrigger: Show High Line setting is " + showHigh);
-        List<Figure> figures = new ArrayList<>();
+        boolean showLow = settings.getBoolean(S_SHOW_LOW_LINE, true);
+        
+        // Pre-allocate list size for better performance
+        List<Figure> figures = new ArrayList<>((showHigh ? 1 : 0) + (showLow ? 1 : 0));
+        
         if (showHigh) {
             PathInfo highPath = settings.getPath(S_HIGH_LINE_PATH);
-            Logger.debug("BiotakTrigger: Drawing High Line at " + high);
             figures.add(new Line(new Coordinate(startTime, high), new Coordinate(endTime, high), highPath));
         }
 
-        boolean showLow = settings.getBoolean(S_SHOW_LOW_LINE, true);
-        Logger.debug("BiotakTrigger: Show Low Line setting is " + showLow);
         if (showLow) {
             PathInfo lowPath = settings.getPath(S_LOW_LINE_PATH);
-            Logger.debug("BiotakTrigger: Drawing Low Line at " + low);
             figures.add(new Line(new Coordinate(startTime, low), new Coordinate(endTime, low), lowPath));
         }
         return figures;
@@ -85,10 +82,7 @@ public class LevelDrawer {
      */
     public static List<Figure> drawTHLevels(Settings settings, DataSeries series, double midpointPrice, double highestHigh, double lowestLow, double thBasePrice, long startTime, long endTime) {
         double timeframePercentage = TimeframeUtil.getTimeframePercentage(series.getBarSize());
-        Logger.debug("BiotakTrigger: Timeframe percentage: " + timeframePercentage);
-        
         double thStepInPoints = THCalculator.calculateTHPoints(series.getInstrument(), thBasePrice, timeframePercentage);
-        Logger.debug("BiotakTrigger: TH step in points: " + thStepInPoints);
 
         if (thStepInPoints <= 0) {
             Logger.warn("BiotakTrigger: Invalid TH step value (<=0). Cannot draw TH levels.");
@@ -96,9 +90,6 @@ public class LevelDrawer {
         }
 
         double pointValue = series.getInstrument().getTickSize();
-        // Apply pip multiplier so that spacing matches MT4 (price to pips conversion)
-        double pipMultiplier = FractalCalculator.getPipMultiplier(series.getInstrument());
-        Logger.debug("BiotakTrigger: Point value (tick size): " + pointValue + ", Pip multiplier: " + pipMultiplier);
 
         // Final price distance between consecutive TH levels
         // Removed pipMultiplier scaling: keep distance in price units
@@ -106,7 +97,7 @@ public class LevelDrawer {
         int maxLevelsAbove = settings.getInteger(S_MAX_LEVELS_ABOVE);
         int maxLevelsBelow = settings.getInteger(S_MAX_LEVELS_BELOW);
 
-        List<Figure> figures = new ArrayList<>();
+        List<Figure> figures = new ArrayList<>(maxLevelsAbove + maxLevelsBelow); // Pre-allocate capacity
         // Draw levels above midpoint
         int stepCountAbove = 1;
         int levelCountAbove = 0;
@@ -114,7 +105,7 @@ public class LevelDrawer {
         while (priceLevelAbove <= highestHigh && levelCountAbove < maxLevelsAbove) {
             PathInfo path = getPathForLevel(settings, stepCountAbove);
             if (path != null) {
-                Logger.debug("BiotakTrigger: Drawing level above at " + priceLevelAbove + " (step " + stepCountAbove + ")");
+                // Remove debug logging to improve performance
                 figures.add(new Line(new Coordinate(startTime, priceLevelAbove), new Coordinate(endTime, priceLevelAbove), path));
                 levelCountAbove++;
             }
@@ -129,7 +120,7 @@ public class LevelDrawer {
         while (priceLevelBelow >= lowestLow && levelCountBelow < maxLevelsBelow) {
             PathInfo path = getPathForLevel(settings, stepCountBelow);
             if (path != null) {
-                Logger.debug("BiotakTrigger: Drawing level below at " + priceLevelBelow + " (step " + stepCountBelow + ")");
+                // Remove debug logging to improve performance
                 figures.add(new Line(new Coordinate(startTime, priceLevelBelow), new Coordinate(endTime, priceLevelBelow), path));
                 levelCountBelow++;
             }
@@ -182,7 +173,7 @@ public class LevelDrawer {
             return new ArrayList<>();
         }
 
-        double pipMultiplier = FractalCalculator.getPipMultiplier(series.getInstrument()); // retained for potential debug logs
+        double pipMultiplier = com.biotak.util.UnitConverter.getPipMultiplier(series.getInstrument()); // retained for potential debug logs
         // Removed pipMultiplier scaling: ssValue/lsValue are already in price units
         double stepSS = ssValue;
         double stepLS = lsValue;

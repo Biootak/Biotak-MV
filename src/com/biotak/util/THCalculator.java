@@ -39,23 +39,7 @@ public final class THCalculator {
      * Fixed to match the MT4 implementation exactly.
      */
     public static double calculateTHPoints(Instrument instrument, double price, double percentage) {
-        if (price <= 0 || percentage <= 0) return 0;
-        double point = instrument.getTickSize();
-        if (point <= 0) return 0;
-
-        // Determine digits from tick size
-        int digits = 0;
-        if (instrument.getTickSize() > 0) {
-            String tickStr = String.valueOf(instrument.getTickSize());
-            if (tickStr.contains(".")) {
-                digits = tickStr.length() - tickStr.indexOf('.') - 1;
-            }
-        }
-
-        // Calculate TH value using the percentage directly (not divided by 100)
-        double thStepPriceUnits = (price * percentage) / 100.0;
-        
-        // Return the value in points (divided by point size)
-        return thStepPriceUnits / point;
+        // Use optimized calculation for better performance
+        return OptimizedCalculations.calculateTHOptimized(instrument, price, percentage);
     }
 } 

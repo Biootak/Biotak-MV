@@ -1,7 +1,6 @@
 package com.biotak.util;
 
 import com.motivewave.platform.sdk.common.Instrument;
-import com.biotak.core.FractalCalculator;
 
 /**
  * Centralized helper for converting between price, pip and point units.
@@ -19,6 +18,73 @@ public final class UnitConverter {
 
     private UnitConverter() {}
 
+    /**
+     * Determines the appropriate pip multiplier for a given instrument.
+     * 
+     * @param instrument The trading instrument
+     * @return The multiplier to convert from price to pips
+     */
+    public static double getPipMultiplier(Instrument instrument) {
+        if (instrument == null) return 10.0; // Default multiplier
+        
+        // Create cache key from instrument properties
+        String symbol = instrument.getSymbol();
+        double tickSize = instrument.getTickSize();
+        String cacheKey = symbol + "_" + tickSize;
+        
+        // Check cache first
+        Double cached = ComputationCache.getCachedPipMultiplier(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        
+        double result;
+        
+        // Determine number of decimal places in tick size
+        int decimalPlaces = 0;
+        if (tickSize > 0) {
+            String tickStr = String.valueOf(tickSize);
+            if (tickStr.contains(".")) {
+                decimalPlaces = tickStr.length() - tickStr.indexOf('.') - 1;
+            }
+        }
+        
+        // For forex pairs
+        if (symbol != null && 
+            (symbol.contains("/") || 
+             (symbol.length() >= 6 && !symbol.contains(".")))) {
+            
+            // JPY pairs typically have 2 decimal places
+            if (symbol.contains("JPY") || symbol.contains("jpy")) {
+                result = 100.0;
+            }
+            // Most other forex pairs have 4 decimal places, with pip being the 4th decimal
+            else if (decimalPlaces >= 4) {
+                result = 10.0;
+            }
+            else {
+                result = 10.0; // Default for forex
+            }
+        }
+        else {
+            // For indices, stocks, etc. - use a multiplier based on decimal places
+            switch (decimalPlaces) {
+                case 0: result = 1.0; break;    // No decimal places
+                case 1: result = 10.0; break;   // 1 decimal place
+                case 2: result = 100.0; break;  // 2 decimal places
+                case 3: result = 10.0; break;   // 3 decimal places (unusual)
+                case 4: result = 10.0; break;   // 4 decimal places (standard forex)
+                case 5: result = 10.0; break;   // 5 decimal places (some brokers)
+                default: result = 10.0; break; // Default
+            }
+        }
+        
+        // Cache the result
+        ComputationCache.cachePipMultiplier(cacheKey, result);
+        
+        return result;
+    }
+
     /* ------------------------------------------------------------- */
     /*  Pip ↔ Price                                                  */
     /* ------------------------------------------------------------- */
@@ -32,7 +98,7 @@ public final class UnitConverter {
      */
     public static double priceToPip(double priceDiff, Instrument instrument) {
         if (instrument == null) return 0;
-        double pipMultiplier = FractalCalculator.getPipMultiplier(instrument);
+        double pipMultiplier = getPipMultiplier(instrument);
         return priceDiff * pipMultiplier;
     }
 
@@ -45,7 +111,7 @@ public final class UnitConverter {
      */
     public static double pipToPrice(double pips, Instrument instrument) {
         if (instrument == null) return 0;
-        double pipMultiplier = FractalCalculator.getPipMultiplier(instrument);
+        double pipMultiplier = getPipMultiplier(instrument);
         return pips / pipMultiplier;
     }
 

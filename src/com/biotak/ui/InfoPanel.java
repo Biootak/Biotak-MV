@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.biotak.enums.PanelPosition;
+import com.biotak.util.PoolManager;
+import com.biotak.util.StringUtils;
 
 /**
  * Custom figure class to draw the information panel.
@@ -50,6 +52,14 @@ public class InfoPanel extends Figure {
     private Rectangle minimizeButtonRect; // Stores bounds of minimize/restore button
     // Added constant to control vertical padding after separator lines inside the panel
     private static final int SEPARATOR_PADDING = 25; // was previously 15 – gives text more breathing room
+    
+    // Cache for UI elements to avoid repeated creation
+    private List<String> cachedCoreLines;
+    private List<String> cachedHierarchyLines;
+    private long lastCacheTime = 0;
+    private static final long CACHE_DURATION_MS = 1000; // 1 second cache
+    
+    // Object pools removed - using centralized PoolManager instead
     
     public InfoPanel(String timeframe, double thValue, com.motivewave.platform.sdk.common.Instrument instrument, 
                     Font contentFont, Font titleFont, PanelPosition position, 
@@ -98,49 +108,24 @@ public class InfoPanel extends Figure {
         // Get chart bounds
         Rectangle bounds = ctx.getBounds();
         
-        // Prepare content for each section
-        // -----------------------------  CORE VALUES  ---------------------------------
-        // Calculate Control (C) as the average of SS and LS => 7T.
-        double controlValue = (shortStep + longStep) / 2.0; // C = (SS + LS) / 2
-
-        List<String> coreLines = new ArrayList<>();
-        // Format numbers to one decimal place (in pips)
-        coreLines.add("TH: "   + String.format("%.1f", com.biotak.util.UnitConverter.priceToPip(thValue, instrument)));
-        coreLines.add("ATR: "  + String.format("%.1f", com.biotak.util.UnitConverter.priceToPip(atrValue, instrument)));
-        coreLines.add("SS: "   + String.format("%.1f", com.biotak.util.UnitConverter.priceToPip(shortStep, instrument)));
-        coreLines.add("LS: "   + String.format("%.1f", com.biotak.util.UnitConverter.priceToPip(longStep, instrument)));
-        coreLines.add("C: "    + String.format("%.1f", com.biotak.util.UnitConverter.priceToPip(controlValue, instrument)));
-        // Calculate M = SS + C + LS and add to core lines
-        double mValue = shortStep + controlValue + longStep;
-        coreLines.add("M: "    + String.format("%.1f", com.biotak.util.UnitConverter.priceToPip(mValue, instrument)));
-        coreLines.add("Live: " + String.format("%.1f", com.biotak.util.UnitConverter.priceToPip(liveAtrValue, instrument)));
-
-        //---------------------------  HIERARCHY VALUES  --------------------------------
-        List<String> hierarchyLines = new ArrayList<>();
-
-        // Helper lambda to format TH and C together to avoid clutter
-        java.util.function.Function<Double, String> formatThC = (th) -> {
-            double cVal = th * 1.75; // C-tier value
-            double thPip = com.biotak.util.UnitConverter.priceToPip(th, instrument);
-            double cPip  = com.biotak.util.UnitConverter.priceToPip(cVal, instrument);
-            return String.format("%.1f", thPip) + "  (C:" + String.format("%.1f", cPip) + ")";
-        };
-
-        if (higherStructureTF != null && !higherStructureTF.isEmpty()) {
-            hierarchyLines.add("▲ S [" + higherStructureTF + "]: " + formatThC.apply(higherStructureTH));
-        }
-        if (higherPatternTF != null && !higherPatternTF.isEmpty()) {
-            hierarchyLines.add("▲ P [" + higherPatternTF + "]: " + formatThC.apply(higherPatternTH));
-        }
-
-        // Current timeframe – include star marker
-        hierarchyLines.add("■ [" + timeframe + "]: " + formatThC.apply(thValue) + " *");
-
-        if (lowerPatternTF != null && !lowerPatternTF.isEmpty()) {
-            hierarchyLines.add("▼ P [" + lowerPatternTF + "]: " + formatThC.apply(lowerPatternTH));
-        }
-        if (lowerTriggerTF != null && !lowerTriggerTF.isEmpty()) {
-            hierarchyLines.add("▼ T [" + lowerTriggerTF + "]: " + formatThC.apply(lowerTriggerTH));
+        // Use cached content if available and recent
+        long currentTime = System.currentTimeMillis();
+        List<String> coreLines;
+        List<String> hierarchyLines;
+        
+        if (cachedCoreLines != null && cachedHierarchyLines != null && 
+            (currentTime - lastCacheTime) < CACHE_DURATION_MS) {
+            // Use cached content
+            coreLines = cachedCoreLines;
+            hierarchyLines = cachedHierarchyLines;
+        } else {
+            // Generate new content and cache it
+            coreLines = generateCoreLines();
+            hierarchyLines = generateHierarchyLines();
+            
+            cachedCoreLines = coreLines;
+            cachedHierarchyLines = hierarchyLines;
+            lastCacheTime = currentTime;
         }
 
         // Calculate panel dimensions
@@ -237,6 +222,134 @@ public class InfoPanel extends Figure {
 
     public boolean isInMinimizeButton(double x, double y) {
         return minimizeButtonRect != null && minimizeButtonRect.contains(x, y);
+    }
+    
+    /**
+     * Generate core lines content (cached for performance)
+     */
+    private List<String> generateCoreLines() {
+        ArrayList<String> coreLines = PoolManager.getStringList();
+        StringBuilder sb = PoolManager.getStringBuilder();
+        
+        try {
+            // Calculate Control (C) as the average of SS and LS => 7T.
+            double controlValue = (shortStep + longStep) / 2.0; // C = (SS + LS) / 2
+            
+            // Pre-calculate pip values to avoid repeated conversions
+            double thPip = com.biotak.util.UnitConverter.priceToPip(thValue, instrument);
+            double atrPip = com.biotak.util.UnitConverter.priceToPip(atrValue, instrument);
+            double ssPip = com.biotak.util.UnitConverter.priceToPip(shortStep, instrument);
+            double lsPip = com.biotak.util.UnitConverter.priceToPip(longStep, instrument);
+            double cPip = com.biotak.util.UnitConverter.priceToPip(controlValue, instrument);
+            double mValue = shortStep + controlValue + longStep;
+            double mPip = com.biotak.util.UnitConverter.priceToPip(mValue, instrument);
+            double livePip = com.biotak.util.UnitConverter.priceToPip(liveAtrValue, instrument);
+            
+            // Use StringBuilder for efficient string building with optimized formatting
+            sb.setLength(0);
+            sb.append("TH: ").append(StringUtils.format1f(thPip));
+            coreLines.add(sb.toString());
+            
+            sb.setLength(0);
+            sb.append("ATR: ").append(StringUtils.format1f(atrPip));
+            coreLines.add(sb.toString());
+            
+            sb.setLength(0);
+            sb.append("SS: ").append(StringUtils.format1f(ssPip));
+            coreLines.add(sb.toString());
+            
+            sb.setLength(0);
+            sb.append("LS: ").append(StringUtils.format1f(lsPip));
+            coreLines.add(sb.toString());
+            
+            sb.setLength(0);
+            sb.append("C: ").append(StringUtils.format1f(cPip));
+            coreLines.add(sb.toString());
+            
+            sb.setLength(0);
+            sb.append("M: ").append(StringUtils.format1f(mPip));
+            coreLines.add(sb.toString());
+            
+            sb.setLength(0);
+            sb.append("Live: ").append(StringUtils.format1f(livePip));
+            coreLines.add(sb.toString());
+            
+            // Return a copy to avoid pool interference
+            return new ArrayList<>(coreLines);
+        } finally {
+            PoolManager.releaseStringBuilder(sb);
+            PoolManager.releaseStringList(coreLines);
+        }
+    }
+    
+    /**
+     * Generate hierarchy lines content (cached for performance)
+     */
+    private List<String> generateHierarchyLines() {
+        ArrayList<String> hierarchyLines = PoolManager.getStringList();
+        StringBuilder sb = PoolManager.getStringBuilder();
+        
+        try {
+            if (higherStructureTF != null && !higherStructureTF.isEmpty()) {
+                sb.setLength(0);
+                double cVal = higherStructureTH * 1.75;
+                double thPip = com.biotak.util.UnitConverter.priceToPip(higherStructureTH, instrument);
+                double cPip = com.biotak.util.UnitConverter.priceToPip(cVal, instrument);
+                sb.append("▲ S [").append(higherStructureTF).append("]: ")
+                  .append(StringUtils.format1f(thPip)).append("  (C:")
+                  .append(StringUtils.format1f(cPip)).append(")");
+                hierarchyLines.add(sb.toString());
+            }
+            
+            if (higherPatternTF != null && !higherPatternTF.isEmpty()) {
+                sb.setLength(0);
+                double cVal = higherPatternTH * 1.75;
+                double thPip = com.biotak.util.UnitConverter.priceToPip(higherPatternTH, instrument);
+                double cPip = com.biotak.util.UnitConverter.priceToPip(cVal, instrument);
+                sb.append("▲ P [").append(higherPatternTF).append("]: ")
+                  .append(StringUtils.format1f(thPip)).append("  (C:")
+                  .append(StringUtils.format1f(cPip)).append(")");
+                hierarchyLines.add(sb.toString());
+            }
+
+            // Current timeframe – include star marker
+            sb.setLength(0);
+            double cVal = thValue * 1.75;
+            double thPip = com.biotak.util.UnitConverter.priceToPip(thValue, instrument);
+            double cPip = com.biotak.util.UnitConverter.priceToPip(cVal, instrument);
+            sb.append("■ [").append(timeframe).append("]: ")
+              .append(StringUtils.format1f(thPip)).append("  (C:")
+              .append(StringUtils.format1f(cPip)).append(") *");
+            hierarchyLines.add(sb.toString());
+
+            if (lowerPatternTF != null && !lowerPatternTF.isEmpty()) {
+                sb.setLength(0);
+                cVal = lowerPatternTH * 1.75;
+                thPip = com.biotak.util.UnitConverter.priceToPip(lowerPatternTH, instrument);
+                cPip = com.biotak.util.UnitConverter.priceToPip(cVal, instrument);
+                sb.append("▼ P [").append(lowerPatternTF).append("]: ")
+                  .append(StringUtils.format1f(thPip)).append("  (C:")
+                  .append(StringUtils.format1f(cPip)).append(")");
+                hierarchyLines.add(sb.toString());
+            }
+            
+            if (lowerTriggerTF != null && !lowerTriggerTF.isEmpty()) {
+                sb.setLength(0);
+                cVal = lowerTriggerTH * 1.75;
+                thPip = com.biotak.util.UnitConverter.priceToPip(lowerTriggerTH, instrument);
+                cPip = com.biotak.util.UnitConverter.priceToPip(cVal, instrument);
+                sb.append("▼ T [").append(lowerTriggerTF).append("]: ")
+                  .append(StringUtils.format1f(thPip)).append("  (C:")
+                  .append(StringUtils.format1f(cPip)).append(")");
+                hierarchyLines.add(sb.toString());
+            }
+            
+            // Return a copy to avoid pool interference
+            return new ArrayList<>(hierarchyLines);
+        } finally {
+            PoolManager.releaseStringBuilder(sb);
+            PoolManager.releaseStringList(hierarchyLines);
+        }
     }
 
     private void drawHierarchySection(Graphics2D gc, int x, int y, int panelWidth, List<String> lines, 

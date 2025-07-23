@@ -7,6 +7,7 @@ import com.motivewave.platform.sdk.common.Settings;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Helper utilities for fractal calculations used by the Biotak Trigger indicator.
@@ -15,6 +16,11 @@ import java.util.Map;
  * نگه‌داری آسان‌تر شود و از تکرار کد جلوگیری گردد.
  */
 public final class FractalUtil {
+
+    // Cache names for different types of calculations
+    private static final String TH_BUNDLE_CACHE = "th_bundle";
+    private static final String PERCENTAGE_CACHE = "percentage";
+    private static final long CACHE_EXPIRY_MS = 60000; // 1 minute
 
     private FractalUtil() {}
 
@@ -26,8 +32,20 @@ public final class FractalUtil {
 
     /**
      * Calculates TH values for پنج سطح فراکتالی اطراف {@code barSize} با استفاده از قیمت پایه.
+     * Uses caching to improve performance for repeated calculations.
      */
     public static THBundle calculateTHBundle(Instrument instrument, BarSize barSize, double basePrice) {
+        // Create cache key
+        String cacheKey = instrument.getSymbol() + "_" + barSize.toString() + "_" + 
+                         String.format("%.5f", basePrice);
+        
+        // Check cache first
+        THBundle cached = CacheManager.get(TH_BUNDLE_CACHE, cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        
+        // Calculate if not in cache or expired
         double tick = instrument.getTickSize();
 
         double th = calcTH(instrument, barSize, basePrice, tick);
@@ -41,12 +59,18 @@ public final class FractalUtil {
         double structureTH    = calcTH(instrument, structureSize, basePrice, tick);
         double higherPatternTH= calcTH(instrument, higherPattern, basePrice, tick);
 
-        return new THBundle(th, patternTH, triggerTH, structureTH, higherPatternTH);
+        THBundle result = new THBundle(th, patternTH, triggerTH, structureTH, higherPatternTH);
+        
+        // Cache the result
+        CacheManager.put(TH_BUNDLE_CACHE, cacheKey, result, CACHE_EXPIRY_MS);
+        
+        return result;
     }
 
     /**
      * Calculates the historical high and low for the loaded {@link DataSeries}. This logic previously
      * تکراری در دو مکان (calculate و drawFigures) قرار داشت.
+     * Optimized to avoid full series scan when cached values are available.
      *
      * @param series      داده‌های قیمت
      * @param settings    {@link com.motivewave.platform.sdk.common.desc.Settings} شیء مربوط به اندیکاتور
@@ -63,18 +87,50 @@ public final class FractalUtil {
             return new double[]{manualHigh, manualLow};
         }
 
-        double computedHigh = Double.NEGATIVE_INFINITY;
-        double computedLow  = Double.POSITIVE_INFINITY;
-        int sz = series.size();
-        for (int i = 0; i < sz; i++) {
-            computedHigh = Math.max(computedHigh, series.getHigh(i));
-            computedLow  = Math.min(computedLow,  series.getLow(i));
+        // If we have valid cached values, only scan recent bars for updates
+        boolean hasValidCache = cachedHigh != Double.NEGATIVE_INFINITY && 
+                               cachedLow != Double.POSITIVE_INFINITY;
+        
+        if (hasValidCache) {
+            // Only check the last few bars for new extremes
+            int sz = series.size();
+            int startIndex = Math.max(0, sz - 50); // Check last 50 bars only
+            
+            double recentHigh = cachedHigh;
+            double recentLow = cachedLow;
+            
+            for (int i = startIndex; i < sz; i++) {
+                recentHigh = Math.max(recentHigh, series.getHigh(i));
+                recentLow = Math.min(recentLow, series.getLow(i));
+            }
+            
+            return new double[]{recentHigh, recentLow};
         }
+        
+        // Full scan only when no cache is available - use optimized calculation
+        int sz = series.size();
+        
+        // Limit full scan to reasonable number of bars to prevent performance issues
+        int maxBarsToScan = Math.min(sz, 1000); // کاهش از 10k به 1k bars max
+        int startIndex = Math.max(0, sz - maxBarsToScan);
+        
+        // Use optimized min/max calculation
+        double[] minMax = OptimizedCalculations.findMinMaxOptimized(series, startIndex, sz);
+        double computedHigh = minMax[0];
+        double computedLow = minMax[1];
 
-        double finalHigh = (cachedHigh == Double.NEGATIVE_INFINITY) ? computedHigh : Math.max(cachedHigh, computedHigh);
-        double finalLow  = (cachedLow  == Double.POSITIVE_INFINITY) ? computedLow  : Math.min(cachedLow,  computedLow);
-
-        return new double[]{finalHigh, finalLow};
+        return new double[]{computedHigh, computedLow};
+    }
+    
+    /**
+     * Incremental update method for extremes - more efficient than full recalculation
+     */
+    public static double[] updateExtremes(double currentHigh, double currentLow, 
+                                         double newHigh, double newLow) {
+        return new double[]{
+            Math.max(currentHigh, newHigh),
+            Math.min(currentLow, newLow)
+        };
     }
 
     private static double calcTH(Instrument inst, BarSize size, double basePrice, double tick) {

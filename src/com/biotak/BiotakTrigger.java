@@ -423,9 +423,8 @@ public class BiotakTrigger extends Study {
         DataSeries series = ctx.getDataSeries();
         // Determine if this is the last bar for live updates
         boolean isLastBar = (index == series.size() - 1);
-        // Skip incomplete bars except for the last bar, with logging for skipped cases
+        // Skip incomplete bars except for the last bar, remove logging for performance
         if (!series.isBarComplete(index) && !isLastBar) {
-            Logger.info("BiotakTrigger: Skipping calculate for index " + index + " - bar incomplete and not last bar");
             return;
         }
         
@@ -462,7 +461,7 @@ public class BiotakTrigger extends Study {
         boolean isFirstBar = (index == 0);
         
         if (isFirstBar && !firstBarDrawn) {
-            Logger.info("BiotakTrigger: First bar detected. Drawing initial figures...");
+            // Remove excessive logging for better performance
             drawFigures(index, ctx);
             firstBarDrawn = true;
         }
@@ -472,7 +471,7 @@ public class BiotakTrigger extends Study {
                 Logger.info("BiotakTrigger: Historical High/Low calculated from " + series.getBarSize() + " timeframe (merged). High: " + cachedHigh + ", Low: " + cachedLow);
                 lastHighLowLogTime = nowHL;
             }
-            Logger.debug("BiotakTrigger: Last bar detected. Updating figures...");
+            // Remove debug logging for better performance
             drawFigures(index, ctx);
         }
     }
@@ -482,7 +481,7 @@ public class BiotakTrigger extends Study {
      * It's called only on the first and last bars.
      */
     private void drawFigures(int index, DataContext ctx) {
-        Logger.debug("BiotakTrigger: drawFigures() called for index: " + index);
+        // Remove debug logging for better performance
         clearFigures(); // Clear all previously drawn figures for a clean redraw.
 
         DataSeries series = ctx.getDataSeries();
@@ -502,7 +501,12 @@ public class BiotakTrigger extends Study {
             if (manualMode) {
                 finalHigh = settings.getDouble(S_MANUAL_HIGH, 0);
                 finalLow  = settings.getDouble(S_MANUAL_LOW, 0);
-                Logger.info("BiotakTrigger: Using manual high/low values. High: " + finalHigh + ", Low: " + finalLow);
+                // Use throttled logging to prevent spam - only log once per minute
+                long nowManual = System.currentTimeMillis();
+                if (nowManual - lastHighLowLogTime > LOG_INTERVAL_MS) {
+                    Logger.info("BiotakTrigger: Using manual high/low values. High: " + finalHigh + ", Low: " + finalLow);
+                    lastHighLowLogTime = nowManual;
+                }
             } else {
                 double[] range = com.biotak.util.FractalUtil.getHistoricalRange(series, settings, cachedHigh, cachedLow, false);
                 finalHigh = range[0];
@@ -536,7 +540,7 @@ public class BiotakTrigger extends Study {
             long startTime = series.getStartTime(0);
             long endTime = series.getStartTime(totalBars - 1);
             
-            Logger.debug("BiotakTrigger: Start time: " + startTime + ", End time: " + endTime);
+            // Remove debug logging for better performance
     
             // Determine selected step mode once
             StepCalculationMode currentMode = com.biotak.util.EnumUtil.safeEnum(StepCalculationMode.class,
@@ -695,7 +699,7 @@ public class BiotakTrigger extends Study {
 
             long now = System.currentTimeMillis();
             if (now - lastCalcTableLogTime > LOG_INTERVAL_MS) {
-                double pipMultiplier = FractalCalculator.getPipMultiplier(series.getInstrument());
+                double pipMultiplier = com.biotak.util.UnitConverter.getPipMultiplier(series.getInstrument());
                 FractalCalculator.logCalculationTable(series, thValue, structureValue, patternValue, triggerValue,
                                shortStep, longStep, atrValue, liveAtrValue,
                                pipMultiplier, lastCalcTableLogTime, LOG_INTERVAL_MS);

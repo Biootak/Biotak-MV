@@ -3,6 +3,7 @@ package com.biotak.core;
 import com.biotak.util.Logger;
 import com.biotak.util.Logger.LogLevel;
 import com.biotak.util.TimeframeUtil;
+import com.biotak.util.OptimizedCalculations;
 import com.motivewave.platform.sdk.common.BarSize;
 import com.motivewave.platform.sdk.common.DataSeries;
 import com.motivewave.platform.sdk.common.Instrument;
@@ -65,7 +66,6 @@ public class FractalCalculator {
     public static double calculateATR(DataSeries series) {
         // Get the appropriate ATR period for this timeframe
         int period = TimeframeUtil.getAtrPeriod(series.getBarSize());
-        Logger.debug("BiotakTrigger: Using ATR period " + period + " for timeframe " + series.getBarSize().toString());
         
         // Calculate ATR using the standard formula
         int size = series.size();
@@ -74,23 +74,8 @@ public class FractalCalculator {
             return 0.0;
         }
         
-        // Calculate first TR
-        double sumTR = 0;
-        for (int i = size - period; i < size; i++) {
-            double high = series.getHigh(i);
-            double low = series.getLow(i);
-            double prevClose = (i > 0) ? series.getClose(i-1) : series.getOpen(i);
-            
-            // True Range = max(high - low, abs(high - prevClose), abs(low - prevClose))
-            double tr = Math.max(high - low, Math.max(
-                Math.abs(high - prevClose),
-                Math.abs(low - prevClose)
-            ));
-            
-            sumTR += tr;
-        }
-        
-        return sumTR / period;
+        // Use optimized ATR calculation
+        return OptimizedCalculations.calculateATROptimized(series, period);
     }
     
     /**

@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Map;
 
 /**
  * A simple logger utility to write messages to both the console and a log file.
@@ -65,6 +66,11 @@ public final class Logger {
         log(LogLevel.INFO, message);
     }
     
+    // Throttling mechanism to prevent excessive logging
+    private static final Map<String, Long> messageThrottleMap = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long THROTTLE_INTERVAL_MS = 5000; // 5 seconds
+    private static final int MAX_THROTTLE_MAP_SIZE = 100; // محدودیت اندازه
+    
     /**
      * Logs a message with the specified log level.
      * @param level The log level.
@@ -74,6 +80,22 @@ public final class Logger {
         // Skip if the message's level is below the current log level
         if (level.getLevel() < currentLogLevel.getLevel()) {
             return;
+        }
+        
+        // Throttle repeated messages
+        String messageKey = level.name() + ":" + message;
+        long currentTime = System.currentTimeMillis();
+        Long lastLogTime = messageThrottleMap.get(messageKey);
+        
+        if (lastLogTime != null && (currentTime - lastLogTime) < THROTTLE_INTERVAL_MS) {
+            return; // Skip this message due to throttling
+        }
+        
+        messageThrottleMap.put(messageKey, currentTime);
+        
+        // Clean up old entries periodically to prevent memory leak
+        if (messageThrottleMap.size() > MAX_THROTTLE_MAP_SIZE) {
+            cleanupThrottleMap(currentTime);
         }
         
         String timestamp = DATE_FORMAT.format(new Date());
@@ -91,6 +113,14 @@ public final class Logger {
         } catch (IOException ioe) {
             System.err.println("Logger I/O Error: " + ioe.getMessage());
         }
+    }
+    
+    /**
+     * Clean up old throttle entries to prevent memory leak
+     */
+    private static void cleanupThrottleMap(long currentTime) {
+        messageThrottleMap.entrySet().removeIf(entry -> 
+            (currentTime - entry.getValue()) > (THROTTLE_INTERVAL_MS * 10));
     }
 
     // ------------------------------------------------------------------
