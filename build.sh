@@ -22,7 +22,7 @@ mkdir -p "$BUILD_DIR"
 
 # Compile sources
 echo "Compiling Java files..."
-"$JAVA_HOME/bin/javac" -cp "$MWAVE_SDK_JAR" -d "$BUILD_DIR" $(find "$SRC_DIR" -name "*.java") || { echo "Compilation failed"; exit 1; }
+"$JAVA_HOME/bin/javac" -cp "$MWAVE_SDK_JAR" -d "$BUILD_DIR" -nowarn $(find "$SRC_DIR" -name "*.java") || { echo "Compilation failed"; exit 1; }
 
 echo "Compilation successful."
 
