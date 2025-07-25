@@ -17,8 +17,8 @@ public final class ComputationCache {
     // Cache for pip multiplier calculations
     private static final Map<String, Double> pipMultiplierCache = new ConcurrentHashMap<>();
     
-    // Cache size limits
-    private static final int MAX_CACHE_SIZE = 50;
+    // Cache size limits - increased for better hit ratios
+    private static final int MAX_CACHE_SIZE = 200;
     
     private ComputationCache() {}
     
