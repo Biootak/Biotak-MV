@@ -3,6 +3,9 @@ package com.biotak;
 import com.biotak.enums.THStartPointType;
 import com.biotak.enums.PanelPosition;
 import com.biotak.util.THCalculator;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import com.biotak.util.TimeframeUtil;
 import com.biotak.util.Logger;
 import com.biotak.util.Constants;
@@ -49,6 +52,10 @@ import com.biotak.ui.LevelDrawer;
     requiresBarUpdates = true
 )
 public class BiotakTrigger extends Study {
+    // --- Timer for bid logging when market is inactive ---
+    private static final long BID_LOG_INTERVAL_SEC = 10;
+    private ScheduledExecutorService bidLogger;
+    private volatile DataSeries lastSeriesRef;
 
     public static final String S_PANEL_MINIMIZED = "panelMinimized";
     public static final String S_CUSTOM_PRICE   = "customPrice"; // stores user-defined custom price
@@ -993,6 +1000,8 @@ public class BiotakTrigger extends Study {
     @Override
     public void onBarUpdate(DataContext ctx) {
         Logger.debug("BiotakTrigger: onBarUpdate called");
+        // Keep latest DataSeries reference for timer task
+        this.lastSeriesRef = ctx.getDataSeries();
         // Call calculate on the latest bar index for live rendering
         int lastIdx = ctx.getDataSeries().size() - 1;
         calculate(lastIdx, ctx);
@@ -1023,7 +1032,8 @@ public class BiotakTrigger extends Study {
         boolean showRuler = getSettings().getBoolean(S_SHOW_RULER, false);
         infoPanel.setRulerActive(showRuler);
         // Calculate fractal TH values for hierarchy display
-        double basePrice = series.getClose(series.size() - 2);
+        // Use current bid price instead of previous-close to base TH calculations
+            double basePrice = series.getBidClose(series.size() - 1);
         // Pattern timeframe (one level down)
         BarSize patternBarSize = TimeframeUtil.getPatternBarSize(barSize);
         double patternTFPercent = TimeframeUtil.getTimeframePercentage(patternBarSize);
@@ -1040,6 +1050,8 @@ public class BiotakTrigger extends Study {
         BarSize higherPatternBarSize = TimeframeUtil.getPatternBarSize(structureBarSize);
         double higherPatternPercent = TimeframeUtil.getTimeframePercentage(higherPatternBarSize);
         double higherPatternTH = THCalculator.calculateTHPoints(instrument, basePrice, higherPatternPercent) * instrument.getTickSize();
+            // Log live bid price and calculated TH steps for verification
+            Logger.debug(String.format("LiveBid=%.5f | PatternTH=%.1f | TriggerTH=%.1f | StructureTH=%.1f | HigherPatternTH=%.1f", basePrice, patternTH, triggerTH, structureTH, higherPatternTH));
         infoPanel.setUpwardFractalInfo(FractalCalculator.formatTimeframeString(higherPatternBarSize), FractalCalculator.formatTimeframeString(structureBarSize), higherPatternTH, structureTH);
         // Set instance fields
         this.thValue = thValue;
@@ -1048,6 +1060,23 @@ public class BiotakTrigger extends Study {
         this.structureTH = structureTH;
         this.higherPatternTH = higherPatternTH;
         addFigure(this.infoPanel);
+        // ---------------------------------------------------------
+        // Start background logger to emit price even if no new ticks
+        // ---------------------------------------------------------
+        if (bidLogger == null) {
+            bidLogger = Executors.newSingleThreadScheduledExecutor();
+            bidLogger.scheduleAtFixedRate(() -> {
+                try {
+                    DataSeries dsRef = lastSeriesRef;
+                    if (dsRef != null && dsRef.size() > 0) {
+                        double bid = dsRef.getBidClose(dsRef.size() - 1);
+                        Logger.debug(String.format("[Timer] LiveBid=%.5f (no activity)", bid));
+                    }
+                } catch (Exception ignore) {
+                    // Ignore exceptions in timer thread to avoid scheduler termination
+                }
+            }, BID_LOG_INTERVAL_SEC, BID_LOG_INTERVAL_SEC, TimeUnit.SECONDS);
+        }
     }
 
     private class RulerFigure extends Figure {
@@ -1098,7 +1127,7 @@ public class BiotakTrigger extends Study {
         @Override
         public void draw(java.awt.Graphics2D gc, DrawContext ctx) {
             // Ensure logging is at INFO so that debug/info lines get captured when ruler draws
-            Logger.setLogLevel(LogLevel.INFO);
+            // Logger.setLogLevel(LogLevel.INFO); // Commented out to preserve global log level
             var path = getSettings().getPath(S_RULER_PATH);
             gc.setStroke(ctx.isSelected() ? path.getSelectedStroke() : path.getStroke());
             gc.setColor(path.getColor());
@@ -1218,11 +1247,12 @@ public class BiotakTrigger extends Study {
                          int lowMin  = TimeframeUtil.parseCompoundTimeframe(bestBelowLabel);
                          int highMin = TimeframeUtil.parseCompoundTimeframe(bestAboveLabel);
                          if (lowMin > 0 && highMin > lowMin) {
-                             double closePrice = series.getClose(series.size()-1);
+                             double closePrice = series.getBidClose(series.size()-1);
                              while (highMin - lowMin > 1) {
                                  int mid = (lowMin + highMin) / 2;
                                  double perc   = TimeframeUtil.getTimeframePercentage(mid);
                                  double thPts  = THCalculator.calculateTHPoints(series.getInstrument(), closePrice, perc) * tick;
+                                  Logger.debug(String.format("[Refine] LiveBid=%.5f perc=%.3f thPts=%.2f leg=%.1f", closePrice, perc, thPts, legPip));
                                  double mVal   = TH_TO_M_FACTOR * thPts;
                                  double mPips  = Math.round(mVal / tick * 10.0) / 10.0;
                                  if (mPips >= legPip) {
