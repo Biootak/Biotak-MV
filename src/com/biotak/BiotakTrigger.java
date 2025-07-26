@@ -132,7 +132,7 @@ public class BiotakTrigger extends Study {
     // (Leg Ruler fields removed)
 
     // Keep last DataContext for quick redraws triggered by key events
-    private DataContext lastDataContext;
+    private DrawContext lastDrawContext;
 
     public BiotakTrigger() {
         super();
@@ -336,25 +336,12 @@ public class BiotakTrigger extends Study {
 
     @Override
     public MenuDescriptor onMenu(String plotName, Point loc, DrawContext ctx) {
-        Settings settings = getSettings();
+        // Store DrawContext for SDK 7 compatibility
+        this.lastDrawContext = ctx;
+        
+        // If click is inside info panel, suppress context menu completely
+        // The minimize and ruler button functionality has been moved to onClick method
         if (infoPanel != null && infoPanel.contains(loc.x, loc.y, ctx)) {
-            if (infoPanel.isInMinimizeButton(loc.x, loc.y)) {
-                boolean newState = !settings.getBoolean(S_PANEL_MINIMIZED, false);
-                settings.setBoolean(S_PANEL_MINIMIZED, newState);
-                infoPanel.setMinimized(newState);
-                // Redraw all figures to prevent levels from disappearing
-                DataContext dc = ctx.getDataContext();
-                int lastIdx = dc.getDataSeries().size() - 1;
-                drawFigures(lastIdx, dc);
-            } else if (infoPanel.isInRulerButton(loc.x, loc.y)) {
-                boolean showRuler = settings.getBoolean(S_SHOW_RULER, false);
-                settings.setBoolean(S_SHOW_RULER, !showRuler);
-                // Redraw all figures to update ruler visibility
-                DataContext dc = ctx.getDataContext();
-                int lastIdx = dc.getDataSeries().size() - 1;
-                drawFigures(lastIdx, dc);
-            }
-            // Suppress any context menu inside panel completely
             return new MenuDescriptor(null, true);
         }
 
@@ -365,35 +352,35 @@ public class BiotakTrigger extends Study {
             DataSeries ds = ctx.getDataContext().getDataSeries();
             if (ds.size() == 0) return;
             double lastClose = ds.getClose(ds.size() - 1);
-            settings.setDouble(S_CUSTOM_PRICE, lastClose);
+            getSettings().setDouble(S_CUSTOM_PRICE, lastClose);
             lastCustomMoveTime = System.currentTimeMillis();
             drawFigures(ds.size() - 1, ctx.getDataContext());
         }));
         // ---- Ruler context toggles ----
-        boolean showRuler = settings.getBoolean(S_SHOW_RULER, false);
+        boolean showRuler = getSettings().getBoolean(S_SHOW_RULER, false);
         items.add(new MenuItem(showRuler ? "Hide Ruler" : "Show Ruler", false, () -> {
-            settings.setBoolean(S_SHOW_RULER, !showRuler);
+            getSettings().setBoolean(S_SHOW_RULER, !showRuler);
             DataSeries ds = ctx.getDataContext().getDataSeries();
             drawFigures(ds.size() - 1, ctx.getDataContext());
         }));
         
-        boolean alwaysShowRulerInfo = settings.getBoolean(S_ALWAYS_SHOW_RULER_INFO, false);
+        boolean alwaysShowRulerInfo = getSettings().getBoolean(S_ALWAYS_SHOW_RULER_INFO, false);
         items.add(new MenuItem("Always Show Ruler Info", alwaysShowRulerInfo, () -> {
-            settings.setBoolean(S_ALWAYS_SHOW_RULER_INFO, !alwaysShowRulerInfo);
+            getSettings().setBoolean(S_ALWAYS_SHOW_RULER_INFO, !alwaysShowRulerInfo);
             DataSeries ds = ctx.getDataContext().getDataSeries();
             drawFigures(ds.size() - 1, ctx.getDataContext());
         }));
 
-        boolean extLeft = settings.getBoolean(S_RULER_EXT_LEFT, false);
+        boolean extLeft = getSettings().getBoolean(S_RULER_EXT_LEFT, false);
         items.add(new MenuItem("Extend Left", extLeft, () -> {
-            settings.setBoolean(S_RULER_EXT_LEFT, !extLeft);
+            getSettings().setBoolean(S_RULER_EXT_LEFT, !extLeft);
             DataSeries ds = ctx.getDataContext().getDataSeries();
             drawFigures(ds.size() - 1, ctx.getDataContext());
         }));
 
-        boolean extRight = settings.getBoolean(S_RULER_EXT_RIGHT, false);
+        boolean extRight = getSettings().getBoolean(S_RULER_EXT_RIGHT, false);
         items.add(new MenuItem("Extend Right", extRight, () -> {
-            settings.setBoolean(S_RULER_EXT_RIGHT, !extRight);
+            getSettings().setBoolean(S_RULER_EXT_RIGHT, !extRight);
             DataSeries ds = ctx.getDataContext().getDataSeries();
             drawFigures(ds.size() - 1, ctx.getDataContext());
         }));
@@ -401,10 +388,63 @@ public class BiotakTrigger extends Study {
         return new MenuDescriptor(items, true);
     }
 
-    // Toggle panel on any left-click (generic mouse down) within its bounds
-    public void onMouseDown(Point loc, DrawContext ctx) {
+    /**
+     * Handle left-click events using the standard SDK onClick method
+     * This replaces the custom onMouseDown implementation
+     */
+    @Override
+    public boolean onClick(Point loc, int flags) {
         Settings settings = getSettings();
+        DrawContext ctx = getDrawContext();
+        if (ctx == null) {
+            // In SDK 7, onMouseDown might not be called before onClick
+            // So we can't rely on lastDrawContext being set
+            Logger.info("BiotakTrigger: onClick called but no DrawContext available");
+            
+            // Even without DrawContext, we can still handle panel button clicks
+            // by checking if the click is within the button areas
+            if (infoPanel != null) {
+                // Check if click is on minimize button
+                if (infoPanel.isInMinimizeButton(loc.x, loc.y)) {
+                    boolean newState = !settings.getBoolean(S_PANEL_MINIMIZED, false);
+                    settings.setBoolean(S_PANEL_MINIMIZED, newState);
+                    infoPanel.setMinimized(newState);
+                    Logger.info("BiotakTrigger: Minimize button clicked, new state: " + newState);
+                    return false; // prevent default behavior
+                }
+                // Check if click is on ruler button
+                else if (infoPanel.isInRulerButton(loc.x, loc.y)) {
+                    boolean showRuler = settings.getBoolean(S_SHOW_RULER, false);
+                    settings.setBoolean(S_SHOW_RULER, !showRuler);
+                    Logger.info("BiotakTrigger: Ruler button clicked, new state: " + !showRuler);
+                    return false; // prevent default behavior
+                }
+            }
+            return true; // no context available for other actions
+        }
+        
         if (infoPanel != null && infoPanel.contains(loc.x, loc.y, ctx)) {
+            // Check if click is on minimize button
+            if (infoPanel.isInMinimizeButton(loc.x, loc.y)) {
+                boolean newState = !settings.getBoolean(S_PANEL_MINIMIZED, false);
+                settings.setBoolean(S_PANEL_MINIMIZED, newState);
+                infoPanel.setMinimized(newState);
+                // Redraw all figures to prevent levels from disappearing
+                DataContext dc = ctx.getDataContext();
+                int lastIdx = dc.getDataSeries().size() - 1;
+                drawFigures(lastIdx, dc);
+                return false; // prevent default behavior
+            }
+            // Check if click is on ruler button
+            else if (infoPanel.isInRulerButton(loc.x, loc.y)) {
+                boolean showRuler = settings.getBoolean(S_SHOW_RULER, false);
+                settings.setBoolean(S_SHOW_RULER, !showRuler);
+                // Redraw all figures to update ruler visibility
+                DataContext dc = ctx.getDataContext();
+                int lastIdx = dc.getDataSeries().size() - 1;
+                drawFigures(lastIdx, dc);
+                return false; // prevent default behavior
+            }
             // Detect double-click inside panel to reset Custom Price quickly
             long nowClick = System.currentTimeMillis();
             if (nowClick - lastClickTime < 350) {
@@ -417,18 +457,35 @@ public class BiotakTrigger extends Study {
                 }
             }
             lastClickTime = nowClick;
-            boolean newState = !settings.getBoolean(S_PANEL_MINIMIZED, false);
-            settings.setBoolean(S_PANEL_MINIMIZED, newState);
-            infoPanel.setMinimized(newState);
-            DataContext dc = ctx.getDataContext();
-            int lastIdx = dc.getDataSeries().size() - 1;
-            drawFigures(lastIdx, dc);
-            return; // suppress other handling when clicking panel
+            return false; // prevent default behavior when clicking panel
         }
+        return true; // allow default behavior for clicks outside panel
+    }
+    
+    // Keep old method for backward compatibility but make it call onClick
+    public void onMouseDown(Point loc, DrawContext ctx) {
+        // Store the DrawContext for use in onClick method
+        this.lastDrawContext = ctx;
+        onClick(loc, 0); // Call the standard SDK method with no modifier flags
+    }
+    
+    /**
+     * Get the current DrawContext from the chart
+     * This is needed for SDK 7 compatibility
+     */
+    private DrawContext getDrawContext() {
+        // If lastDrawContext is already set, use it
+        if (lastDrawContext != null) return lastDrawContext;
+        
+        // In SDK 7, we can't directly get DrawContext without it being passed to us
+        // So we have to return null and handle this case in onClick
+        return null;
     }
 
     @Override
     public void calculate(int index, DataContext ctx) {
+        // We don't store DrawContext here anymore, it will be stored in onMouseDown
+        
         // Sync logger level once per bar zero
         if (index == 0) {
             Logger.LogLevel lvl = com.biotak.util.EnumUtil.safeEnum(Logger.LogLevel.class,
@@ -850,6 +907,9 @@ public class BiotakTrigger extends Study {
     @Override
     public void onEndResize(ResizePoint rp, DrawContext ctx) {
         super.onEndResize(rp, ctx);
+        // Store DrawContext for SDK 7 compatibility
+        this.lastDrawContext = ctx;
+        
         if (rp == rulerStartResize) {
             getSettings().setString(S_RULER_START, rp.getValue() + "|" + rp.getTime());
         } else if (rp == rulerEndResize) {
@@ -866,6 +926,9 @@ public class BiotakTrigger extends Study {
     @Override
     public void onResize(ResizePoint rp, DrawContext ctx) {
         super.onResize(rp, ctx);
+        // Store DrawContext for SDK 7 compatibility
+        this.lastDrawContext = ctx;
+        
         if (rp == rulerStartResize || rp == rulerEndResize) {
             rulerFigure.layout(ctx);
         }
@@ -1349,10 +1412,13 @@ public class BiotakTrigger extends Study {
             boolean show = getSettings().getBoolean(S_SHOW_RULER, false);
             getSettings().setBoolean(S_SHOW_RULER, !show);
             Logger.info("BiotakTrigger: Ruler now " + (!show ? "ON" : "OFF"));
-            if (lastDataContext != null) {
-                DataSeries ds = lastDataContext.getDataSeries();
-                if (ds != null && ds.size() > 0) {
-                    drawFigures(ds.size() - 1, lastDataContext);
+            if (lastDrawContext != null) {
+                DataContext dataCtx = lastDrawContext.getDataContext();
+                if (dataCtx != null) {
+                    DataSeries ds = dataCtx.getDataSeries();
+                    if (ds != null && ds.size() > 0) {
+                        drawFigures(ds.size() - 1, dataCtx);
+                    }
                 }
             }
             e.consume(); // prevent further propagation if supported
