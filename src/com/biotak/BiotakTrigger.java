@@ -3,9 +3,6 @@ package com.biotak;
 import com.biotak.enums.THStartPointType;
 import com.biotak.enums.PanelPosition;
 import com.biotak.util.THCalculator;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import com.biotak.util.TimeframeUtil;
 import com.biotak.util.Logger;
 import com.biotak.util.Constants;
@@ -52,10 +49,6 @@ import com.biotak.ui.LevelDrawer;
     requiresBarUpdates = true
 )
 public class BiotakTrigger extends Study {
-    // --- Timer for bid logging when market is inactive ---
-    private static final long BID_LOG_INTERVAL_SEC = 10;
-    private ScheduledExecutorService bidLogger;
-    private volatile DataSeries lastSeriesRef;
 
     public static final String S_PANEL_MINIMIZED = "panelMinimized";
     public static final String S_CUSTOM_PRICE   = "customPrice"; // stores user-defined custom price
@@ -1000,8 +993,6 @@ public class BiotakTrigger extends Study {
     @Override
     public void onBarUpdate(DataContext ctx) {
         Logger.debug("BiotakTrigger: onBarUpdate called");
-        // Keep latest DataSeries reference for timer task
-        this.lastSeriesRef = ctx.getDataSeries();
         // Call calculate on the latest bar index for live rendering
         int lastIdx = ctx.getDataSeries().size() - 1;
         calculate(lastIdx, ctx);
@@ -1060,23 +1051,6 @@ public class BiotakTrigger extends Study {
         this.structureTH = structureTH;
         this.higherPatternTH = higherPatternTH;
         addFigure(this.infoPanel);
-        // ---------------------------------------------------------
-        // Start background logger to emit price even if no new ticks
-        // ---------------------------------------------------------
-        if (bidLogger == null) {
-            bidLogger = Executors.newSingleThreadScheduledExecutor();
-            bidLogger.scheduleAtFixedRate(() -> {
-                try {
-                    DataSeries dsRef = lastSeriesRef;
-                    if (dsRef != null && dsRef.size() > 0) {
-                        double bid = dsRef.getBidClose(dsRef.size() - 1);
-                        Logger.debug(String.format("[Timer] LiveBid=%.5f (no activity)", bid));
-                    }
-                } catch (Exception ignore) {
-                    // Ignore exceptions in timer thread to avoid scheduler termination
-                }
-            }, BID_LOG_INTERVAL_SEC, BID_LOG_INTERVAL_SEC, TimeUnit.SECONDS);
-        }
     }
 
     private class RulerFigure extends Figure {
@@ -1127,7 +1101,7 @@ public class BiotakTrigger extends Study {
         @Override
         public void draw(java.awt.Graphics2D gc, DrawContext ctx) {
             // Ensure logging is at INFO so that debug/info lines get captured when ruler draws
-            // Logger.setLogLevel(LogLevel.INFO); // Commented out to preserve global log level
+            Logger.setLogLevel(LogLevel.INFO);
             var path = getSettings().getPath(S_RULER_PATH);
             gc.setStroke(ctx.isSelected() ? path.getSelectedStroke() : path.getStroke());
             gc.setColor(path.getColor());
