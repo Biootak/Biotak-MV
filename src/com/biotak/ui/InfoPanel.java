@@ -50,6 +50,7 @@ public class InfoPanel extends Figure {
     private boolean isMinimized;
     private Rectangle panelBounds;
     private Rectangle minimizeButtonRect; // Stores bounds of minimize/restore button
+    private Rectangle rulerButtonRect; // Stores bounds of ruler toggle button
     // Added constant to control vertical padding after separator lines inside the panel
     private static final int SEPARATOR_PADDING = 25; // was previously 15 – gives text more breathing room
     
@@ -197,6 +198,16 @@ public class InfoPanel extends Figure {
         } else {
             gc.drawLine(btnX + 3, btnY + btnSize/2, btnX + btnSize - 3, btnY + btnSize/2);
         }
+        
+        // Draw ruler toggle button (to the left of minimize button)
+        int rulerBtnX = btnX - btnSize - btnPadding;
+        int rulerBtnY = btnY;
+        rulerButtonRect = new Rectangle(rulerBtnX, rulerBtnY, btnSize, btnSize);
+        gc.setColor(Color.DARK_GRAY);
+        gc.fillRect(rulerBtnX, rulerBtnY, btnSize, btnSize);
+        gc.setColor(Color.WHITE);
+        // Draw 'R' for Ruler
+        gc.drawString("R", rulerBtnX + 6, rulerBtnY + 15);
 
         // Draw title (centered)
         gc.setFont(titleFont);
@@ -222,6 +233,10 @@ public class InfoPanel extends Figure {
 
     public boolean isInMinimizeButton(double x, double y) {
         return minimizeButtonRect != null && minimizeButtonRect.contains(x, y);
+    }
+    
+    public boolean isInRulerButton(double x, double y) {
+        return rulerButtonRect != null && rulerButtonRect.contains(x, y);
     }
     
     /**
@@ -504,4 +519,4 @@ public class InfoPanel extends Figure {
     public boolean contains(double x, double y, DrawContext ctx) { 
         return panelBounds != null && panelBounds.contains(x, y);
     }
-} 
+}

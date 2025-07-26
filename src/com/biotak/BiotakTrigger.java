@@ -64,6 +64,7 @@ public class BiotakTrigger extends Study {
     // Add constants for Leg Ruler
     // (Leg Ruler constants removed)
     public static final String S_SHOW_RULER = "showRuler";
+    public static final String S_ALWAYS_SHOW_RULER_INFO = "alwaysShowRulerInfo";
     public static final String S_RULER_PATH = "rulerPath";
     public static final String S_RULER_TEXT_COLOR = "rulerTextColor";
     public static final String S_RULER_BG_COLOR   = "rulerBgColor";
@@ -312,6 +313,7 @@ public class BiotakTrigger extends Study {
         var tabR = sd.addTab("Ruler");
         var grpR = tabR.addGroup("Ruler Settings");
         grpR.addRow(new BooleanDescriptor(S_SHOW_RULER, "Show Ruler", false));
+        grpR.addRow(new BooleanDescriptor(S_ALWAYS_SHOW_RULER_INFO, "Always Show Ruler Info", false));
         grpR.addRow(new PathDescriptor(S_RULER_PATH, "Ruler Line Path", X11Colors.GREEN, 1.0f, null, true, false, false));
         grpR.addRow(new BooleanDescriptor(S_RULER_EXT_LEFT, "Extend Left", false));
         grpR.addRow(new BooleanDescriptor(S_RULER_EXT_RIGHT, "Extend Right", false));
@@ -344,6 +346,13 @@ public class BiotakTrigger extends Study {
                 DataContext dc = ctx.getDataContext();
                 int lastIdx = dc.getDataSeries().size() - 1;
                 drawFigures(lastIdx, dc);
+            } else if (infoPanel.isInRulerButton(loc.x, loc.y)) {
+                boolean showRuler = settings.getBoolean(S_SHOW_RULER, false);
+                settings.setBoolean(S_SHOW_RULER, !showRuler);
+                // Redraw all figures to update ruler visibility
+                DataContext dc = ctx.getDataContext();
+                int lastIdx = dc.getDataSeries().size() - 1;
+                drawFigures(lastIdx, dc);
             }
             // Suppress any context menu inside panel completely
             return new MenuDescriptor(null, true);
@@ -364,6 +373,13 @@ public class BiotakTrigger extends Study {
         boolean showRuler = settings.getBoolean(S_SHOW_RULER, false);
         items.add(new MenuItem(showRuler ? "Hide Ruler" : "Show Ruler", false, () -> {
             settings.setBoolean(S_SHOW_RULER, !showRuler);
+            DataSeries ds = ctx.getDataContext().getDataSeries();
+            drawFigures(ds.size() - 1, ctx.getDataContext());
+        }));
+        
+        boolean alwaysShowRulerInfo = settings.getBoolean(S_ALWAYS_SHOW_RULER_INFO, false);
+        items.add(new MenuItem("Always Show Ruler Info", alwaysShowRulerInfo, () -> {
+            settings.setBoolean(S_ALWAYS_SHOW_RULER_INFO, !alwaysShowRulerInfo);
             DataSeries ds = ctx.getDataContext().getDataSeries();
             drawFigures(ds.size() - 1, ctx.getDataContext());
         }));
@@ -1257,52 +1273,58 @@ public class BiotakTrigger extends Study {
                      atrStr2
                  };
 
-                // Calculate max width and total height
-                java.awt.font.FontRenderContext frc = gc.getFontRenderContext();
-                double maxWidth = 0;
-                double lineHeight = gc.getFont().getLineMetrics("A", frc).getHeight();
-                for (String ln : lines) {
-                    double w = gc.getFont().getStringBounds(ln, frc).getWidth();
-                    if (w > maxWidth) maxWidth = w;
-                }
-                int padding = 5;
-                int boxWidth = (int) maxWidth + 2 * padding;
-                int boxHeight = (int) (lineHeight * lines.length) + 2 * padding;
+                // Only show ruler info if ruler is selected or "Always Show Ruler Info" is enabled
+                boolean showInfo = ctx.isSelected() || getSettings().getBoolean(S_ALWAYS_SHOW_RULER_INFO, false);
+                
+                if (showInfo) {
+                    // Calculate max width and total height
+                    java.awt.font.FontRenderContext frc = gc.getFontRenderContext();
+                    double maxWidth = 0;
+                    double lineHeight = gc.getFont().getLineMetrics("A", frc).getHeight();
+                    for (String ln : lines) {
+                        double w = gc.getFont().getStringBounds(ln, frc).getWidth();
+                        if (w > maxWidth) maxWidth = w;
+                    }
+                    int padding = 5;
+                    int boxWidth = (int) maxWidth + 2 * padding;
+                    int boxHeight = (int) (lineHeight * lines.length) + 2 * padding;
 
-                int boxX = (int) (midX - boxWidth / 2);
-                // Position box touching the line at midpoint
-                int boxY;
-                if (pixelDY > 0) { // Descending: box above, bottom touches line
-                    boxY = (int) midY - boxHeight;
-                } else { // Ascending: box below, top touches line
-                    boxY = (int) midY;
-                }
+                    int boxX = (int) (midX - boxWidth / 2);
+                    // Position box touching the line at midpoint
+                    int boxY;
+                    if (pixelDY > 0) { // Descending: box above, bottom touches line
+                        boxY = (int) midY - boxHeight;
+                    } else { // Ascending: box below, top touches line
+                        boxY = (int) midY;
+                    }
 
-                // Draw background box using user-selected color (with transparency)
-                java.awt.Color baseBg = getSettings().getColor(S_RULER_BG_COLOR);
-                if (baseBg == null) baseBg = java.awt.Color.WHITE;
-                java.awt.Color bgCol = new java.awt.Color(baseBg.getRed(), baseBg.getGreen(), baseBg.getBlue(), 200);
-                gc.setColor(bgCol);
-                gc.fillRoundRect(boxX, boxY, boxWidth, boxHeight, 8, 8);
+                    // Draw background box using user-selected color (with transparency)
+                    java.awt.Color baseBg = getSettings().getColor(S_RULER_BG_COLOR);
+                    if (baseBg == null) baseBg = java.awt.Color.WHITE;
+                    java.awt.Color bgCol = new java.awt.Color(baseBg.getRed(), baseBg.getGreen(), baseBg.getBlue(), 200);
+                    gc.setColor(bgCol);
+                    gc.fillRoundRect(boxX, boxY, boxWidth, boxHeight, 8, 8);
 
-                // Optional: draw border using user-selected color
-                java.awt.Color borderCol = getSettings().getColor(S_RULER_BORDER_COLOR);
-                if (borderCol == null) borderCol = java.awt.Color.GRAY;
-                gc.setColor(borderCol);
-                gc.drawRoundRect(boxX, boxY, boxWidth, boxHeight, 8, 8);
+                    // Optional: draw border using user-selected color
+                    java.awt.Color borderCol = getSettings().getColor(S_RULER_BORDER_COLOR);
+                    if (borderCol == null) borderCol = java.awt.Color.GRAY;
+                    gc.setColor(borderCol);
+                    gc.drawRoundRect(boxX, boxY, boxWidth, boxHeight, 8, 8);
 
-                java.awt.Color txtCol = getSettings().getColor(S_RULER_TEXT_COLOR);
-                if (txtCol == null) txtCol = java.awt.Color.BLACK;
-                gc.setColor(txtCol);
-                gc.setFont(getSettings().getFont(S_FONT).getFont()); // Use existing font setting
-                // Draw each line centered
-                java.awt.font.LineMetrics lm = gc.getFont().getLineMetrics("A", frc);
-                int y = boxY + (int) lm.getAscent() + padding;
-                for (String ln : lines) {
-                    java.awt.geom.Rectangle2D bounds = gc.getFont().getStringBounds(ln, frc);
-                    int x = boxX + (boxWidth - (int) bounds.getWidth()) / 2;
-                    gc.drawString(ln, x, y);
-                    y += lineHeight;
+                    java.awt.Color txtCol = getSettings().getColor(S_RULER_TEXT_COLOR);
+                    if (txtCol == null) txtCol = java.awt.Color.BLACK;
+                    gc.setColor(txtCol);
+                    gc.setFont(getSettings().getFont(S_FONT).getFont()); // Use existing font setting
+                    // Draw each line centered
+                    java.awt.font.LineMetrics lm = gc.getFont().getLineMetrics("A", frc);
+                    int y = boxY + (int) lm.getAscent() + padding;
+                    
+                    for (String ln : lines) {
+                        java.awt.geom.Rectangle2D bounds = gc.getFont().getStringBounds(ln, frc);
+                        int x = boxX + (boxWidth - (int) bounds.getWidth()) / 2;
+                        gc.drawString(ln, x, y);
+                        y += lineHeight;
+                    }
                 }
             }
         }
@@ -1336,4 +1358,4 @@ public class BiotakTrigger extends Study {
             e.consume(); // prevent further propagation if supported
         }
     }
-} 
+}
