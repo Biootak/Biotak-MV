@@ -69,6 +69,7 @@ public class BiotakTrigger extends Study {
     public static final String S_RULER_TEXT_COLOR = "rulerTextColor";
     public static final String S_RULER_BG_COLOR   = "rulerBgColor";
     public static final String S_RULER_BORDER_COLOR = "rulerBorderColor";
+    public static final String S_RULER_FONT = "rulerFont";
     public static final String S_LOG_LEVEL = "logLevel";
     public static final String S_RULER_EXT_RIGHT = "rulerExtRight";
     public static final String S_RULER_EXT_LEFT = "rulerExtLeft";
@@ -266,6 +267,9 @@ public class BiotakTrigger extends Study {
         grp = tab.addGroup("Display Options");
         grp.addRow(new BooleanDescriptor(S_SHOW_MIDPOINT, "Show Midpoint Line", true));
         grp.addRow(new BooleanDescriptor(Constants.S_SHOW_LEVEL_LABELS, "Show Level Labels", true));
+        
+        // Add ruler font setting
+        grp.addRow(new FontDescriptor(S_RULER_FONT, "Ruler Info Font", new Font("Arial", Font.PLAIN, 11)));
         
         // -----------------  NEW SS/LS STEP OPTIONS -----------------
         tab = sd.addTab("Step Mode");
@@ -1396,21 +1400,25 @@ public class BiotakTrigger extends Study {
 
                     // Draw background box using user-selected color (with transparency)
                     java.awt.Color baseBg = getSettings().getColor(S_RULER_BG_COLOR);
-                    if (baseBg == null) baseBg = java.awt.Color.WHITE;
+                    if (baseBg == null) baseBg = new java.awt.Color(160, 160, 160);
                     java.awt.Color bgCol = new java.awt.Color(baseBg.getRed(), baseBg.getGreen(), baseBg.getBlue(), 200);
                     gc.setColor(bgCol);
                     gc.fillRoundRect(boxX, boxY, boxWidth, boxHeight, 8, 8);
 
                     // Optional: draw border using user-selected color
                     java.awt.Color borderCol = getSettings().getColor(S_RULER_BORDER_COLOR);
-                    if (borderCol == null) borderCol = java.awt.Color.GRAY;
+                    if (borderCol == null) borderCol = new java.awt.Color(100, 100, 100);
                     gc.setColor(borderCol);
                     gc.drawRoundRect(boxX, boxY, boxWidth, boxHeight, 8, 8);
 
                     java.awt.Color txtCol = getSettings().getColor(S_RULER_TEXT_COLOR);
-                    if (txtCol == null) txtCol = java.awt.Color.BLACK;
+                    if (txtCol == null) txtCol = java.awt.Color.WHITE;
                     gc.setColor(txtCol);
-                    gc.setFont(getSettings().getFont(S_FONT).getFont()); // Use existing font setting
+                    
+                    // Use ruler font setting if available, otherwise use default font
+                    FontInfo rulerFontInfo = getSettings().getFont(S_RULER_FONT);
+                    Font rulerFont = rulerFontInfo != null ? rulerFontInfo.getFont() : getSettings().getFont(S_FONT).getFont();
+                    gc.setFont(rulerFont);
                     // Draw each line centered
                     java.awt.font.LineMetrics lm = gc.getFont().getLineMetrics("A", frc);
                     int y = boxY + (int) lm.getAscent() + padding;

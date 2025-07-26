@@ -51,6 +51,7 @@ public class InfoPanel extends Figure {
     private Rectangle panelBounds;
     private Rectangle minimizeButtonRect; // Stores bounds of minimize/restore button
     private Rectangle rulerButtonRect; // Stores bounds of ruler toggle button
+    private boolean rulerActive = false; // Tracks if ruler is active
     // Added constant to control vertical padding after separator lines inside the panel
     private static final int SEPARATOR_PADDING = 25; // was previously 15 – gives text more breathing room
     
@@ -178,7 +179,7 @@ public class InfoPanel extends Figure {
         this.panelBounds = new Rectangle(x, y, panelWidth, panelHeight);
 
         // Draw panel background (with transparency)
-        Color panelBg = new Color(30, 30, 30, transparency);
+        Color panelBg = new Color(160, 160, 160, transparency);
         gc.setColor(panelBg);
         gc.fillRoundRect(x, y, panelWidth, panelHeight, 8, 8);
         // Draw minimize/restore button (top-right corner)
@@ -188,7 +189,7 @@ public class InfoPanel extends Figure {
         int btnY = y + btnPadding;
         minimizeButtonRect = new Rectangle(btnX, btnY, btnSize, btnSize);
         // Button background hover state not tracked; draw simple grey box
-        gc.setColor(Color.DARK_GRAY);
+        gc.setColor(new Color(100, 100, 100));
         gc.fillRect(btnX, btnY, btnSize, btnSize);
         gc.setColor(Color.WHITE);
         // Draw symbol: '-' if not minimized, '+' if minimized
@@ -203,7 +204,7 @@ public class InfoPanel extends Figure {
         int rulerBtnX = btnX - btnSize - btnPadding;
         int rulerBtnY = btnY;
         rulerButtonRect = new Rectangle(rulerBtnX, rulerBtnY, btnSize, btnSize);
-        gc.setColor(Color.DARK_GRAY);
+        gc.setColor(new Color(100, 100, 100));
         gc.fillRect(rulerBtnX, rulerBtnY, btnSize, btnSize);
         gc.setColor(Color.WHITE);
         // Draw 'R' for Ruler
@@ -211,7 +212,7 @@ public class InfoPanel extends Figure {
 
         // Draw title (centered)
         gc.setFont(titleFont);
-        gc.setColor(Color.WHITE);
+        gc.setColor(Color.BLACK);
         
         int currentY = y + titleHeight + 5;
         gc.drawString(timeframe, x + (panelWidth - titleWidth) / 2, currentY);
@@ -372,7 +373,7 @@ public class InfoPanel extends Figure {
         int currentY = y;
         
         // Separator line
-        gc.setColor(new Color(60, 60, 70, 200));
+        gc.setColor(new Color(80, 80, 80, 200));
         gc.setStroke(new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, new float[]{3.0f}, 0.0f));
         gc.drawLine(x + 10, currentY, x + panelWidth - 10, currentY);
         currentY += SEPARATOR_PADDING; // Increased padding after separator line
@@ -398,8 +399,8 @@ public class InfoPanel extends Figure {
                 gc.setColor(new Color(120, 100, 0, 180)); // Dark gold background
                 gc.fillRoundRect(textX - padding, currentY - fm.getAscent(), lineWidth + (padding * 2), fm.getHeight(), 8, 8);
                 
-                // Draw the text with a bright yellow color
-                gc.setColor(new Color(255, 255, 0)); // Bright yellow for maximum visibility
+                // Draw the text with a dark color for better visibility on light background
+                gc.setColor(new Color(0, 0, 0)); // Black text for maximum visibility
                 gc.drawString(line, textX, currentY);
             } else {
                 // Check if the line contains an arrow symbol
@@ -412,16 +413,16 @@ public class InfoPanel extends Figure {
                     int beforeWidth = fm.stringWidth(beforeArrow);
                     int arrowWidth = fm.stringWidth(arrow);
                     
-                    // Draw the text before the arrow in white
-                    gc.setColor(Color.WHITE);
+                    // Draw the text before the arrow in black
+                    gc.setColor(Color.BLACK);
                     gc.drawString(beforeArrow, textX, currentY);
                     
-                    // Draw the arrow in light green
-                    gc.setColor(new Color(144, 238, 144)); // Light green
+                    // Draw the arrow in dark green
+                    gc.setColor(new Color(0, 100, 0)); // Dark green
                     gc.drawString(arrow, textX + beforeWidth, currentY);
                     
-                    // Draw the text after the arrow in white
-                    gc.setColor(Color.WHITE);
+                    // Draw the text after the arrow in black
+                    gc.setColor(Color.BLACK);
                     gc.drawString(afterArrow, textX + beforeWidth + arrowWidth, currentY);
                 } 
                 else if (line.contains("▼")) {
@@ -433,21 +434,21 @@ public class InfoPanel extends Figure {
                     int beforeWidth = fm.stringWidth(beforeArrow);
                     int arrowWidth = fm.stringWidth(arrow);
                     
-                    // Draw the text before the arrow in white
-                    gc.setColor(Color.WHITE);
+                    // Draw the text before the arrow in black
+                    gc.setColor(Color.BLACK);
                     gc.drawString(beforeArrow, textX, currentY);
                     
-                    // Draw the arrow in red
-                    gc.setColor(new Color(255, 99, 71)); // Tomato red
+                    // Draw the arrow in dark red
+                    gc.setColor(new Color(139, 0, 0)); // Dark red
                     gc.drawString(arrow, textX + beforeWidth, currentY);
                     
-                    // Draw the text after the arrow in white
-                    gc.setColor(Color.WHITE);
+                    // Draw the text after the arrow in black
+                    gc.setColor(Color.BLACK);
                     gc.drawString(afterArrow, textX + beforeWidth + arrowWidth, currentY);
                 }
                 else {
-                    // No arrows, draw the entire line in white
-                    gc.setColor(Color.WHITE);
+                    // No arrows, draw the entire line in black
+                    gc.setColor(Color.BLACK);
                     gc.drawString(line, textX, currentY);
                 }
             }
@@ -478,13 +479,13 @@ public class InfoPanel extends Figure {
         int currentY = y;
         
         // Separator line
-        gc.setColor(new Color(60, 60, 70, 200));
+        gc.setColor(new Color(80, 80, 80, 200));
         gc.setStroke(new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, new float[]{3.0f}, 0.0f));
         gc.drawLine(x + 10, currentY, x + panelWidth - 10, currentY);
         currentY += SEPARATOR_PADDING; // Increased padding after separator line
         
         // Section Content
-        gc.setColor(Color.WHITE);
+        gc.setColor(Color.BLACK);
         gc.setFont(font);
         if (isTwoColumn) {
             int i = 0;

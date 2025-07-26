@@ -37,11 +37,11 @@ public class PriceLabel extends Figure {
         Rectangle gb = ctx.getBounds();
         int x = (int) (gb.getX() + gb.getWidth()/2 - textW/2); // center of chart
         int y = (int) (p.getY() - textH/2); // exactly on the line
-        gc.setColor(new Color(0, 0, 0, 200)); // dark translucent background
+        gc.setColor(new Color(160, 160, 160, 200)); // light gray translucent background
         gc.fillRoundRect(x - padding, y - textH, textW + 2 * padding, textH + padding, 10, 10);
-        gc.setColor(new Color(255, 215, 0)); // gold border
+        gc.setColor(new Color(100, 100, 100)); // dark gray border
         gc.drawRoundRect(x - padding, y - textH, textW + 2 * padding, textH + padding, 10, 10);
-        gc.setColor(Color.WHITE);
+        gc.setColor(Color.BLACK); // black text for better readability
         gc.drawString(text, x, y);
     }
 
@@ -49,4 +49,4 @@ public class PriceLabel extends Figure {
     public boolean contains(double x, double y, DrawContext ctx) {
         return false;
     }
-} 
+}

@@ -32,12 +32,12 @@ public class LevelLabel extends Figure {
         FontMetrics fm = gc.getFontMetrics();
         int textW = fm.stringWidth(text);
         int textH = fm.getAscent();
-        gc.setColor(new Color(0,0,0,180));
+        gc.setColor(new Color(160,160,160,180)); // light gray translucent background
         gc.fillRoundRect((int)p.getX()+4, (int)(p.getY()-textH/2-2), textW+6, textH+4, 8, 8);
-        gc.setColor(Color.WHITE);
+        gc.setColor(Color.BLACK); // black text for better readability
         gc.drawString(text, (int)p.getX()+7, (int)(p.getY()+textH/2-2));
     }
 
     @Override
     public boolean contains(double x, double y, DrawContext ctx) { return false; }
-} 
+}
