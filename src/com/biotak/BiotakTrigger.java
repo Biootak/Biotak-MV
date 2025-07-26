@@ -384,7 +384,40 @@ public class BiotakTrigger extends Study {
             DataSeries ds = ctx.getDataContext().getDataSeries();
             drawFigures(ds.size() - 1, ctx.getDataContext());
         }));
-        // (Reset Leg Ruler menu item removed)
+        
+        // Add Reset Ruler to Last Leg option
+        items.add(new MenuItem("Reset Ruler to Last Leg", false, () -> {
+            DataSeries series = ctx.getDataContext().getDataSeries();
+            if (series.size() < 2) return; // Need at least 2 bars
+            
+            // Set ruler end to last bar
+            int lastIdx = series.size() - 1;
+            long endTime = series.getStartTime(lastIdx);
+            double endPrice = series.getDouble(lastIdx, Enums.BarInput.MIDPOINT);
+            
+            // Set ruler start to a reasonable distance back (e.g., 40 bars)
+            int startIdx = Math.max(0, lastIdx - 40);
+            long startTime = series.getStartTime(startIdx);
+            double startPrice = series.getDouble(startIdx, Enums.BarInput.MIDPOINT);
+            
+            // Update resize points
+            rulerStartResize.setLocation(startTime, startPrice);
+            rulerEndResize.setLocation(endTime, endPrice);
+            
+            // Save settings
+            getSettings().setString(S_RULER_START, startPrice + "|" + startTime);
+            getSettings().setString(S_RULER_END, endPrice + "|" + endTime);
+            
+            // Make sure ruler is visible
+            if (!getSettings().getBoolean(S_SHOW_RULER, false)) {
+                getSettings().setBoolean(S_SHOW_RULER, true);
+            }
+            
+            // Redraw
+            rulerFigure.layout(ctx);
+            drawFigures(lastIdx, ctx.getDataContext());
+        }));
+        
         return new MenuDescriptor(items, true);
     }
 
@@ -1407,21 +1440,6 @@ public class BiotakTrigger extends Study {
     // ----------------------- KEYBOARD SHORTCUTS -----------------------
     public void onKey(java.awt.event.KeyEvent e) {
         Logger.info("BiotakTrigger: Key pressed code=" + e.getKeyCode());
-        if (e.getKeyCode() == java.awt.event.KeyEvent.VK_R) {
-            Logger.info("BiotakTrigger: Toggling ruler visibility");
-            boolean show = getSettings().getBoolean(S_SHOW_RULER, false);
-            getSettings().setBoolean(S_SHOW_RULER, !show);
-            Logger.info("BiotakTrigger: Ruler now " + (!show ? "ON" : "OFF"));
-            if (lastDrawContext != null) {
-                DataContext dataCtx = lastDrawContext.getDataContext();
-                if (dataCtx != null) {
-                    DataSeries ds = dataCtx.getDataSeries();
-                    if (ds != null && ds.size() > 0) {
-                        drawFigures(ds.size() - 1, dataCtx);
-                    }
-                }
-            }
-            e.consume(); // prevent further propagation if supported
-        }
+        // Keyboard shortcuts have been removed as requested
     }
 }
