@@ -100,6 +100,10 @@ public class InfoPanel extends Figure {
 
     public void setMinimized(boolean value) { this.isMinimized = value; }
     
+    public void setRulerActive(boolean active) {
+        this.rulerActive = active;
+    }
+    
     @Override
     public void draw(Graphics2D gc, DrawContext ctx) {
         // Save original settings
@@ -204,7 +208,12 @@ public class InfoPanel extends Figure {
         int rulerBtnX = btnX - btnSize - btnPadding;
         int rulerBtnY = btnY;
         rulerButtonRect = new Rectangle(rulerBtnX, rulerBtnY, btnSize, btnSize);
-        gc.setColor(new Color(100, 100, 100));
+        // Change button color to green if ruler is active, otherwise use dark gray
+        if (rulerActive) {
+            gc.setColor(new Color(0, 128, 0)); // Green color when ruler is active
+        } else {
+            gc.setColor(new Color(100, 100, 100)); // Dark gray when ruler is inactive
+        }
         gc.fillRect(rulerBtnX, rulerBtnY, btnSize, btnSize);
         gc.setColor(Color.WHITE);
         // Draw 'R' for Ruler

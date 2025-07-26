@@ -363,7 +363,11 @@ public class BiotakTrigger extends Study {
         // ---- Ruler context toggles ----
         boolean showRuler = getSettings().getBoolean(S_SHOW_RULER, false);
         items.add(new MenuItem(showRuler ? "Hide Ruler" : "Show Ruler", false, () -> {
-            getSettings().setBoolean(S_SHOW_RULER, !showRuler);
+            boolean newRulerState = !showRuler;
+            getSettings().setBoolean(S_SHOW_RULER, newRulerState);
+            if (infoPanel != null) {
+                infoPanel.setRulerActive(newRulerState);
+            }
             DataSeries ds = ctx.getDataContext().getDataSeries();
             drawFigures(ds.size() - 1, ctx.getDataContext());
         }));
@@ -452,8 +456,10 @@ public class BiotakTrigger extends Study {
                 // Check if click is on ruler button
                 else if (infoPanel.isInRulerButton(loc.x, loc.y)) {
                     boolean showRuler = settings.getBoolean(S_SHOW_RULER, false);
-                    settings.setBoolean(S_SHOW_RULER, !showRuler);
-                    Logger.info("BiotakTrigger: Ruler button clicked, new state: " + !showRuler);
+                    boolean newRulerState = !showRuler;
+                    settings.setBoolean(S_SHOW_RULER, newRulerState);
+                    infoPanel.setRulerActive(newRulerState);
+                    Logger.info("BiotakTrigger: Ruler button clicked, new state: " + newRulerState);
                     return false; // prevent default behavior
                 }
             }
@@ -475,7 +481,9 @@ public class BiotakTrigger extends Study {
             // Check if click is on ruler button
             else if (infoPanel.isInRulerButton(loc.x, loc.y)) {
                 boolean showRuler = settings.getBoolean(S_SHOW_RULER, false);
-                settings.setBoolean(S_SHOW_RULER, !showRuler);
+                boolean newRulerState = !showRuler;
+                settings.setBoolean(S_SHOW_RULER, newRulerState);
+                infoPanel.setRulerActive(newRulerState);
                 // Redraw all figures to update ruler visibility
                 DataContext dc = ctx.getDataContext();
                 int lastIdx = dc.getDataSeries().size() - 1;
@@ -1011,6 +1019,9 @@ public class BiotakTrigger extends Study {
         // pipMultiplier is now handled internally via UnitConverter; variable removed.
         // Create the info panel and add it as a figure (UnitConverter now handles pips)
         this.infoPanel = new InfoPanel(timeframe, thValue, instrument, contentFont, titleFont, panelPos, marginX, marginY, transparency, shortStep, longStep, atrValue, liveAtrValue, isSecondsBased, isMinimized);
+        // Set initial ruler state
+        boolean showRuler = getSettings().getBoolean(S_SHOW_RULER, false);
+        infoPanel.setRulerActive(showRuler);
         // Calculate fractal TH values for hierarchy display
         double basePrice = series.getClose(series.size() - 2);
         // Pattern timeframe (one level down)
