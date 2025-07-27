@@ -82,7 +82,7 @@ public class BiotakTrigger extends Study {
     private InfoPanel infoPanel;
     private ResizePoint customPricePoint; // draggable point for custom price
     private PriceLabel customPriceLabel; // displays the numeric value next to the custom price line
-    private Line customPriceLine; // horizontal line for custom price anchor
+    private CustomPriceLine customPriceLine; // horizontal line for custom price anchor (now draggable)
     // Label was not added due to SDK limitations; using only ResizePoint for visual feedback
     // Added caches to avoid full-series scans on each redraw
     private double cachedHigh = Double.NEGATIVE_INFINITY;
@@ -716,10 +716,15 @@ public class BiotakTrigger extends Study {
                 customPriceLabel.setData(anchorTime, savedPrice, priceText);
                 addFigure(customPriceLabel);
 
-                // Draw/update custom price horizontal line
-                PathInfo cpPath = getSettings().getPath(S_CUSTOM_PRICE_PATH);
-                customPriceLine = new Line(new Coordinate(startTime, savedPrice), new Coordinate(endTime, savedPrice), cpPath);
+                // Draw/update custom price horizontal line (now draggable)
+                customPriceLine = new CustomPriceLine(startTime, endTime, savedPrice);
                 addFigure(customPriceLine);
+                
+                // Add the invisible ResizePoint for line dragging
+                ResizePoint lineResizePoint = customPriceLine.getLineResizePoint();
+                if (lineResizePoint != null) {
+                    addFigure(lineResizePoint);
+                }
 
                 // Additional visual labeling can be explored later if needed.
             }
@@ -960,8 +965,32 @@ public class BiotakTrigger extends Study {
         } else if (rp == rulerEndResize) {
             getSettings().setString(S_RULER_END, rp.getValue() + "|" + rp.getTime());
         } else if (rp == customPricePoint) {
-            // Persist the new custom price and redraw levels based on it
-            getSettings().setDouble(S_CUSTOM_PRICE, rp.getValue());
+            // Persist the new custom price and sync the line
+            double newPrice = rp.getValue();
+            getSettings().setDouble(S_CUSTOM_PRICE, newPrice);
+            
+            // Update the custom price line position if it exists
+            if (customPriceLine != null) {
+                customPriceLine.updatePrice(newPrice);
+            }
+            
+            lastCustomMoveTime = System.currentTimeMillis();
+            drawFigures(ctx.getDataContext().getDataSeries().size() - 1, ctx.getDataContext());
+        } else if (customPriceLine != null && rp == customPriceLine.getLineResizePoint()) {
+            // User finished dragging the invisible line ResizePoint (line itself)
+            double newPrice = rp.getValue();
+            getSettings().setDouble(S_CUSTOM_PRICE, newPrice);
+            
+            // Update the custom price line position
+            if (customPriceLine != null) {
+                customPriceLine.updatePrice(newPrice);
+            }
+            
+            // Sync the visible ResizePoint position if it exists
+            if (customPricePoint != null) {
+                customPricePoint.setLocation(customPricePoint.getTime(), newPrice);
+            }
+            
             lastCustomMoveTime = System.currentTimeMillis();
             drawFigures(ctx.getDataContext().getDataSeries().size() - 1, ctx.getDataContext());
         }
@@ -978,11 +1007,35 @@ public class BiotakTrigger extends Study {
             rulerFigure.layout(ctx);
         }
         else if (rp == customPricePoint) {
-            // As the user drags the golden point, update the custom price and refresh figures for live feedback
-            getSettings().setDouble(S_CUSTOM_PRICE, rp.getValue());
+            // As the user drags the golden point, update the custom price and sync the line
+            double newPrice = rp.getValue();
+            getSettings().setDouble(S_CUSTOM_PRICE, newPrice);
+            
+            // Update the custom price line position if it exists
+            if (customPriceLine != null) {
+                customPriceLine.updatePrice(newPrice);
+            }
+            
+            drawFigures(ctx.getDataContext().getDataSeries().size() - 1, ctx.getDataContext());
+        }
+        else if (customPriceLine != null && rp == customPriceLine.getLineResizePoint()) {
+            // User is dragging the invisible line ResizePoint (dragging the line itself)
+            double newPrice = rp.getValue();
+            getSettings().setDouble(S_CUSTOM_PRICE, newPrice);
+            
+            // Update the custom price line position
+            customPriceLine.updatePrice(newPrice);
+            
+            // Sync the visible ResizePoint position if it exists
+            if (customPricePoint != null) {
+                customPricePoint.setLocation(customPricePoint.getTime(), newPrice);
+            }
+            
             drawFigures(ctx.getDataContext().getDataSeries().size() - 1, ctx.getDataContext());
         }
     }
+
+
 
     @Override
     public int getMinBars() {
@@ -1053,6 +1106,83 @@ public class BiotakTrigger extends Study {
         addFigure(this.infoPanel);
     }
 
+    // Custom draggable price line class with invisible line-wide ResizePoint
+    // Invisible resize point that responds to clicks anywhere along the line
+    private class LineResizePoint extends ResizePoint {
+        private final CustomPriceLine parentLine;
+        LineResizePoint(CustomPriceLine parentLine) {
+            super(ResizeType.VERTICAL, false); // invisible – only captures events
+            this.parentLine = parentLine;
+            setSnapToLocation(true);
+        }
+        @Override
+        public boolean contains(double x, double y, DrawContext ctx) {
+            // Delegate hit-test to the parent line so the whole line is draggable
+            return parentLine != null && parentLine.contains(x, y, ctx);
+        }
+        // Ensure nothing is drawn – keep it fully invisible
+        @Override
+        public void draw(java.awt.Graphics2D gc, DrawContext ctx) { /* no-op */ }
+    }
+
+    private class CustomPriceLine extends Figure {
+        private java.awt.geom.Line2D line;
+        private double price;
+        private long startTime, endTime;
+        private ResizePoint lineResizePoint; // Invisible ResizePoint covering the entire line
+        
+        public CustomPriceLine(long startTime, long endTime, double price) {
+            this.startTime = startTime;
+            this.endTime = endTime;
+            this.price = price;
+            
+            // Create a special invisible resize point that treats the whole line as the hit-area
+            this.lineResizePoint = new LineResizePoint(this);
+            // Initial location → midpoint of the line for better UX
+            long midTime = (startTime + endTime) / 2;
+            this.lineResizePoint.setLocation(midTime, price);
+        }
+        
+        public void updatePrice(double newPrice) {
+            this.price = newPrice;
+            if (lineResizePoint != null) {
+                lineResizePoint.setLocation(lineResizePoint.getTime(), newPrice);
+            }
+        }
+        
+        public ResizePoint getLineResizePoint() {
+            return lineResizePoint;
+        }
+        
+        @Override
+        public boolean contains(double x, double y, DrawContext ctx) {
+            return line != null && Util.distanceFromLine(x, y, line) < 6;
+        }
+        
+        @Override
+        public void layout(DrawContext ctx) {
+            var start = ctx.translate(new Coordinate(startTime, price));
+            var end = ctx.translate(new Coordinate(endTime, price));
+            line = new java.awt.geom.Line2D.Double(start, end);
+            
+            // Keep the invisible resize point roughly in the centre of the visible line
+            if (lineResizePoint != null) {
+                long midTime = (startTime + endTime) / 2;
+                lineResizePoint.setLocation(midTime, price);
+            }
+        }
+        
+        @Override
+        public void draw(java.awt.Graphics2D gc, DrawContext ctx) {
+            if (line == null) return;
+            PathInfo path = getSettings().getPath(S_CUSTOM_PRICE_PATH);
+            gc.setStroke(ctx.isSelected() ? path.getSelectedStroke() : path.getStroke());
+            gc.setColor(path.getColor());
+            gc.draw(line);
+        }
+    }
+
+    // This class is responsible for the rendering of the ruler line
     private class RulerFigure extends Figure {
         private java.awt.geom.Line2D line;
 
