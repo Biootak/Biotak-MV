@@ -719,11 +719,15 @@ public class BiotakTrigger extends Study {
                 // Draw/update custom price horizontal line (now draggable)
                 customPriceLine = new CustomPriceLine(startTime, endTime, savedPrice);
                 addFigure(customPriceLine);
+                Logger.debug("CustomPriceLine created and added at price: " + savedPrice);
                 
                 // Add the invisible ResizePoint for line dragging
                 ResizePoint lineResizePoint = customPriceLine.getLineResizePoint();
                 if (lineResizePoint != null) {
                     addFigure(lineResizePoint);
+                    Logger.debug("LineResizePoint added for line dragging");
+                } else {
+                    Logger.debug("ERROR: LineResizePoint is null!");
                 }
 
                 // Additional visual labeling can be explored later if needed.
@@ -979,20 +983,37 @@ public class BiotakTrigger extends Study {
         } else if (customPriceLine != null && rp == customPriceLine.getLineResizePoint()) {
             // User finished dragging the invisible line ResizePoint (line itself)
             double newPrice = rp.getValue();
+            long currentTime = System.currentTimeMillis();
+            
+            Logger.debug("=== LINE DRAG END EVENT START ===");
+            Logger.debug("onEndResize: LineResizePoint drag completed at time: " + currentTime);
+            Logger.debug("onEndResize: ResizePoint class: " + rp.getClass().getSimpleName());
+            Logger.debug("onEndResize: Final price value: " + newPrice);
+            Logger.debug("onEndResize: ResizePoint location: (" + rp.getTime() + ", " + rp.getValue() + ")");
+            
+            // Update settings with final price
             getSettings().setDouble(S_CUSTOM_PRICE, newPrice);
+            Logger.debug("onEndResize: Settings updated with final price: " + newPrice);
             
             // Update the custom price line position
             if (customPriceLine != null) {
                 customPriceLine.updatePrice(newPrice);
+                Logger.debug("onEndResize: CustomPriceLine.updatePrice() called with final price");
             }
             
             // Sync the visible ResizePoint position if it exists
             if (customPricePoint != null) {
                 customPricePoint.setLocation(customPricePoint.getTime(), newPrice);
+                Logger.debug("onEndResize: CustomPricePoint synchronized to final position: (" + customPricePoint.getTime() + ", " + newPrice + ")");
             }
             
-            lastCustomMoveTime = System.currentTimeMillis();
+            lastCustomMoveTime = currentTime;
+            Logger.debug("onEndResize: lastCustomMoveTime updated to: " + lastCustomMoveTime);
+            
+            // Trigger full redraw with all levels recalculation
             drawFigures(ctx.getDataContext().getDataSeries().size() - 1, ctx.getDataContext());
+            Logger.debug("onEndResize: drawFigures() called for full recalculation");
+            Logger.debug("=== LINE DRAG END EVENT END ===");
         }
     }
 
@@ -1003,12 +1024,21 @@ public class BiotakTrigger extends Study {
         // Store DrawContext for SDK 7 compatibility
         this.lastDrawContext = ctx;
         
+        Logger.debug("onResize called with ResizePoint: " + rp.getClass().getSimpleName() + " at (" + rp.getTime() + ", " + rp.getValue() + ")");
+        
         if (rp == rulerStartResize || rp == rulerEndResize) {
             rulerFigure.layout(ctx);
         }
         else if (rp == customPricePoint) {
             // As the user drags the golden point, update the custom price and sync the line
+            Logger.debug("onResize: customPricePoint drag detected, newPrice = " + rp.getValue());
             double newPrice = rp.getValue();
+            // Duplicate call filter to minimize lag
+            double lastPointPrice = getSettings().getDouble("LAST_POINT_PRICE", Double.NaN);
+            if (!Double.isNaN(lastPointPrice) && Math.abs(lastPointPrice - newPrice) < 0.1) {
+                return;
+            }
+            getSettings().setDouble("LAST_POINT_PRICE", newPrice);
             getSettings().setDouble(S_CUSTOM_PRICE, newPrice);
             
             // Update the custom price line position if it exists
@@ -1016,22 +1046,53 @@ public class BiotakTrigger extends Study {
                 customPriceLine.updatePrice(newPrice);
             }
             
-            drawFigures(ctx.getDataContext().getDataSeries().size() - 1, ctx.getDataContext());
+            // Light update during drag - full recalculation happens in onEndResize
         }
-        else if (customPriceLine != null && rp == customPriceLine.getLineResizePoint()) {
+        else if (rp instanceof LineResizePoint) {
             // User is dragging the invisible line ResizePoint (dragging the line itself)
             double newPrice = rp.getValue();
+            long currentTime = System.currentTimeMillis();
+            
+            Logger.debug("=== LINE DRAG EVENT START ===");
+            Logger.debug("onResize: LineResizePoint drag detected at time: " + currentTime);
+            Logger.debug("onResize: ResizePoint class: " + rp.getClass().getSimpleName());
+            Logger.debug("onResize: New price value: " + newPrice);
+            Logger.debug("onResize: ResizePoint location: (" + rp.getTime() + ", " + rp.getValue() + ")");
+            Logger.debug("onResize: CustomPriceLine exists: " + (customPriceLine != null));
+            Logger.debug("onResize: CustomPricePoint exists: " + (customPricePoint != null));
+            Logger.debug("onResize: LastDrawContext exists: " + (lastDrawContext != null));
+            
+            // Update settings first
             getSettings().setDouble(S_CUSTOM_PRICE, newPrice);
+            Logger.debug("onResize: Settings updated with new price: " + newPrice);
             
             // Update the custom price line position
-            customPriceLine.updatePrice(newPrice);
+            if (customPriceLine != null) {
+                customPriceLine.updatePrice(newPrice);
+                Logger.debug("onResize: CustomPriceLine.updatePrice() called");
+            }
+            
+            // Update ResizePoint location
+            rp.setLocation(rp.getTime(), newPrice);
+            Logger.debug("onResize: ResizePoint location updated to: (" + rp.getTime() + ", " + newPrice + ")");
             
             // Sync the visible ResizePoint position if it exists
             if (customPricePoint != null) {
                 customPricePoint.setLocation(customPricePoint.getTime(), newPrice);
+                Logger.debug("onResize: CustomPricePoint synchronized to: (" + customPricePoint.getTime() + ", " + newPrice + ")");
             }
             
-            drawFigures(ctx.getDataContext().getDataSeries().size() - 1, ctx.getDataContext());
+            // Force layout update for smoother dragging
+            if (lastDrawContext != null) {
+                customPriceLine.layout(lastDrawContext);
+                Logger.debug("onResize: CustomPriceLine.layout() called");
+            }
+            
+            // Note: Redraw will happen automatically through layout updates
+            Logger.debug("onResize: Layout and synchronization completed");
+            Logger.debug("=== LINE DRAG EVENT END ===");
+            
+            // Light update during drag - full recalculation happens in onEndResize
         }
     }
 
@@ -1106,25 +1167,48 @@ public class BiotakTrigger extends Study {
         addFigure(this.infoPanel);
     }
 
-    // Custom draggable price line class with invisible line-wide ResizePoint
-    // Invisible resize point that responds to clicks anywhere along the line
+    // Invisible resize point that treats the entire line as hit area
     private class LineResizePoint extends ResizePoint {
         private final CustomPriceLine parentLine;
         LineResizePoint(CustomPriceLine parentLine) {
-            super(ResizeType.VERTICAL, false); // invisible – only captures events
+            super(ResizeType.VERTICAL, true); // vertical only for horizontal price line
             this.parentLine = parentLine;
             setSnapToLocation(true);
         }
         @Override
         public boolean contains(double x, double y, DrawContext ctx) {
-            // Delegate hit-test to the parent line so the whole line is draggable
-            return parentLine != null && parentLine.contains(x, y, ctx);
+            // Delegate hit-test to the parent line so clicks anywhere on the line start the drag
+            // Use a more generous hit area for better responsiveness
+            long currentTime = System.currentTimeMillis();
+            boolean parentExists = (parentLine != null);
+            boolean result = false;
+            if (parentExists && parentLine.line != null) {
+                double distance = Util.distanceFromLine(x, y, parentLine.line);
+                result = distance < 10.0; // 10 pixel tolerance for better hit detection
+                Logger.debug("Line distance: " + distance + ", tolerance: 10.0");
+            }
+            
+            // Log all hit tests for debugging mouse interaction issues
+            Logger.debug("=== LINE HIT TEST ===");
+            Logger.debug("LineResizePoint.contains() called at time: " + currentTime);
+            Logger.debug("Hit test coordinates: (" + x + ", " + y + ")");
+            Logger.debug("Parent line exists: " + parentExists);
+            Logger.debug("Hit test result: " + result);
+            
+            if (result) {
+                Logger.debug("*** LINE HIT DETECTED *** at (" + x + ", " + y + ")");
+                Logger.debug("ResizePoint location: (" + getTime() + ", " + getValue() + ")");
+            }
+            Logger.debug("=== LINE HIT TEST END ===");
+            
+            return result;
         }
-        // Ensure nothing is drawn – keep it fully invisible
+        // Keep fully invisible – no drawing
         @Override
-        public void draw(java.awt.Graphics2D gc, DrawContext ctx) { /* no-op */ }
+        public void draw(java.awt.Graphics2D gc, DrawContext ctx) {}
     }
 
+    // Custom draggable price line class with invisible line-wide ResizePoint
     private class CustomPriceLine extends Figure {
         private java.awt.geom.Line2D line;
         private double price;
@@ -1136,18 +1220,33 @@ public class BiotakTrigger extends Study {
             this.endTime = endTime;
             this.price = price;
             
-            // Create a special invisible resize point that treats the whole line as the hit-area
+            // Create a special invisible resize point whose hit area is the whole line
             this.lineResizePoint = new LineResizePoint(this);
-            // Initial location → midpoint of the line for better UX
-            long midTime = (startTime + endTime) / 2;
-            this.lineResizePoint.setLocation(midTime, price);
+            // Position at end of line for value/time reference
+            this.lineResizePoint.setLocation(endTime, price);
         }
         
         public void updatePrice(double newPrice) {
+            long currentTime = System.currentTimeMillis();
+            double oldPrice = this.price;
+            
+            Logger.debug("=== PRICE UPDATE START ===");
+            Logger.debug("CustomPriceLine.updatePrice() called at time: " + currentTime);
+            Logger.debug("Old price: " + oldPrice);
+            Logger.debug("New price: " + newPrice);
+            Logger.debug("Price change: " + (newPrice - oldPrice));
+            Logger.debug("LineResizePoint exists: " + (lineResizePoint != null));
+            
             this.price = newPrice;
+            Logger.debug("Price field updated to: " + this.price);
+            
             if (lineResizePoint != null) {
-                lineResizePoint.setLocation(lineResizePoint.getTime(), newPrice);
+                long oldTime = lineResizePoint.getTime();
+                lineResizePoint.setLocation(oldTime, newPrice);
+                Logger.debug("LineResizePoint location updated to: (" + oldTime + ", " + newPrice + ")");
             }
+            
+            Logger.debug("=== PRICE UPDATE END ===");
         }
         
         public ResizePoint getLineResizePoint() {
@@ -1161,15 +1260,28 @@ public class BiotakTrigger extends Study {
         
         @Override
         public void layout(DrawContext ctx) {
+            long currentTime = System.currentTimeMillis();
+            
+            Logger.debug("=== LAYOUT UPDATE START ===");
+            Logger.debug("CustomPriceLine.layout() called at time: " + currentTime);
+            Logger.debug("Current price: " + price);
+            Logger.debug("Start time: " + startTime + ", End time: " + endTime);
+            
             var start = ctx.translate(new Coordinate(startTime, price));
             var end = ctx.translate(new Coordinate(endTime, price));
-            line = new java.awt.geom.Line2D.Double(start, end);
+            Logger.debug("Translated start point: (" + start.getX() + ", " + start.getY() + ")");
+            Logger.debug("Translated end point: (" + end.getX() + ", " + end.getY() + ")");
             
-            // Keep the invisible resize point roughly in the centre of the visible line
+            line = new java.awt.geom.Line2D.Double(start, end);
+            Logger.debug("Line geometry updated");
+            
+            // Update the invisible ResizePoint position
             if (lineResizePoint != null) {
-                long midTime = (startTime + endTime) / 2;
-                lineResizePoint.setLocation(midTime, price);
+                lineResizePoint.setLocation(endTime, price);
+                Logger.debug("LineResizePoint position updated to: (" + endTime + ", " + price + ")");
             }
+            
+            Logger.debug("=== LAYOUT UPDATE END ===");
         }
         
         @Override
