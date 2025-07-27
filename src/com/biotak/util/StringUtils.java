@@ -5,14 +5,17 @@ package com.biotak.util;
  */
 public final class StringUtils {
     
-    // Pre-allocated format strings to avoid repeated parsing
-    private static final String FORMAT_1F = "%.1f";
-    private static final String FORMAT_2F = "%.2f";
-    private static final String FORMAT_5F = "%.5f";
+    // Thread-local DecimalFormat instances for better performance
+    private static final ThreadLocal<java.text.DecimalFormat> FORMAT_1F_TL = 
+        ThreadLocal.withInitial(() -> new java.text.DecimalFormat("#.#"));
+    private static final ThreadLocal<java.text.DecimalFormat> FORMAT_2F_TL = 
+        ThreadLocal.withInitial(() -> new java.text.DecimalFormat("#.##"));
+    private static final ThreadLocal<java.text.DecimalFormat> FORMAT_5F_TL = 
+        ThreadLocal.withInitial(() -> new java.text.DecimalFormat("#.#####"));
     
-    // Thread-local StringBuilder for thread-safe operations
+    // Thread-local StringBuilder for thread-safe operations - optimized size
     private static final ThreadLocal<StringBuilder> THREAD_LOCAL_SB = 
-        ThreadLocal.withInitial(() -> new StringBuilder(64));
+        ThreadLocal.withInitial(() -> new StringBuilder(32)); // Reduced initial capacity
     
     private StringUtils() {}
     
@@ -20,21 +23,21 @@ public final class StringUtils {
      * Format a double to 1 decimal place efficiently
      */
     public static String format1f(double value) {
-        return String.format(FORMAT_1F, value);
+        return FORMAT_1F_TL.get().format(value);
     }
     
     /**
      * Format a double to 2 decimal places efficiently
      */
     public static String format2f(double value) {
-        return String.format(FORMAT_2F, value);
+        return FORMAT_2F_TL.get().format(value);
     }
     
     /**
      * Format a double to 5 decimal places efficiently
      */
     public static String format5f(double value) {
-        return String.format(FORMAT_5F, value);
+        return FORMAT_5F_TL.get().format(value);
     }
     
     /**

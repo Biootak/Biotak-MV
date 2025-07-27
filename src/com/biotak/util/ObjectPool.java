@@ -4,21 +4,22 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Supplier;
 
 /**
- * Simple object pool to reduce memory allocation overhead
+ * Memory-optimized object pool to reduce allocation overhead
  * @param <T> Type of objects to pool
  */
 public class ObjectPool<T> {
     private final ConcurrentLinkedQueue<T> pool = new ConcurrentLinkedQueue<>();
     private final Supplier<T> factory;
     private final int maxSize;
+    private volatile int currentSize = 0; // Track current size efficiently
     
     public ObjectPool(Supplier<T> factory, int maxSize) {
         this.factory = factory;
-        this.maxSize = maxSize;
+        this.maxSize = Math.min(maxSize, 200); // Cap maximum size
     }
     
     public ObjectPool(Supplier<T> factory) {
-        this(factory, 100); // Default max size
+        this(factory, 50); // Reduced default max size for memory efficiency
     }
     
     /**
@@ -26,15 +27,21 @@ public class ObjectPool<T> {
      */
     public T acquire() {
         T object = pool.poll();
-        return object != null ? object : factory.get();
+        if (object != null) {
+            currentSize = Math.max(0, currentSize - 1);
+            return object;
+        }
+        return factory.get();
     }
     
     /**
      * Return an object to the pool
      */
     public void release(T object) {
-        if (object != null && pool.size() < maxSize) {
-            pool.offer(object);
+        if (object != null && currentSize < maxSize) {
+            if (pool.offer(object)) {
+                currentSize++;
+            }
         }
     }
     

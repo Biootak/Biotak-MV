@@ -13,8 +13,10 @@ public final class PerformanceMonitor {
     private static final Map<String, Integer> methodCallCounts = new ConcurrentHashMap<>();
     private static final boolean MONITORING_ENABLED = false; // Disable in production
     
-    // محدودیت اندازه برای جلوگیری از نشت حافظه
-    private static final int MAX_METHODS_TRACKED = 100;
+    // محدودیت اندازه برای جلوگیری از نشت حافظه - بهینه‌سازی شده
+    private static final int MAX_METHODS_TRACKED = 50; // کاهش برای صرفه‌جویی حافظه
+    private static final int CLEANUP_THRESHOLD = 40;
+    private static final long SLOW_METHOD_THRESHOLD = 50_000_000; // 50ms
     
     // Cleanup scheduler برای پاکسازی خودکار
     private static final java.util.concurrent.ScheduledExecutorService cleanupExecutor = 

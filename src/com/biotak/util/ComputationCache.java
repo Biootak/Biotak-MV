@@ -17,8 +17,13 @@ public final class ComputationCache {
     // Cache for pip multiplier calculations
     private static final Map<String, Double> pipMultiplierCache = new ConcurrentHashMap<>();
     
-    // Cache size limits - increased for better hit ratios
-    private static final int MAX_CACHE_SIZE = 200;
+    // Cache size limits - optimized for better hit ratios
+    private static final int MAX_CACHE_SIZE = 500;
+    private static final int CLEANUP_THRESHOLD = 400;
+    
+    // Hit ratio tracking for monitoring
+    private static volatile long hits = 0;
+    private static volatile long misses = 0;
     
     private ComputationCache() {}
     
@@ -26,15 +31,23 @@ public final class ComputationCache {
      * Get cached timeframe percentage or compute and cache it
      */
     public static Double getCachedPercentage(String barSizeKey) {
-        return percentageCache.get(barSizeKey);
+        Double result = percentageCache.get(barSizeKey);
+        if (result != null) {
+            hits++;
+        } else {
+            misses++;
+        }
+        return result;
     }
     
     /**
      * Cache a timeframe percentage calculation
      */
     public static void cachePercentage(String barSizeKey, double percentage) {
-        if (percentageCache.size() < MAX_CACHE_SIZE) {
-            percentageCache.put(barSizeKey, percentage);
+        percentageCache.put(barSizeKey, percentage);
+        
+        if (percentageCache.size() > CLEANUP_THRESHOLD) {
+            cleanUp();
         }
     }
     
@@ -80,10 +93,40 @@ public final class ComputationCache {
     }
     
     /**
+     * Clean up least recently used entries when cache gets too large
+     */
+    private static void cleanUp() {
+        if (percentageCache.size() > MAX_CACHE_SIZE) {
+            // Simple cleanup - remove 25% of entries randomly
+            int toRemove = percentageCache.size() / 4;
+            percentageCache.entrySet().removeIf(entry -> Math.random() < 0.25 && toRemove > 0);
+        }
+    }
+    
+    /**
+     * Get hit ratio as percentage
+     */
+    public static double getHitRatio() {
+        long totalRequests = hits + misses;
+        return totalRequests > 0 ? (double) hits / totalRequests * 100 : 0.0;
+    }
+    
+    /**
+     * Reset hit ratio counters
+     */
+    public static void resetStats() {
+        hits = 0;
+        misses = 0;
+    }
+    
+    /**
      * Get cache statistics for monitoring
      */
     public static String getCacheStats() {
-        return String.format("ComputationCache - Percentage: %d, ATR: %d, Pip: %d", 
-                           percentageCache.size(), atrPeriodCache.size(), pipMultiplierCache.size());
+        double hitRatio = getHitRatio();
+        long totalRequests = hits + misses;
+        return String.format("ComputationCache - Percentage: %d, ATR: %d, Pip: %d | Hits: %d, Misses: %d, Hit Ratio: %.1f%% (Total: %d)", 
+                           percentageCache.size(), atrPeriodCache.size(), pipMultiplierCache.size(),
+                           hits, misses, hitRatio, totalRequests);
     }
 }

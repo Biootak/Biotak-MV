@@ -108,10 +108,10 @@ public class BiotakTrigger extends Study {
     // Human-readable labels for each TH value (Current, Pattern, Trigger, Structure, Higher)
     private String[] tfLabels = {"", "", "", "", ""};
 
-    // Holds comprehensive M values for ruler matching built during drawFigures()
-    private java.util.Map<String, Double> fullMValues = new java.util.HashMap<>();
-    // Holds 3×ATR values (price) for ruler comparison
-    private java.util.Map<String, Double> fullATRValues = new java.util.HashMap<>();
+    // Holds comprehensive M values for ruler matching built during drawFigures() - optimized
+    private final java.util.Map<String, Double> fullMValues = new java.util.concurrent.ConcurrentHashMap<>(16, 0.75f, 1);
+    // Holds 3×ATR values (price) for ruler comparison - optimized
+    private final java.util.Map<String, Double> fullATRValues = new java.util.concurrent.ConcurrentHashMap<>(16, 0.75f, 1);
 
     // Base values for ATR scaling (current timeframe)
     private int atrStructureMin = 0;          // minutes of current structure timeframe
@@ -788,7 +788,8 @@ public class BiotakTrigger extends Study {
             this.tfLabels[4] = FractalCalculator.formatTimeframeString(higherPatternBarSize);
 
             // -----------------------------  BUILD COMPREHENSIVE M MAP  -----------------------------
-            this.fullMValues = com.biotak.util.FractalUtil.buildMMap(series, thBasePrice, mScale);
+            this.fullMValues.clear();
+            this.fullMValues.putAll(com.biotak.util.FractalUtil.buildMMap(series, thBasePrice, mScale));
  
             // (Debug logging for M map removed in release version)
 
@@ -820,7 +821,8 @@ public class BiotakTrigger extends Study {
                 });
             }
 
-            this.fullATRValues = com.biotak.util.FractalUtil.buildATR3Map(structureMin, atrValue);
+            this.fullATRValues.clear();
+            this.fullATRValues.putAll(com.biotak.util.FractalUtil.buildATR3Map(structureMin, atrValue));
             this.atrStructureMin   = structureMin;
             this.atrStructurePrice = atrValue;
 

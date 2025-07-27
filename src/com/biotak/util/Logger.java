@@ -66,10 +66,12 @@ public final class Logger {
         log(LogLevel.INFO, message);
     }
     
-    // Throttling mechanism to prevent excessive logging
+    // Throttling mechanism to prevent excessive logging - memory optimized
     private static final Map<String, Long> messageThrottleMap = new java.util.concurrent.ConcurrentHashMap<>();
     private static final long THROTTLE_INTERVAL_MS = 5000; // 5 seconds
-    private static final int MAX_THROTTLE_MAP_SIZE = 100; // محدودیت اندازه
+    private static final int MAX_THROTTLE_MAP_SIZE = 50; // کاهش برای صرفه‌جویی حافظه
+    private static final long THROTTLE_CLEANUP_INTERVAL = 300_000; // 5 minutes
+    private static volatile long lastCleanupTime = System.currentTimeMillis();
     
     /**
      * Logs a message with the specified log level.

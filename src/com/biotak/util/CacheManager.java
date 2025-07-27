@@ -11,20 +11,22 @@ public final class CacheManager {
     private static final Map<String, Map<String, Object>> caches = new ConcurrentHashMap<>();
     private static final Map<String, Map<String, Long>> cacheTimestamps = new ConcurrentHashMap<>();
     private static final long DEFAULT_EXPIRY_MS = 60000; // 1 minute
-    private static final int MAX_CACHE_SIZE = 500; // کاهش از 1000 به 500
+    private static final int MAX_CACHE_SIZE = 1000; // افزایش برای hit ratio بهتر
+    private static final int CLEANUP_THRESHOLD = 800; // شروع cleanup زودتر
     
     // Cleanup scheduler برای پاکسازی خودکار
     private static final java.util.concurrent.ScheduledExecutorService cleanupExecutor = 
         java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "CacheCleanup");
             t.setDaemon(true);
+            t.setPriority(Thread.MIN_PRIORITY); // کم‌ترین اولویت
             return t;
         });
     
     static {
-        // پاکسازی خودکار هر 2 دقیقه
+        // پاکسازی خودکار هر 90 ثانیه (بهینه‌تر)
         cleanupExecutor.scheduleAtFixedRate(
-            CacheManager::cleanupAll, 120, 120, java.util.concurrent.TimeUnit.SECONDS);
+            CacheManager::cleanupAll, 90, 90, java.util.concurrent.TimeUnit.SECONDS);
     }
     
     private CacheManager() {}
