@@ -30,6 +30,8 @@ import com.biotak.enums.StepCalculationMode;
 import com.biotak.enums.SSLSBasisType;
 import com.biotak.ui.InfoPanel;
 import com.biotak.ui.PriceLabel;
+import com.biotak.ui.CustomPriceLine;
+import com.biotak.ui.LineResizePoint;
 import com.biotak.core.FractalCalculator;
 import com.biotak.ui.LevelDrawer;
 
@@ -717,7 +719,8 @@ public class BiotakTrigger extends Study {
                 addFigure(customPriceLabel);
 
                 // Draw/update custom price horizontal line (now draggable)
-                customPriceLine = new CustomPriceLine(startTime, endTime, savedPrice);
+                PathInfo customPricePath = getSettings().getPath(S_CUSTOM_PRICE_PATH);
+                customPriceLine = new CustomPriceLine(startTime, endTime, savedPrice, customPricePath);
                 addFigure(customPriceLine);
                 // Logger.debug("CustomPriceLine created and added at price: " + savedPrice);
                 
@@ -1169,132 +1172,6 @@ public class BiotakTrigger extends Study {
         addFigure(this.infoPanel);
     }
 
-    // Invisible resize point that treats the entire line as hit area
-    private class LineResizePoint extends ResizePoint {
-        private final CustomPriceLine parentLine;
-        LineResizePoint(CustomPriceLine parentLine) {
-            super(ResizeType.VERTICAL, true); // vertical only for horizontal price line
-            this.parentLine = parentLine;
-            setSnapToLocation(true);
-        }
-        @Override
-        public boolean contains(double x, double y, DrawContext ctx) {
-            // Delegate hit-test to the parent line so clicks anywhere on the line start the drag
-            // Use a more generous hit area for better responsiveness
-            long currentTime = System.currentTimeMillis();
-            boolean parentExists = (parentLine != null);
-            boolean result = false;
-            if (parentExists && parentLine.line != null) {
-                double distance = Util.distanceFromLine(x, y, parentLine.line);
-                result = distance < 10.0; // 10 pixel tolerance for better hit detection
-                // Logger.debug("Line distance: " + distance + ", tolerance: 10.0");
-            }
-            
-            // Log all hit tests for debugging mouse interaction issues
-            // Logger.debug("=== LINE HIT TEST ===");
-            // Logger.debug("LineResizePoint.contains() called at time: " + currentTime);
-            // Logger.debug("Hit test coordinates: (" + x + ", " + y + ")");
-            // Logger.debug("Parent line exists: " + parentExists);
-            // Logger.debug("Hit test result: " + result);
-            
-            if (result) {
-                // Logger.debug("*** LINE HIT DETECTED *** at (" + x + ", " + y + ")");
-                // Logger.debug("ResizePoint location: (" + getTime() + ", " + getValue() + ")");
-            }
-            // Logger.debug("=== LINE HIT TEST END ===");
-            
-            return result;
-        }
-        // Keep fully invisible – no drawing
-        @Override
-        public void draw(java.awt.Graphics2D gc, DrawContext ctx) {}
-    }
-
-    // Custom draggable price line class with invisible line-wide ResizePoint
-    private class CustomPriceLine extends Figure {
-        private java.awt.geom.Line2D line;
-        private double price;
-        private long startTime, endTime;
-        private ResizePoint lineResizePoint; // Invisible ResizePoint covering the entire line
-        
-        public CustomPriceLine(long startTime, long endTime, double price) {
-            this.startTime = startTime;
-            this.endTime = endTime;
-            this.price = price;
-            
-            // Create a special invisible resize point whose hit area is the whole line
-            this.lineResizePoint = new LineResizePoint(this);
-            // Position at end of line for value/time reference
-            this.lineResizePoint.setLocation(endTime, price);
-        }
-        
-        public void updatePrice(double newPrice) {
-            long currentTime = System.currentTimeMillis();
-            double oldPrice = this.price;
-            
-            // Logger.debug("=== PRICE UPDATE START ===");
-            // Logger.debug("CustomPriceLine.updatePrice() called at time: " + currentTime);
-            // Logger.debug("Old price: " + oldPrice);
-            // Logger.debug("New price: " + newPrice);
-            // Logger.debug("Price change: " + (newPrice - oldPrice));
-            // Logger.debug("LineResizePoint exists: " + (lineResizePoint != null));
-            
-            this.price = newPrice;
-            // Logger.debug("Price field updated to: " + this.price);
-            
-            if (lineResizePoint != null) {
-                long oldTime = lineResizePoint.getTime();
-                lineResizePoint.setLocation(oldTime, newPrice);
-                // Logger.debug("LineResizePoint location updated to: (" + oldTime + ", " + newPrice + ")");
-            }
-            
-            // Logger.debug("=== PRICE UPDATE END ===");
-        }
-        
-        public ResizePoint getLineResizePoint() {
-            return lineResizePoint;
-        }
-        
-        @Override
-        public boolean contains(double x, double y, DrawContext ctx) {
-            return line != null && Util.distanceFromLine(x, y, line) < 6;
-        }
-        
-        @Override
-        public void layout(DrawContext ctx) {
-            long currentTime = System.currentTimeMillis();
-            
-            // Logger.debug("=== LAYOUT UPDATE START ===");
-            // Logger.debug("CustomPriceLine.layout() called at time: " + currentTime);
-            // Logger.debug("Current price: " + price);
-            // Logger.debug("Start time: " + startTime + ", End time: " + endTime);
-            
-            var start = ctx.translate(new Coordinate(startTime, price));
-            var end = ctx.translate(new Coordinate(endTime, price));
-            // Logger.debug("Translated start point: (" + start.getX() + ", " + start.getY() + ")");
-            // Logger.debug("Translated end point: (" + end.getX() + ", " + end.getY() + ")");
-            
-            line = new java.awt.geom.Line2D.Double(start, end);
-            // Logger.debug("Line geometry updated");
-            
-            // Update the invisible ResizePoint position
-            if (lineResizePoint != null) {
-                lineResizePoint.setLocation(endTime, price);
-                // Logger.debug("LineResizePoint position updated to: (" + endTime + ", " + price + ")");
-            }
-            
-            // Logger.debug("=== LAYOUT UPDATE END ===");
-        }
-        
-        @Override
-        public void draw(java.awt.Graphics2D gc, DrawContext ctx) {
-            if (line == null) return;
-            PathInfo path = getSettings().getPath(S_CUSTOM_PRICE_PATH);
-            gc.setStroke(ctx.isSelected() ? path.getSelectedStroke() : path.getStroke());
-            gc.setColor(path.getColor());
-            gc.draw(line);
-        }
-    }
 
     // This class is responsible for the rendering of the ruler line
     private class RulerFigure extends Figure {
