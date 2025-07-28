@@ -1,7 +1,7 @@
 package com.biotak.ui;
 
 import com.biotak.enums.THStartPointType;
-import com.biotak.util.Logger;
+import com.biotak.debug.AdvancedLogger;
 import com.biotak.util.THCalculator;
 import com.biotak.util.TimeframeUtil;
 import com.biotak.core.FractalCalculator;
@@ -85,7 +85,7 @@ public class LevelDrawer {
         double thStepInPoints = THCalculator.calculateTHPoints(series.getInstrument(), thBasePrice, timeframePercentage);
 
         if (thStepInPoints <= 0) {
-            Logger.warn("BiotakTrigger: Invalid TH step value (<=0). Cannot draw TH levels.");
+            AdvancedLogger.warn("LevelDrawer", "drawTHLevels", "Invalid TH step value (<=0). Cannot draw TH levels.");
             return new ArrayList<>();
         }
 
@@ -169,7 +169,7 @@ public class LevelDrawer {
                                 double ssValue, double lsValue, boolean lsFirst,
                                 long startTime, long endTime) {
         if (ssValue <= 0 || lsValue <= 0) {
-            Logger.warn("BiotakTrigger: Invalid SS/LS values – cannot draw levels.");
+            AdvancedLogger.warn("LevelDrawer", "drawSSLSLevels", "Invalid SS/LS values – cannot draw levels.");
             return new ArrayList<>();
         }
 
@@ -271,7 +271,7 @@ public class LevelDrawer {
 
         // Validate inputs
         if (patternValue <= 0 || structureValue <= 0 || shortStepValue <= 0 || controlValue <= 0 || longStepValue <= 0) {
-            Logger.warn("BiotakTrigger: Invalid fractal values – cannot draw Control-Based levels.");
+            AdvancedLogger.warn("LevelDrawer", "drawControlLevels", "Invalid fractal values – cannot draw Control-Based levels.");
             return new ArrayList<>();
         }
 
@@ -371,7 +371,7 @@ public class LevelDrawer {
             long endTime) {
 
         if (controlDistance <= 0) {
-            Logger.warn("BiotakTrigger: Invalid C distance – cannot draw M ladder.");
+            AdvancedLogger.warn("LevelDrawer", "drawMLevels", "Invalid C distance – cannot draw M ladder.");
             return new java.util.ArrayList<>();
         }
 
@@ -452,7 +452,7 @@ public class LevelDrawer {
             long endTime) {
 
         if (mDistance <= 0) {
-            Logger.warn("BiotakTrigger: Invalid M distance – cannot draw levels.");
+            AdvancedLogger.warn("LevelDrawer", "drawMEqualLevels", "Invalid M distance – cannot draw levels.");
             return new java.util.ArrayList<>();
         }
 

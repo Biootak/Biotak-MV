@@ -5,6 +5,7 @@ import java.lang.management.MemoryMXBean;
 import java.lang.management.ThreadMXBean;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import com.biotak.debug.AdvancedLogger;
 
 /**
  * Advanced performance profiler for detailed monitoring
@@ -72,7 +73,7 @@ public final class PerformanceProfiler {
     public static void startProfiling() {
         profilingEnabled = true;
         profilingStartTime = System.currentTimeMillis();
-        Logger.info("Performance profiling started");
+        AdvancedLogger.info("PerformanceProfiler", "startProfiling", "Performance profiling started");
     }
     
     /**
@@ -80,7 +81,7 @@ public final class PerformanceProfiler {
      */
     public static void stopProfiling() {
         profilingEnabled = false;
-        Logger.info("Performance profiling stopped");
+        AdvancedLogger.info("PerformanceProfiler", "stopProfiling", "Performance profiling stopped");
     }
     
     /**

@@ -1,7 +1,6 @@
 package com.biotak.core;
 
-import com.biotak.util.Logger;
-import com.biotak.util.Logger.LogLevel;
+import com.biotak.debug.AdvancedLogger;
 import com.biotak.util.TimeframeUtil;
 import com.biotak.util.OptimizedCalculations;
 import com.motivewave.platform.sdk.common.BarSize;
@@ -70,7 +69,7 @@ public class FractalCalculator {
         // Calculate ATR using the standard formula
         int size = series.size();
         if (size <= period) {
-            Logger.warn("BiotakTrigger: Not enough data to calculate ATR. Need " + period + " bars, but only have " + size);
+            AdvancedLogger.warn("FractalCalculator", "calculateATR", "Not enough data to calculate ATR. Need %d bars, but only have %d", period, size);
             return 0.0;
         }
         
@@ -247,7 +246,8 @@ public class FractalCalculator {
                                     double longStep, double atrValue, double liveAtrValue,
                                     double pipMultiplier, long lastCalcTableLogTime, long LOG_INTERVAL_MS) {
         // Force log level to INFO for this method
-        Logger.setLogLevel(LogLevel.INFO);
+        AdvancedLogger.LogLevel originalLevel = com.biotak.config.LoggingConfiguration.getCurrentLogLevel();
+        AdvancedLogger.setLogLevel(AdvancedLogger.LogLevel.INFO);
         
         try {
             StringBuilder sb = new StringBuilder();
@@ -372,10 +372,10 @@ public class FractalCalculator {
             sb.append("+----------------------------------------------------------------------------------------+\n");
             
             // Log the entire table
-            Logger.info(sb.toString());
+            AdvancedLogger.info("FractalCalculator", "logCalculationTable", sb.toString());
         } finally {
             // Restore the previous log level
-            Logger.setLogLevel(LogLevel.WARN);
+            AdvancedLogger.setLogLevel(originalLevel);
         }
     }
 

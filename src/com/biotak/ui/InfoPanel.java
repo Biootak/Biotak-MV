@@ -11,6 +11,7 @@ import com.motivewave.platform.sdk.draw.Line;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Cursor;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
@@ -176,6 +177,8 @@ public class InfoPanel extends Figure {
     
     public void setRulerActive(boolean active) {
         this.rulerActive = active;
+        // Note: Cursor changes should be handled by the parent component
+        // since Figure doesn't support setCursor() method
     }
     
     /**

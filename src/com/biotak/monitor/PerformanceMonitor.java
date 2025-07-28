@@ -7,6 +7,7 @@ import java.io.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.nio.file.*;
+import com.biotak.debug.AdvancedLogger;
 
 /**
  * Real-time Performance Monitor
@@ -142,6 +143,7 @@ public class PerformanceMonitor {
         }
         
         isMonitoring = true;
+        AdvancedLogger.info("PerformanceMonitor", "startMonitoring", "Starting performance monitoring with interval: %d seconds", intervalSeconds);
         System.out.println("🔍 Starting performance monitoring (interval: " + intervalSeconds + "s)");
         
         // Performance monitoring task
@@ -174,6 +176,7 @@ public class PerformanceMonitor {
         
         isMonitoring = false;
         scheduler.shutdown();
+        AdvancedLogger.info("PerformanceMonitor", "stopMonitoring", "Performance monitoring stopped");
         System.out.println("🛑 Performance monitoring stopped");
         
         try {

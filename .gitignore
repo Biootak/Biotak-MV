@@ -5,8 +5,54 @@ Mt4/
 out/
 build/
 sdk_api_doc/
+bin/
+target/
+.settings/
+.gradle/
+
+# Java specific
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+
+# Eclipse specific
+.classpath
+.project
+
+# IntelliJ IDEA specific
+*.iml
+*.iws
+.idea/
+
+# Maven specific
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+
+# Gradle specific
+.gradle/
+build/
 
 # Files
 *.log
-biotak_log.txt 
+biotak_log.txt
 nul
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*~
+*.swp
+*.swo
+*.tmp
+*.bak

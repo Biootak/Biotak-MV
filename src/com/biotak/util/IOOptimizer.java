@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.concurrent.ConcurrentHashMap;
+import com.biotak.debug.AdvancedLogger;
 
 /**
  * Optimized I/O operations for better performance
@@ -235,7 +236,7 @@ public final class IOOptimizer {
                     channel.close();
                 }
             } catch (IOException e) {
-                Logger.warn("Failed to close file channel: " + e.getMessage());
+                AdvancedLogger.warn("IOOptimizer", "cleanup", "Failed to close file channel: %s", e.getMessage());
             }
         });
         channelCache.clear();

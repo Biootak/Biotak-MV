@@ -1,5 +1,7 @@
 package com.biotak.util;
 
+import com.biotak.debug.AdvancedLogger;
+
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.concurrent.ConcurrentHashMap;

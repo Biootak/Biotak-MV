@@ -3,6 +3,7 @@ package com.biotak.util;
 import java.lang.ref.WeakReference;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import com.biotak.debug.AdvancedLogger;
 
 /**
  * Advanced memory management utilities for optimal performance
@@ -159,7 +160,7 @@ public final class AdvancedMemoryManager {
         // Suggest garbage collection
         System.gc();
         
-        Logger.info("Memory cleanup completed: " + getMemoryStats());
+        AdvancedLogger.info("AdvancedMemoryManager", "forceCleanup", "Memory cleanup completed: %s", getMemoryStats());
     }
     
     /**

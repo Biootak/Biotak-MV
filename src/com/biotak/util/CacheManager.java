@@ -2,6 +2,7 @@ package com.biotak.util;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
+import com.biotak.debug.AdvancedLogger;
 
 /**
  * Centralized cache management to prevent memory leaks and improve performance
@@ -161,6 +162,6 @@ public final class CacheManager {
             sb.append(String.format("%-20s: %d entries\n", cacheName, size));
         }
         
-        Logger.info(sb.toString());
+        AdvancedLogger.debug("CacheManager", "logCacheStats", sb.toString());
     }
 }

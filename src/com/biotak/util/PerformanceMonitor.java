@@ -2,6 +2,7 @@ package com.biotak.util;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
+import com.biotak.debug.AdvancedLogger;
 
 /**
  * Performance monitoring utility to track method execution times and memory usage
@@ -64,8 +65,7 @@ public final class PerformanceMonitor {
             
             // Log slow methods (> 10ms)
             if (duration > 10_000_000) { // 10ms in nanoseconds
-                Logger.warn("Slow method detected: " + methodName + " took " + 
-                           (duration / 1_000_000) + "ms");
+                AdvancedLogger.warn("PerformanceMonitor", "endTiming", "Slow method detected: %s took %.2fms (threshold: %.2fms)", methodName, duration / 1_000_000.0, SLOW_METHOD_THRESHOLD / 1_000_000.0);
             }
         }
     }
@@ -89,7 +89,7 @@ public final class PerformanceMonitor {
                     method, calls, totalTime / 1_000_000.0, avgTime / 1_000_000.0));
         }
         
-        Logger.info(sb.toString());
+        AdvancedLogger.info("PerformanceMonitor", "logPerformanceStats", sb.toString());
     }
     
     /**
@@ -116,7 +116,7 @@ public final class PerformanceMonitor {
     public static void checkMemoryUsage() {
         double memoryMB = getMemoryUsageMB();
         if (memoryMB > 100) { // Log if using more than 100MB
-            Logger.warn("High memory usage detected: " + String.format("%.2f MB", memoryMB));
+            AdvancedLogger.warn("PerformanceMonitor", "checkMemoryUsage", "High memory usage detected: %.2f MB", memoryMB);
         }
     }
 }

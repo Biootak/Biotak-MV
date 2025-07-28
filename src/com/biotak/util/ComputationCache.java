@@ -2,6 +2,7 @@ package com.biotak.util;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
+import com.biotak.debug.AdvancedLogger;
 
 /**
  * Specialized cache for expensive computations to avoid repeated calculations
@@ -100,6 +101,7 @@ public final class ComputationCache {
             // Simple cleanup - remove 25% of entries randomly
             int toRemove = percentageCache.size() / 4;
             percentageCache.entrySet().removeIf(entry -> Math.random() < 0.25 && toRemove > 0);
+            AdvancedLogger.debug("ComputationCache", "cleanUp", "Cache cleanup performed, removed ~%d entries, current size: %d", toRemove, percentageCache.size());
         }
     }
     

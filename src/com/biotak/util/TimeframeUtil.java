@@ -6,7 +6,6 @@ import com.motivewave.platform.sdk.common.Enums;
 import static com.biotak.util.Constants.FRACTAL_PERCENTAGES;
 import java.util.Map;
 import java.util.TreeMap;
-import com.biotak.util.Logger;
 import java.util.HashMap;
 
 /**
