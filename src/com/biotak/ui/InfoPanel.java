@@ -22,8 +22,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.biotak.enums.PanelPosition;
+import com.biotak.config.BiotakConfig;
 import com.biotak.util.PoolManager;
 import com.biotak.util.StringUtils;
+import com.biotak.ui.ThemeManager;
 
 /**
  * Custom figure class to draw the information panel.
@@ -54,6 +56,78 @@ public class InfoPanel extends Figure {
     private boolean rulerActive = false; // Tracks if ruler is active
     // Added constant to control vertical padding after separator lines inside the panel
     private static final int SEPARATOR_PADDING = 25; // was previously 15 – gives text more breathing room
+    
+    // Color theme system
+    private static class ColorTheme {
+        // Panel colors
+        final Color panelBgTop;
+        final Color panelBgBottom;
+        final Color panelBorder;
+        final Color panelShadow;
+        
+        // Text colors
+        final Color titleColor;
+        final Color titleShadow;
+        final Color contentColor;
+        final Color highlightLine;
+        
+        // Button colors
+        final Color buttonBg;
+        final Color buttonBorder;
+        final Color buttonText;
+        
+        // Separator colors
+        final Color separatorColor;
+        
+        ColorTheme(Color panelBgTop, Color panelBgBottom, Color panelBorder, Color panelShadow,
+                  Color titleColor, Color titleShadow, Color contentColor, Color highlightLine,
+                  Color buttonBg, Color buttonBorder, Color buttonText, Color separatorColor) {
+            this.panelBgTop = panelBgTop;
+            this.panelBgBottom = panelBgBottom;
+            this.panelBorder = panelBorder;
+            this.panelShadow = panelShadow;
+            this.titleColor = titleColor;
+            this.titleShadow = titleShadow;
+            this.contentColor = contentColor;
+            this.highlightLine = highlightLine;
+            this.buttonBg = buttonBg;
+            this.buttonBorder = buttonBorder;
+            this.buttonText = buttonText;
+            this.separatorColor = separatorColor;
+        }
+    }
+    
+    // Dark theme for dark chart backgrounds (like #1E1E1E)
+    private static final ColorTheme DARK_THEME = new ColorTheme(
+        new Color(60, 60, 60, 220),     // panelBgTop - lighter gray
+        new Color(40, 40, 40, 220),     // panelBgBottom - darker gray
+        new Color(80, 80, 80, 180),     // panelBorder - medium gray
+        new Color(0, 0, 0, 60),         // panelShadow - black shadow
+        new Color(220, 220, 220),       // titleColor - light gray text
+        new Color(0, 0, 0, 120),        // titleShadow - dark shadow
+        new Color(200, 200, 200),       // contentColor - light content text
+        new Color(100, 100, 100, 150),  // highlightLine - subtle highlight
+        new Color(70, 70, 70, 200),     // buttonBg - button background
+        new Color(90, 90, 90, 180),     // buttonBorder - button border
+        new Color(240, 240, 240),       // buttonText - white button text
+        new Color(100, 100, 100, 200)   // separatorColor - separator line
+    );
+    
+    // Light theme for gray chart backgrounds (like 160,160,160)
+    private static final ColorTheme LIGHT_THEME = new ColorTheme(
+        new Color(240, 240, 240, 220),  // panelBgTop - very light gray
+        new Color(200, 200, 200, 220),  // panelBgBottom - light gray
+        new Color(120, 120, 120, 180),  // panelBorder - medium gray
+        new Color(0, 0, 0, 40),         // panelShadow - light shadow
+        new Color(40, 40, 40),          // titleColor - dark text
+        new Color(255, 255, 255, 100),  // titleShadow - light shadow
+        new Color(60, 60, 60),          // contentColor - dark content text
+        new Color(180, 180, 180, 120),  // highlightLine - light highlight
+        new Color(220, 220, 220, 200),  // buttonBg - light button background
+        new Color(140, 140, 140, 180),  // buttonBorder - darker border
+        new Color(40, 40, 40),          // buttonText - dark button text
+        new Color(140, 140, 140, 200)   // separatorColor - darker separator
+    );
     
     // Cache for UI elements to avoid repeated creation
     private List<String> cachedCoreLines;
@@ -102,6 +176,32 @@ public class InfoPanel extends Figure {
     
     public void setRulerActive(boolean active) {
         this.rulerActive = active;
+    }
+    
+    /**
+     * Detects the appropriate color theme based on chart background
+     * @param ctx DrawContext to analyze background
+     * @return ColorTheme to use
+     */
+    private ColorTheme detectColorTheme(DrawContext ctx) {
+        // Use centralized ThemeManager
+        ThemeManager.ColorTheme centralTheme = ThemeManager.getCurrentTheme(ctx, transparency);
+        
+        // Convert ThemeManager.ColorTheme to InfoPanel.ColorTheme
+        return new ColorTheme(
+            centralTheme.panelBgTop,
+            centralTheme.panelBgBottom,
+            centralTheme.panelBorder,
+            centralTheme.panelShadow,
+            centralTheme.titleColor,
+            centralTheme.titleShadow,
+            centralTheme.contentColor,
+            centralTheme.highlightLine,
+            centralTheme.buttonBg,
+            centralTheme.buttonBorder,
+            centralTheme.buttonText,
+            centralTheme.separatorColor
+        );
     }
     
     @Override
@@ -181,58 +281,147 @@ public class InfoPanel extends Figure {
         }
         
         this.panelBounds = new Rectangle(x, y, panelWidth, panelHeight);
+        
+        // Detect appropriate theme based on chart background
+        ColorTheme theme = detectColorTheme(ctx);
 
-        // Draw panel background (with transparency)
-        Color panelBg = new Color(160, 160, 160, transparency);
-        gc.setColor(panelBg);
-        gc.fillRoundRect(x, y, panelWidth, panelHeight, 8, 8);
-        // Draw minimize/restore button (top-right corner)
-        int btnSize = 20; // enlarged for easier click
-        int btnPadding = 4;
+        // Draw panel background with theme-appropriate gradient and shadow effect
+        // First draw a subtle shadow
+        gc.setColor(theme.panelShadow);
+        gc.fillRoundRect(x + 2, y + 2, panelWidth, panelHeight, 10, 10);
+        
+        // Main panel background with theme-based gradient effect
+        Color panelBgTop = new Color(
+            theme.panelBgTop.getRed(), 
+            theme.panelBgTop.getGreen(), 
+            theme.panelBgTop.getBlue(), 
+            Math.min(transparency, theme.panelBgTop.getAlpha())
+        );
+        Color panelBgBottom = new Color(
+            theme.panelBgBottom.getRed(), 
+            theme.panelBgBottom.getGreen(), 
+            theme.panelBgBottom.getBlue(), 
+            Math.min(transparency, theme.panelBgBottom.getAlpha())
+        );
+        
+        // Simulate gradient by drawing multiple layers
+        for (int i = 0; i < panelHeight; i++) {
+            float ratio = (float) i / panelHeight;
+            int red = (int) (panelBgTop.getRed() * (1 - ratio) + panelBgBottom.getRed() * ratio);
+            int green = (int) (panelBgTop.getGreen() * (1 - ratio) + panelBgBottom.getGreen() * ratio);
+            int blue = (int) (panelBgTop.getBlue() * (1 - ratio) + panelBgBottom.getBlue() * ratio);
+            int alpha = (int) (panelBgTop.getAlpha() * (1 - ratio) + panelBgBottom.getAlpha() * ratio);
+            gc.setColor(new Color(red, green, blue, alpha));
+            gc.fillRect(x, y + i, panelWidth, 1);
+        }
+        
+        // Add theme-appropriate border
+        gc.setColor(theme.panelBorder);
+        gc.setStroke(new BasicStroke(1.5f));
+        gc.drawRoundRect(x, y, panelWidth, panelHeight, 10, 10);
+        // Draw minimize/restore button (top-right corner) with theme-appropriate design
+        int btnSize = 22; // slightly enlarged for better visibility
+        int btnPadding = 6;
         int btnX = x + panelWidth - btnSize - btnPadding;
         int btnY = y + btnPadding;
         minimizeButtonRect = new Rectangle(btnX, btnY, btnSize, btnSize);
-        // Button background hover state not tracked; draw simple grey box
-        gc.setColor(new Color(100, 100, 100));
-        gc.fillRect(btnX, btnY, btnSize, btnSize);
-        gc.setColor(Color.WHITE);
-        // Draw symbol: '-' if not minimized, '+' if minimized
+        
+        // Draw button with theme-appropriate colors
+        gc.setColor(theme.buttonBg);
+        gc.fillRoundRect(btnX, btnY, btnSize, btnSize, 6, 6);
+        
+        // Add theme-appropriate border
+        gc.setColor(theme.buttonBorder);
+        gc.setStroke(new BasicStroke(1.2f));
+        gc.drawRoundRect(btnX, btnY, btnSize, btnSize, 6, 6);
+        
+        // Draw improved symbols with theme-appropriate color
+        gc.setColor(theme.buttonText);
+        gc.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        
         if (isMinimized) {
-            gc.drawLine(btnX + 3, btnY + btnSize/2, btnX + btnSize - 3, btnY + btnSize/2);
-            gc.drawLine(btnX + btnSize/2, btnY + 3, btnX + btnSize/2, btnY + btnSize - 3);
+            // Draw '+' symbol for expand (restore)
+            int centerX = btnX + btnSize/2;
+            int centerY = btnY + btnSize/2;
+            int symbolSize = 8;
+            
+            // Horizontal line
+            gc.drawLine(centerX - symbolSize/2, centerY, centerX + symbolSize/2, centerY);
+            // Vertical line
+            gc.drawLine(centerX, centerY - symbolSize/2, centerX, centerY + symbolSize/2);
         } else {
-            gc.drawLine(btnX + 3, btnY + btnSize/2, btnX + btnSize - 3, btnY + btnSize/2);
+            // Draw '-' symbol for minimize
+            int centerX = btnX + btnSize/2;
+            int centerY = btnY + btnSize/2;
+            int symbolSize = 8;
+            
+            // Horizontal line only
+            gc.drawLine(centerX - symbolSize/2, centerY, centerX + symbolSize/2, centerY);
         }
         
-        // Draw ruler toggle button (to the left of minimize button)
+        // Draw ruler toggle button (to the left of minimize button) with improved design
         int rulerBtnX = btnX - btnSize - btnPadding;
         int rulerBtnY = btnY;
         rulerButtonRect = new Rectangle(rulerBtnX, rulerBtnY, btnSize, btnSize);
-        // Change button color to green if ruler is active, otherwise use dark gray
+        
+        // Create button background with rounded corners based on state
         if (rulerActive) {
-            gc.setColor(new Color(0, 128, 0)); // Green color when ruler is active
+            // Active state - green gradient
+            gc.setColor(new Color(0, 150, 0, 200)); // Brighter green for active
         } else {
-            gc.setColor(new Color(100, 100, 100)); // Dark gray when ruler is inactive
+            // Inactive state - gray gradient (similar to minimize button)
+            gc.setColor(new Color(140, 140, 140, 200));
         }
-        gc.fillRect(rulerBtnX, rulerBtnY, btnSize, btnSize);
+        gc.fillRoundRect(rulerBtnX, rulerBtnY, btnSize, btnSize, 6, 6);
+        
+        // Add border for consistency with minimize button
+        if (rulerActive) {
+            gc.setColor(new Color(0, 100, 0, 180)); // Darker green border
+        } else {
+            gc.setColor(new Color(60, 60, 60, 180)); // Same as minimize button
+        }
+        gc.setStroke(new BasicStroke(1.2f));
+        gc.drawRoundRect(rulerBtnX, rulerBtnY, btnSize, btnSize, 6, 6);
+        
+        // Draw 'R' symbol with improved positioning and font
         gc.setColor(Color.WHITE);
-        // Draw 'R' for Ruler
-        gc.drawString("R", rulerBtnX + 6, rulerBtnY + 15);
+        gc.setFont(new Font("Arial", Font.BOLD, 12)); // Use bold font for better visibility
+        FontMetrics rulerFm = gc.getFontMetrics();
+        String rulerText = "R";
+        int rulerTextWidth = rulerFm.stringWidth(rulerText);
+        int rulerTextHeight = rulerFm.getAscent();
+        
+        // Center the 'R' in the button
+        int rulerTextX = rulerBtnX + (btnSize - rulerTextWidth) / 2;
+        int rulerTextY = rulerBtnY + (btnSize + rulerTextHeight) / 2 - 2; // Slight adjustment for better centering
+        gc.drawString(rulerText, rulerTextX, rulerTextY);
 
-        // Draw title (centered)
+        // Draw title with theme-appropriate enhanced visual effects
         gc.setFont(titleFont);
-        gc.setColor(Color.BLACK);
         
         int currentY = y + titleHeight + 5;
-        gc.drawString(timeframe, x + (panelWidth - titleWidth) / 2, currentY);
+        int titleX = x + (panelWidth - titleWidth) / 2;
+        
+        // Add theme-appropriate text shadow for depth
+        gc.setColor(theme.titleShadow);
+        gc.drawString(timeframe, titleX + 1, currentY + 1);
+        
+        // Draw main title text with theme-appropriate color
+        gc.setColor(theme.titleColor);
+        gc.drawString(timeframe, titleX, currentY);
+        
+        // Add theme-appropriate highlight line above the title area
+        gc.setColor(theme.highlightLine);
+        gc.setStroke(new BasicStroke(1.0f));
+        gc.drawLine(x + 15, y + 8, x + panelWidth - 15, y + 8);
         
         currentY += 10; // Add space below the title before the separator
         
-        // Draw sections without section titles
-        drawSection(gc, x, currentY, panelWidth, "", coreLines, contentMetrics, contentFont, lineSpacing, true);
+        // Draw sections without section titles - pass theme for consistent coloring
+        drawSection(gc, x, currentY, panelWidth, "", coreLines, contentMetrics, contentFont, lineSpacing, true, theme);
         if (!isMinimized) {
             currentY += coreSectionHeight;
-            drawHierarchySection(gc, x, currentY, panelWidth, hierarchyLines, contentMetrics, contentFont, lineSpacing);
+            drawHierarchySection(gc, x, currentY, panelWidth, hierarchyLines, contentMetrics, contentFont, lineSpacing, theme);
         }
         
         // Restore graphics settings
@@ -378,11 +567,11 @@ public class InfoPanel extends Figure {
     }
 
     private void drawHierarchySection(Graphics2D gc, int x, int y, int panelWidth, List<String> lines, 
-                                     FontMetrics fm, Font font, int spacing) {
+                                     FontMetrics fm, Font font, int spacing, ColorTheme theme) {
         int currentY = y;
         
-        // Separator line
-        gc.setColor(new Color(80, 80, 80, 200));
+        // Theme-appropriate separator line
+        gc.setColor(theme.separatorColor);
         gc.setStroke(new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, new float[]{3.0f}, 0.0f));
         gc.drawLine(x + 10, currentY, x + panelWidth - 10, currentY);
         currentY += SEPARATOR_PADDING; // Increased padding after separator line
@@ -484,17 +673,17 @@ public class InfoPanel extends Figure {
         return null;
     }
 
-    private void drawSection(Graphics2D gc, int x, int y, int panelWidth, String title, List<String> lines, FontMetrics fm, Font font, int spacing, boolean isTwoColumn) {
+    private void drawSection(Graphics2D gc, int x, int y, int panelWidth, String title, List<String> lines, FontMetrics fm, Font font, int spacing, boolean isTwoColumn, ColorTheme theme) {
         int currentY = y;
         
-        // Separator line
-        gc.setColor(new Color(80, 80, 80, 200));
+        // Theme-appropriate separator line
+        gc.setColor(theme.separatorColor);
         gc.setStroke(new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, new float[]{3.0f}, 0.0f));
         gc.drawLine(x + 10, currentY, x + panelWidth - 10, currentY);
         currentY += SEPARATOR_PADDING; // Increased padding after separator line
         
-        // Section Content
-        gc.setColor(Color.BLACK);
+        // Section Content with theme-appropriate styling
+        gc.setColor(theme.contentColor);
         gc.setFont(font);
         if (isTwoColumn) {
             int i = 0;

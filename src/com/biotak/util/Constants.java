@@ -112,4 +112,10 @@ public final class Constants {
     public static final double SS_MULTIPLIER = 1.5;   // Short-Step is 1.5 × TH
     public static final double LS_MULTIPLIER = 2.0;   // Long-Step is 2   × TH
     public static final double ATR_FACTOR    = 3.0;   // Default factor for 3×ATR calculations
-} 
+    
+    // Theme System Constants
+    public static final String S_UI_THEME = "ui.theme";             // Theme selection: auto, light, dark
+    public static final String S_ADAPTIVE_COLORS = "ui.adaptive.colors"; // Enable adaptive color system
+    public static final String S_PANEL_COLOR_THEME = "panel.color.theme"; // Panel-specific theme
+    public static final String S_LEVEL_COLOR_THEME = "level.color.theme"; // Level-specific theme
+}

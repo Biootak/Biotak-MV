@@ -7,6 +7,8 @@ import com.biotak.util.TimeframeUtil;
 import com.biotak.util.Logger;
 import com.biotak.util.Constants;
 import com.biotak.util.Logger.LogLevel;
+import com.biotak.ui.ThemeManager;
+import com.biotak.config.BiotakConfig;
 import com.motivewave.platform.sdk.common.*;
 import com.motivewave.platform.sdk.common.desc.*;
 import com.motivewave.platform.sdk.common.menu.MenuDescriptor;
@@ -175,6 +177,15 @@ public class BiotakTrigger extends Study {
         qExtras.addRow(new BooleanDescriptor(S_SHOW_LOW_LINE, "Historical Low", true));
         qExtras.addRow(new BooleanDescriptor(S_SHOW_INFO_PANEL, "Info Panel", true));
         qExtras.addRow(new BooleanDescriptor(S_SHOW_RULER, "Leg Ruler", false));
+        
+        var qTheme = quick.addGroup("Theme");
+        qTheme.addRow(new DiscreteDescriptor(Constants.S_UI_THEME, "Color Theme", "auto", java.util.Arrays.asList(
+                new NVP("Auto (Smart Detection)", "auto"),
+                new NVP("Light Theme", "light"),
+                new NVP("Dark Theme", "dark"))));
+        qTheme.addRow(new BooleanDescriptor(Constants.S_ADAPTIVE_COLORS, "Adaptive Colors", true));
+
+        // Theme initialization will happen in draw methods
 
         var tab = sd.addTab("General");
         var grp = tab.addGroup("General");
@@ -1121,6 +1132,7 @@ public class BiotakTrigger extends Study {
         if (!getSettings().getBoolean(S_SHOW_INFO_PANEL, true)) return;
         Instrument instrument = series.getInstrument();
         if (instrument == null) return;
+        
         // Get settings for panel display
         FontInfo contentFontInfo = getSettings().getFont(S_CONTENT_FONT);
         Font contentFont = contentFontInfo != null ? contentFontInfo.getFont() : new Font("Arial", Font.PLAIN, 11);
@@ -1131,13 +1143,28 @@ public class BiotakTrigger extends Study {
         int marginY = getSettings().getInteger(S_PANEL_MARGIN_Y, 10);
         int transparency = getSettings().getInteger(S_PANEL_TRANSPARENCY, 230);
         boolean isMinimized = getSettings().getBoolean(S_PANEL_MINIMIZED, false);
+        
         // Get timeframe info
         BarSize barSize = series.getBarSize();
         String timeframe = FractalCalculator.formatTimeframeString(barSize);
         boolean isSecondsBased = TimeframeUtil.isSecondsBasedTimeframe(barSize);
-        // pipMultiplier is now handled internally via UnitConverter; variable removed.
-        // Create the info panel and add it as a figure (UnitConverter now handles pips)
-        this.infoPanel = new InfoPanel(timeframe, thValue, instrument, contentFont, titleFont, panelPos, marginX, marginY, transparency, shortStep, longStep, atrValue, liveAtrValue, isSecondsBased, isMinimized);
+        
+        // Update theme configuration from study settings
+        String selectedTheme = getSettings().getString(Constants.S_UI_THEME, "auto");
+        BiotakConfig.getInstance().setProperty("ui.theme", selectedTheme);
+        
+        boolean adaptiveColors = getSettings().getBoolean(Constants.S_ADAPTIVE_COLORS, true);
+        BiotakConfig.getInstance().setProperty("ui.adaptive.colors", adaptiveColors);
+        
+        // Create or update the info panel
+        if (this.infoPanel == null) {
+            // Create new panel only if it doesn't exist
+            this.infoPanel = new InfoPanel(timeframe, thValue, instrument, contentFont, titleFont, panelPos, marginX, marginY, transparency, shortStep, longStep, atrValue, liveAtrValue, isSecondsBased, isMinimized);
+        } else {
+            // Update existing panel with new values (this would require adding update methods to InfoPanel)
+            // For now, recreate the panel to ensure theme changes are applied
+            this.infoPanel = new InfoPanel(timeframe, thValue, instrument, contentFont, titleFont, panelPos, marginX, marginY, transparency, shortStep, longStep, atrValue, liveAtrValue, isSecondsBased, isMinimized);
+        }
         // Set initial ruler state
         boolean showRuler = getSettings().getBoolean(S_SHOW_RULER, false);
         infoPanel.setRulerActive(showRuler);
@@ -1534,21 +1561,44 @@ public class BiotakTrigger extends Study {
                         boxY = (int) midY;
                     }
 
-                    // Draw background box using user-selected color (with transparency)
-                    java.awt.Color baseBg = getSettings().getColor(S_RULER_BG_COLOR);
-                    if (baseBg == null) baseBg = new java.awt.Color(160, 160, 160);
-                    java.awt.Color bgCol = new java.awt.Color(baseBg.getRed(), baseBg.getGreen(), baseBg.getBlue(), 200);
+                    // Get current theme for consistent colors
+                    int transparency = getSettings().getInteger(S_PANEL_TRANSPARENCY, 230);
+                    ThemeManager.ColorTheme theme = ThemeManager.getCurrentTheme(ctx, transparency);
+                    
+                    // Use theme colors if adaptive colors are enabled, otherwise use user-selected colors
+                    boolean useAdaptiveColors = ThemeManager.isAdaptiveColorsEnabled();
+                    
+                    java.awt.Color bgCol;
+                    java.awt.Color borderCol;
+                    java.awt.Color txtCol;
+                    
+                    if (useAdaptiveColors) {
+                        // Use theme colors for consistency with InfoPanel
+                        bgCol = ThemeManager.getThemedColor(theme.rulerBg, 220);
+                        borderCol = theme.rulerBorder;
+                        txtCol = theme.rulerText;
+                    } else {
+                        // Fall back to user-selected colors
+                        java.awt.Color baseBg = getSettings().getColor(S_RULER_BG_COLOR);
+                        if (baseBg == null) baseBg = new java.awt.Color(160, 160, 160);
+                        bgCol = new java.awt.Color(baseBg.getRed(), baseBg.getGreen(), baseBg.getBlue(), 200);
+                        
+                        borderCol = getSettings().getColor(S_RULER_BORDER_COLOR);
+                        if (borderCol == null) borderCol = new java.awt.Color(100, 100, 100);
+                        
+                        txtCol = getSettings().getColor(S_RULER_TEXT_COLOR);
+                        if (txtCol == null) txtCol = java.awt.Color.WHITE;
+                    }
+                    
+                    // Draw background box
                     gc.setColor(bgCol);
                     gc.fillRoundRect(boxX, boxY, boxWidth, boxHeight, 8, 8);
 
-                    // Optional: draw border using user-selected color
-                    java.awt.Color borderCol = getSettings().getColor(S_RULER_BORDER_COLOR);
-                    if (borderCol == null) borderCol = new java.awt.Color(100, 100, 100);
+                    // Draw border
                     gc.setColor(borderCol);
                     gc.drawRoundRect(boxX, boxY, boxWidth, boxHeight, 8, 8);
 
-                    java.awt.Color txtCol = getSettings().getColor(S_RULER_TEXT_COLOR);
-                    if (txtCol == null) txtCol = java.awt.Color.WHITE;
+                    // Set text color
                     gc.setColor(txtCol);
                     
                     // Use ruler font setting if available, otherwise use default font

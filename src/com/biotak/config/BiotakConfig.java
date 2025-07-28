@@ -35,6 +35,7 @@ public class BiotakConfig {
         // UI settings
         public static final boolean DEFAULT_SHOW_DEBUG = false;
         public static final int DEFAULT_REFRESH_RATE = 100;
+        public static final String DEFAULT_UI_THEME = "auto"; // "light", "dark", or "auto"
         
         // Monitoring settings
         public static final int DEFAULT_MONITOR_INTERVAL = 5;
@@ -91,6 +92,7 @@ public class BiotakConfig {
         // UI settings
         properties.setProperty("ui.show.debug", String.valueOf(Defaults.DEFAULT_SHOW_DEBUG));
         properties.setProperty("ui.refresh.rate", String.valueOf(Defaults.DEFAULT_REFRESH_RATE));
+        properties.setProperty("ui.theme", Defaults.DEFAULT_UI_THEME);
         
         // Monitoring settings
         properties.setProperty("monitor.interval", String.valueOf(Defaults.DEFAULT_MONITOR_INTERVAL));
@@ -216,7 +218,9 @@ public class BiotakConfig {
         
         System.out.println("\nUI Settings:");
         System.out.println("  Show Debug: " + getBoolean("ui.show.debug"));
+        System.out.println("  Theme: " + getString("ui.theme"));
         System.out.println("  Refresh Rate: " + getInt("ui.refresh.rate") + "ms");
+        System.out.println("  Theme: " + getString("ui.theme"));
         
         System.out.println("\nMonitoring Settings:");
         System.out.println("  Monitor Interval: " + getInt("monitor.interval") + "s");
