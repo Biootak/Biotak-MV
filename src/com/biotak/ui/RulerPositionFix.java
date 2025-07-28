@@ -2,6 +2,8 @@ package com.biotak.ui;
 
 import com.biotak.debug.AdvancedLogger;
 import com.biotak.enums.RulerState;
+import com.motivewave.platform.sdk.common.*;
+import com.motivewave.platform.sdk.study.Study;
 import java.awt.Point;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
@@ -26,6 +28,21 @@ public class RulerPositionFix {
     
     // آیا باید خط کش را در موقعیت فعلی اجبار کنیم؟
     private boolean forceCurrentPosition = true;
+    
+    // References to MotiveWave components
+    private Study study;
+    private DrawContext drawContext;
+    private DataContext dataContext;
+    
+    // Constructor to inject MotiveWave dependencies
+    public RulerPositionFix(Study study, DrawContext drawContext, DataContext dataContext) {
+        this.study = study;
+        this.drawContext = drawContext;
+        this.dataContext = dataContext;
+        
+        AdvancedLogger.ruler(AdvancedLogger.LogLevel.INFO, CLASS_NAME,
+            "🔧 RulerPositionFix initialized with MotiveWave components");
+    }
     
     /**
      * متد اصلی برای فعال‌سازی خط کش در موقعیت فعلی
@@ -298,18 +315,51 @@ public class RulerPositionFix {
     
     private ChartPosition getCurrentChartPosition() {
         try {
-            // این متد باید موقعیت فعلی چارت را از API دریافت کند
-            // مثال:
-            // long currentTime = chartAPI.getCurrentVisibleTime();
-            // double currentPrice = chartAPI.getCurrentVisiblePrice();
-            // boolean isLive = chartAPI.isAtLivePosition();
+            if (drawContext == null || dataContext == null) {
+                AdvancedLogger.ruler(AdvancedLogger.LogLevel.ERROR, CLASS_NAME,
+                    "❌ DrawContext or DataContext is null");
+                return null;
+            }
             
-            // پیاده‌سازی نمونه:
-            long currentTime = System.currentTimeMillis() - (2 * 60 * 60 * 1000); // 2 ساعت قبل
-            double currentPrice = 45000.0;
-            boolean isLive = false;
+            DataSeries series = dataContext.getDataSeries();
+            if (series == null || series.size() == 0) {
+                AdvancedLogger.ruler(AdvancedLogger.LogLevel.ERROR, CLASS_NAME,
+                    "❌ No data series available");
+                return null;
+            }
             
-            return new ChartPosition(currentTime, currentPrice, isLive);
+            // Get visible time range from chart bounds
+            long visibleStartTime = series.getStartTime(0); // First visible bar
+            long visibleEndTime = series.getStartTime(series.size() - 1); // Last bar
+            
+            // Get current visible center time (approximate)
+            long centerTime = (visibleStartTime + visibleEndTime) / 2;
+            
+            // Find the bar closest to center time
+            int centerBarIndex = findClosestBarIndex(series, centerTime);
+            if (centerBarIndex < 0) {
+                centerBarIndex = Math.max(0, series.size() - 1);
+            }
+            
+            // Get price at center
+            double centerPrice = series.getClose(centerBarIndex);
+            
+            // Check if we're at live position (within last few bars)
+            int lastBarIndex = series.size() - 1;
+            long lastBarTime = series.getStartTime(lastBarIndex);
+            long currentTime = System.currentTimeMillis();
+            
+            // Consider "live" if we're within the last 5 bars or within 5 minutes of current time
+            boolean isLive = (centerBarIndex >= lastBarIndex - 5) || 
+                           (Math.abs(currentTime - lastBarTime) < 5 * 60 * 1000);
+            
+            ChartPosition position = new ChartPosition(centerTime, centerPrice, isLive);
+            
+            AdvancedLogger.ruler(AdvancedLogger.LogLevel.DEBUG, CLASS_NAME,
+                "📊 Current chart position - Time: %d, Price: %.5f, Live: %b, CenterBar: %d/%d", 
+                centerTime, centerPrice, isLive, centerBarIndex, lastBarIndex);
+            
+            return position;
             
         } catch (Exception e) {
             AdvancedLogger.ruler(AdvancedLogger.LogLevel.ERROR, CLASS_NAME,
@@ -343,19 +393,56 @@ public class RulerPositionFix {
     
     private ChartCoordinate convertToChartCoordinate(Point screenPoint) {
         try {
-            // تبدیل نقطه صفحه به مختصات چارت
-            // return chartAPI.screenToChart(screenPoint);
+            if (drawContext == null) {
+                AdvancedLogger.ruler(AdvancedLogger.LogLevel.ERROR, CLASS_NAME,
+                    "❌ DrawContext is null, cannot convert coordinates");
+                return null;
+            }
             
-            // پیاده‌سازی نمونه:
-            long time = System.currentTimeMillis();
-            double price = 45000.0 + (screenPoint.y * 10);
+            // Use MotiveWave API to convert screen coordinates to chart coordinates
+            long time = drawContext.translate2Time(screenPoint.getX());
+            double price = drawContext.translate2Value(screenPoint.getY());
             
-            return new ChartCoordinate(time, price);
+            ChartCoordinate coord = new ChartCoordinate(time, price);
+            
+            AdvancedLogger.ruler(AdvancedLogger.LogLevel.DEBUG, CLASS_NAME,
+                "📍 Screen point (%d, %d) converted to chart coordinate: %s", 
+                screenPoint.x, screenPoint.y, coord);
+            
+            return coord;
             
         } catch (Exception e) {
             AdvancedLogger.ruler(AdvancedLogger.LogLevel.ERROR, CLASS_NAME,
                 "❌ Error converting to chart coordinate: %s", e.getMessage());
             return null;
+        }
+    }
+    
+    /**
+     * پیدا کردن نزدیک‌ترین bar به زمان مشخص
+     */
+    private int findClosestBarIndex(DataSeries series, long targetTime) {
+        try {
+            int closestIndex = 0;
+            long minDiff = Math.abs(series.getStartTime(0) - targetTime);
+            
+            for (int i = 1; i < series.size(); i++) {
+                long diff = Math.abs(series.getStartTime(i) - targetTime);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closestIndex = i;
+                } else {
+                    // Time series is usually sorted, so we can break early
+                    break;
+                }
+            }
+            
+            return closestIndex;
+            
+        } catch (Exception e) {
+            AdvancedLogger.ruler(AdvancedLogger.LogLevel.ERROR, CLASS_NAME,
+                "❌ Error finding closest bar index: %s", e.getMessage());
+            return 0;
         }
     }
     

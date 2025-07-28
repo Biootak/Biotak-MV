@@ -2,6 +2,8 @@ package com.biotak.ui;
 
 import com.biotak.debug.AdvancedLogger;
 import com.biotak.enums.RulerState;
+import com.motivewave.platform.sdk.common.*;
+import com.motivewave.platform.sdk.study.Study;
 import java.awt.Point;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
