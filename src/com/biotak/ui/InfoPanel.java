@@ -410,10 +410,6 @@ public class InfoPanel extends Figure {
         gc.setColor(theme.titleColor);
         gc.drawString(timeframe, titleX, currentY);
         
-        // Add theme-appropriate highlight line above the title area
-        gc.setColor(theme.highlightLine);
-        gc.setStroke(new BasicStroke(1.0f));
-        gc.drawLine(x + 15, y + 8, x + panelWidth - 15, y + 8);
         
         currentY += 10; // Add space below the title before the separator
         
