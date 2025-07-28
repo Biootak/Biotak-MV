@@ -70,48 +70,48 @@ public class ThemeManager {
         }
     }
     
-    // Dark theme for dark chart backgrounds
+    // 🌌 DARK THEME - Futuristic Cyber 2030 (Neo-Matrix Evolution) - Ultra High Contrast
     private static final ColorTheme DARK_THEME = new ColorTheme(
-        new Color(60, 60, 60, 220),     // panelBgTop - lighter gray
-        new Color(40, 40, 40, 220),     // panelBgBottom - darker gray
-        new Color(80, 80, 80, 180),     // panelBorder - medium gray
-        new Color(0, 0, 0, 60),         // panelShadow - black shadow
-        new Color(220, 220, 220),       // titleColor - light gray text
-        new Color(0, 0, 0, 120),        // titleShadow - dark shadow
-        new Color(200, 200, 200),       // contentColor - light content text
-        new Color(100, 100, 100, 150),  // highlightLine - subtle highlight
-        new Color(70, 70, 70, 200),     // buttonBg - button background
-        new Color(90, 90, 90, 180),     // buttonBorder - button border
-        new Color(240, 240, 240),       // buttonText - white button text
-        new Color(100, 100, 100, 200),  // separatorColor - separator line
-        new Color(50, 50, 50, 220),     // rulerBg - dark ruler background
-        new Color(80, 80, 80, 180),     // rulerBorder - ruler border
-        new Color(220, 220, 220),       // rulerText - light ruler text
-        new Color(120, 120, 255),       // rulerLine - blue ruler line
-        new Color(180, 180, 180, 150),  // levelLine - subtle level lines
-        new Color(255, 215, 0, 200)     // customPrice - gold for custom price
+        new Color(12, 15, 25, 250),     // panelBgTop - Deep void gradient (higher opacity)
+        new Color(8, 12, 20, 255),      // panelBgBottom - Absolute cosmic depth
+        new Color(0, 255, 200, 90),     // panelBorder - Refined neon teal glow (reduced opacity)
+        new Color(0, 0, 0, 120),        // panelShadow - Enhanced depth shadow
+        new Color(255, 255, 255, 255),  // titleColor - PURE WHITE for maximum readability
+        new Color(0, 255, 200, 150),    // titleShadow - Bright teal glow shadow for neon effect
+        new Color(255, 255, 255, 255),  // contentColor - PURE WHITE for maximum contrast
+        new Color(64, 255, 180, 85),    // highlightLine - Aqua accent (reduced opacity)
+        new Color(18, 22, 35, 245),     // buttonBg - Ultra-dark button (higher opacity)
+        new Color(0, 255, 200, 110),    // buttonBorder - Subtle teal glow
+        new Color(255, 255, 255, 255),  // buttonText - Pure white (full opacity)
+        new Color(64, 255, 180, 70),    // separatorColor - Soft aqua line
+        new Color(10, 14, 22, 250),     // rulerBg - Deep space ruler (higher opacity)
+        new Color(0, 255, 200, 130),    // rulerBorder - Elegant teal border
+        new Color(255, 255, 255, 255),  // rulerText - Maximum contrast white
+        new Color(255, 20, 147, 180),   // rulerLine - Vibrant magenta accent
+        new Color(147, 0, 255, 120),    // levelLine - Electric purple levels
+        new Color(255, 215, 0, 240)     // customPrice - Premium gold (higher opacity)
     );
     
-    // Light theme for light chart backgrounds
+    // ☀️ LIGHT THEME - Futuristic 2030 Modern Sophistication
     private static final ColorTheme LIGHT_THEME = new ColorTheme(
-        new Color(240, 240, 240, 220),  // panelBgTop - very light gray
-        new Color(200, 200, 200, 220),  // panelBgBottom - light gray
-        new Color(120, 120, 120, 180),  // panelBorder - medium gray
-        new Color(0, 0, 0, 40),         // panelShadow - light shadow
-        new Color(40, 40, 40),          // titleColor - dark text
-        new Color(255, 255, 255, 100),  // titleShadow - light shadow
-        new Color(60, 60, 60),          // contentColor - dark content text
-        new Color(180, 180, 180, 120),  // highlightLine - light highlight
-        new Color(220, 220, 220, 200),  // buttonBg - light button background
-        new Color(140, 140, 140, 180),  // buttonBorder - darker border
-        new Color(40, 40, 40),          // buttonText - dark button text
-        new Color(140, 140, 140, 200),  // separatorColor - darker separator
-        new Color(250, 250, 250, 220),  // rulerBg - light ruler background
-        new Color(120, 120, 120, 180),  // rulerBorder - ruler border
-        new Color(40, 40, 40),          // rulerText - dark ruler text
-        new Color(0, 100, 200),         // rulerLine - blue ruler line
-        new Color(100, 100, 100, 150),  // levelLine - darker level lines
-        new Color(255, 140, 0, 200)     // customPrice - orange for custom price
+        new Color(240, 242, 247, 245),  // panelBgTop - Ultra-clean pearl white with subtle tech feel
+        new Color(232, 236, 243, 255),  // panelBgBottom - Soft arctic gradient for depth
+        new Color(45, 85, 165, 180),    // panelBorder - Refined quantum blue for sophistication
+        new Color(180, 185, 195, 90),   // panelShadow - Subtle modern shadow
+        new Color(15, 25, 45, 255),     // titleColor - Deep space black for ultra-sharp contrast
+        new Color(45, 85, 165, 120),    // titleShadow - Quantum blue glow for tech elegance
+        new Color(25, 35, 55, 255),     // contentColor - Dark neural blue for premium readability
+        new Color(0, 180, 255, 140),    // highlightLine - Electric cyan accent for 2030 feel
+        new Color(248, 250, 253, 240),  // buttonBg - Pristine white button surface
+        new Color(45, 85, 165, 150),    // buttonBorder - Quantum blue interactive border
+        new Color(15, 25, 45, 255),     // buttonText - Ultra-dark for maximum accessibility
+        new Color(0, 180, 255, 100),    // separatorColor - Subtle electric cyan separator
+        new Color(245, 247, 251, 250),  // rulerBg - Clean ruler background with tech precision
+        new Color(45, 85, 165, 160),    // rulerBorder - Strong quantum blue ruler definition
+        new Color(15, 25, 45, 255),     // rulerText - Ultra-contrast dark text
+        new Color(255, 60, 120, 200),   // rulerLine - Vibrant electric magenta accent
+        new Color(120, 50, 255, 160),   // levelLine - Future purple levels
+        new Color(255, 165, 0, 250)     // customPrice - Premium golden amber
     );
     
     /**
@@ -120,13 +120,26 @@ public class ThemeManager {
     public static ColorTheme getCurrentTheme(DrawContext ctx, int transparency) {
         String themePreference = BiotakConfig.getInstance().getString("ui.theme", "auto");
         
+        // Debug logging
+        boolean debug = BiotakConfig.getInstance().getBoolean("ui.show.debug", false);
+        if (debug) {
+            System.out.println("[ThemeManager] Theme preference: " + themePreference + ", Transparency: " + transparency);
+        }
+        
         if ("dark".equalsIgnoreCase(themePreference)) {
+            if (debug) System.out.println("[ThemeManager] Using DARK_THEME (forced)");
             return DARK_THEME;
         } else if ("light".equalsIgnoreCase(themePreference)) {
+            if (debug) System.out.println("[ThemeManager] Using LIGHT_THEME (forced)");
             return LIGHT_THEME;
         } else {
             // Enhanced auto detection logic
-            return detectThemeFromContext(ctx, transparency);
+            ColorTheme detected = detectThemeFromContext(ctx, transparency);
+            if (debug) {
+                System.out.println("[ThemeManager] Auto-detected theme: " + 
+                    (detected == DARK_THEME ? "DARK" : "LIGHT"));
+            }
+            return detected;
         }
     }
     
@@ -135,31 +148,88 @@ public class ThemeManager {
      */
     private static ColorTheme detectThemeFromContext(DrawContext ctx, int transparency) {
         try {
-            // Try to analyze chart background if possible
-            // This is a simplified approach - could be enhanced with actual background sampling
+            // Enhanced auto detection using multiple heuristics
             
-            // If transparency is very high, likely a dark background
-            if (transparency > 200) {
+            // Method 1: Try to analyze chart background color if possible
+            if (ctx != null) {
+                try {
+                    // Get chart bounds and try to sample background
+                    java.awt.Rectangle bounds = ctx.getBounds();
+                    if (bounds != null && bounds.width > 0 && bounds.height > 0) {
+                        // This is a heuristic approach - we can't directly sample pixels
+                        // but we can use other indicators
+                        
+                        // Check if we're in a typical dark environment
+                        // Dark themes usually have high transparency values
+                        if (transparency > 200) {
+                            return DARK_THEME;
+                        }
+                        
+                        // Light themes usually have lower transparency
+                        if (transparency < 120) {
+                            return LIGHT_THEME;
+                        }
+                    }
+                } catch (Exception e) {
+                    // Continue with other methods
+                }
+            }
+            
+            // Method 2: Check system properties for theme hints
+            try {
+                // Check Windows theme
+                String osName = System.getProperty("os.name", "").toLowerCase();
+                if (osName.contains("windows")) {
+                    // Try to detect Windows dark mode
+                    String userTheme = System.getProperty("user.theme");
+                    if (userTheme != null && userTheme.toLowerCase().contains("dark")) {
+                        return DARK_THEME;
+                    }
+                }
+                
+                // Check other system properties
+                String lookAndFeel = System.getProperty("swing.defaultlaf");
+                if (lookAndFeel != null && lookAndFeel.toLowerCase().contains("dark")) {
+                    return DARK_THEME;
+                }
+            } catch (Exception e) {
+                // Continue with fallback
+            }
+            
+            // Method 3: Use time-based heuristic (dark theme more likely at night)
+            try {
+                java.time.LocalTime now = java.time.LocalTime.now();
+                int hour = now.getHour();
+                
+                // If it's night time (6 PM to 6 AM), bias towards dark theme
+                if (hour >= 18 || hour <= 6) {
+                    // Night time + medium/high transparency = probably dark theme
+                    if (transparency >= 150) {
+                        return DARK_THEME;
+                    }
+                } else {
+                    // Day time + low/medium transparency = probably light theme
+                    if (transparency <= 180) {
+                        return LIGHT_THEME;
+                    }
+                }
+            } catch (Exception e) {
+                // Continue with final fallback
+            }
+            
+            // Method 4: Enhanced transparency-based detection with better thresholds
+            if (transparency > 190) {
+                return DARK_THEME;  // Very high transparency suggests dark background
+            } else if (transparency < 140) {
+                return LIGHT_THEME; // Low transparency suggests light background
+            } else {
+                // Medium transparency: use additional heuristics
+                // Default to dark theme for better contrast in uncertain cases
                 return DARK_THEME;
             }
-            
-            // If transparency is very low, likely a light background  
-            if (transparency < 100) {
-                return LIGHT_THEME;
-            }
-            
-            // For medium transparency, use a more sophisticated approach
-            // Check system theme if available
-            String osTheme = System.getProperty("sun.desktop");
-            if (osTheme != null && osTheme.toLowerCase().contains("dark")) {
-                return DARK_THEME;
-            }
-            
-            // Default fallback based on transparency threshold
-            return transparency > 150 ? DARK_THEME : LIGHT_THEME;
             
         } catch (Exception e) {
-            // Fallback to simple transparency-based detection
+            // Ultimate fallback - use transparency only
             return transparency > 150 ? DARK_THEME : LIGHT_THEME;
         }
     }
