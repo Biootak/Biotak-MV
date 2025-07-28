@@ -23,6 +23,7 @@ import com.motivewave.platform.sdk.study.StudyHeader;
 
 import java.awt.Font;
 import java.awt.Cursor;
+import java.awt.Rectangle;
 
 import java.awt.Point;
 import java.util.ArrayList;
@@ -1858,7 +1859,10 @@ public class BiotakTrigger extends Study {
         logRulerDebug(methodName, "RulerEndResize exists: " + (rulerEndResize != null));
         logRulerDebug(methodName, "RulerFigure exists: " + (rulerFigure != null));
         
-        if (!showRuler) {
+        // CRITICAL FIX: Check both setting and actual state for more robust operation
+        boolean shouldActivateRuler = (!showRuler || rulerState == RulerState.INACTIVE);
+        
+        if (shouldActivateRuler) {
             // Enable ruler mode and create default ruler immediately
             RulerState oldState = rulerState;
             settings.setBoolean(S_SHOW_RULER, true);
@@ -1908,8 +1912,8 @@ public class BiotakTrigger extends Study {
     }
     
     /**
-     * ایجاد خط‌کش پیش‌فرض با استفاده از DrawContext (بهتر از immediate)
-     * این متد خط‌کش را در موقعیت فعلی چارت قرار می‌دهد، نه در Live Market
+     * ایجاد خط‌کش پیش‌فرض با استفاده از DrawContext - همیشه در وسط صفحه
+     * این متد خط‌کش را در وسط صفحه نمایشی رسم می‌کند، بدون وابستگی به موقعیت چارت
      */
     private void createDefaultRulerWithContext(Settings settings, DrawContext ctx) {
         final String methodName = "createDefaultRulerWithContext";
@@ -1922,82 +1926,98 @@ public class BiotakTrigger extends Study {
                 return;
             }
             
-            // 🔥 FIX: استفاده از موقعیت فعلی viewport کاربر به جای Live Market
-            // Get visible time range from the chart using alternative method
-            // Note: getVisibleStartTime() and getVisibleEndTime() methods are not available
-            // Using fallback approach with current data
-            long currentTime = System.currentTimeMillis();
-            long timeSpan = 60 * 60 * 1000; // 1 hour span
-            long centerTime = currentTime - (timeSpan / 2);
+            // 🔥 FIX: خط‌کش همیشه در وسط صفحه نمایشی رسم می‌شود
+            // دریافت ابعاد viewport فعلی از DrawContext
+            Rectangle chartBounds = ctx.getBounds();
             
-            // Find indices for visible range
-            int centerIdx = series.findIndex(centerTime);
-            if (centerIdx < 0) centerIdx = series.size() / 2; // fallback to middle if not found
+            // محاسبه وسط صفحه در مختصات صفحه
+            double screenCenterX = chartBounds.getCenterX();
+            double screenCenterY = chartBounds.getCenterY();
             
-            // Create ruler around center of visible area (not at live market edge)
-            int startIdx = Math.max(0, centerIdx - 25); // 25 bars before center
-            int endIdx = Math.min(series.size() - 1, centerIdx + 25); // 25 bars after center
+            // تبدیل مختصات صفحه به مختصات چارت
+            long centerTime = ctx.translate2Time(screenCenterX);
+            double centerPrice = ctx.translate2Value(screenCenterY);
             
-            long startTime = series.getStartTime(startIdx);
-            long endTime = series.getStartTime(endIdx);
-            double startPrice = series.getClose(startIdx);
-            double endPrice = series.getClose(endIdx);
+            // محاسبه span مناسب برای خط‌کش (30% عرض صفحه)
+            double rulerWidthPercent = 0.3; // 30% عرض صفحه
+            double screenWidth = chartBounds.getWidth();
+            double rulerScreenWidth = screenWidth * rulerWidthPercent;
             
-            logRulerInfo(methodName, "Creating context-aware ruler: start=%.5f@%d, end=%.5f@%d", startPrice, startTime, endPrice, endTime);
+            // محاسبه نقاط شروع و پایان بر اساس وسط صفحه
+            double startScreenX = screenCenterX - (rulerScreenWidth / 2);
+            double endScreenX = screenCenterX + (rulerScreenWidth / 2);
+            
+            // تبدیل به مختصات چارت
+            long startTime = ctx.translate2Time(startScreenX);
+            long endTime = ctx.translate2Time(endScreenX);
+            
+            // برای قیمت، از فاصله مناسب حول وسط استفاده می‌کنیم
+            double priceSpanPercent = 0.2; // 20% ارتفاع صفحه
+            double screenHeight = chartBounds.getHeight();
+            double rulerScreenHeight = screenHeight * priceSpanPercent;
+            
+            double startScreenY = screenCenterY - (rulerScreenHeight / 2);
+            double endScreenY = screenCenterY + (rulerScreenHeight / 2);
+            
+            double startPrice = ctx.translate2Value(startScreenY);
+            double endPrice = ctx.translate2Value(endScreenY);
+            
+            logRulerInfo(methodName, "Creating screen-centered ruler: start=%.5f@%d, end=%.5f@%d", startPrice, startTime, endPrice, endTime);
+            logRulerInfo(methodName, "Screen center: (%.1f, %.1f), Chart bounds: %s", screenCenterX, screenCenterY, chartBounds);
             
             // Create ruler resize points
             if (rulerStartResize == null) {
                 rulerStartResize = new ResizePoint(ResizeType.ALL, true);
                 rulerStartResize.setSnapToLocation(true);
-                logRulerDebug(methodName, "Created new ruler start resize point with context");
+                logRulerDebug(methodName, "Created new ruler start resize point at screen center");
             }
             rulerStartResize.setLocation(startTime, startPrice);
             
             if (rulerEndResize == null) {
                 rulerEndResize = new ResizePoint(ResizeType.ALL, true);
                 rulerEndResize.setSnapToLocation(true);
-                logRulerDebug(methodName, "Created new ruler end resize point with context");
+                logRulerDebug(methodName, "Created new ruler end resize point at screen center");
             }
             rulerEndResize.setLocation(endTime, endPrice);
             
             // Create ruler figure
             if (rulerFigure == null) {
                 rulerFigure = new RulerFigure();
-                logRulerDebug(methodName, "Created new ruler figure with context");
+                logRulerDebug(methodName, "Created new ruler figure for screen center");
             }
             
             // Save points to settings
             settings.setString(S_RULER_START, startPrice + "|" + startTime);
             settings.setString(S_RULER_END, endPrice + "|" + endTime);
-            logRulerDebug(methodName, "Saved context-aware ruler points to settings");
+            logRulerDebug(methodName, "Saved screen-centered ruler points to settings");
             
             rulerState = RulerState.ACTIVE;
-            logRulerInfo(methodName, "Context-aware ruler created successfully and set to ACTIVE state");
+            logRulerInfo(methodName, "Screen-centered ruler created successfully and set to ACTIVE state");
             
-            // Calculate and log initial measurements with real data
+            // Calculate and log initial measurements
             double priceDiff = endPrice - startPrice;
             double pips = Math.abs(priceDiff) / series.getInstrument().getTickSize();
-            int barCount = Math.abs(endIdx - startIdx) + 1;
-            logRulerInfo(methodName, "Initial ruler measurement: %.1f pips, price diff: %.5f, bars: %d", pips, priceDiff, barCount);
+            long timeDiff = Math.abs(endTime - startTime);
+            logRulerInfo(methodName, "Initial ruler measurement: %.1f pips, price diff: %.5f, time span: %d ms", pips, priceDiff, timeDiff);
             
         } catch (Exception e) {
-            logRulerError(methodName, "Error creating context-aware ruler: " + e.getMessage());
+            logRulerError(methodName, "Error creating screen-centered ruler: " + e.getMessage());
             // Fallback to immediate creation
             createDefaultRulerImmediate(settings);
         }
     }
     
     /**
-     * ایجاد خط‌کش پیش‌فرض فوری (بدون نیاز به DrawContext)
+     * ایجاد خط‌کش پیش‌فرض فوری (بدون نیاز به DrawContext) - به شکل معقول و قابل استفاده
      */
     private void createDefaultRulerImmediate(Settings settings) {
         final String methodName = "createDefaultRulerImmediate";
         
-        // Try to get current price data for realistic ruler placement
+        // تلاش برای دریافت قیمت فعلی برای قرارگیری بهتر خط‌کش
         double currentPrice = 3310.0; // Default fallback
         long currentTime = System.currentTimeMillis();
         
-        // Try to get actual current price if available
+        // تلاش برای دریافت قیمت واقعی اگر موجود باشد
         try {
             // احتمال دسترسی به آخرین قیمت از تنظیمات
             double customPrice = settings.getDouble(S_CUSTOM_PRICE, Double.NaN);
@@ -2005,21 +2025,35 @@ public class BiotakTrigger extends Study {
                 currentPrice = customPrice;
                 logRulerDebug(methodName, "Using custom price as current price: " + currentPrice);
             }
+            
+            // اگر تاریخ بالا یا پایین در تنظیمات موجود باشد، قیمت را بر اساس آن تنظیم کن
+            double historicalHigh = settings.getDouble(Constants.S_HISTORICAL_HIGH, Double.NaN);
+            double historicalLow = settings.getDouble(Constants.S_HISTORICAL_LOW, Double.NaN);
+            
+            if (!Double.isNaN(historicalHigh) && !Double.isNaN(historicalLow) && historicalHigh > historicalLow) {
+                // استفاده از نقطه میانی بین بالاترین و پایین‌ترین قیمت تاریخی
+                currentPrice = (historicalHigh + historicalLow) / 2.0;
+                logRulerDebug(methodName, "Using midpoint of historical range as current price: " + currentPrice);
+            }
         } catch (Exception e) {
             logRulerDebug(methodName, "Could not get current price, using default: " + currentPrice);
         }
         
-        // Create meaningful ruler points with proper spacing
-        double priceRange = currentPrice * 0.01; // 1% of current price
-        double startPrice = currentPrice - (priceRange * 0.5);
-        double endPrice = currentPrice + (priceRange * 0.5);
+        // ایجاد نقاط قابل استفاده خط‌کش با فاصله مناسب
+        // از فاصله متعادل بالا و پایین قیمت فعلی استفاده می‌کنیم
+        double priceRange = currentPrice * 0.015; // 1.5% از قیمت فعلی (کمی بیشتر از قبل)
+        double startPrice = currentPrice - (priceRange * 0.5); // نیمی پایین‌تر
+        double endPrice = currentPrice + (priceRange * 0.5);   // نیمی بالاتر
         
-        // Time span of 50 bars (approximately)
-        long timeSpan = 50 * 60 * 1000; // 50 minutes for 1-minute bars
-        long startTime = currentTime - timeSpan;
-        long endTime = currentTime;
+        // بازه زمانی حدود 2 ساعت (برای نمایش بهتر)
+        long timeSpan = 2 * 60 * 60 * 1000; // 2 ساعت
+        long centerTime = currentTime - (30 * 60 * 1000); // 30 دقیقه قبل (برای نمایش معقول‌تر)
+        long startTime = centerTime - (timeSpan / 2); // 1 ساعت قبل
+        long endTime = centerTime + (timeSpan / 2);   // 1 ساعت بعد
         
-        logRulerInfo(methodName, "Creating default ruler: start=%.5f@%d, end=%.5f@%d", startPrice, startTime, endPrice, endTime);
+        logRulerInfo(methodName, "Creating centered default ruler: start=%.5f@%d, end=%.5f@%d", startPrice, startTime, endPrice, endTime);
+        logRulerInfo(methodName, "Ruler spans %.1f hours with price range of %.2f (%.3f%% of current price)", 
+            timeSpan / (60.0 * 60.0 * 1000.0), priceRange, (priceRange / currentPrice) * 100);
         
         // Create ruler resize points
         if (rulerStartResize == null) {
@@ -2047,13 +2081,21 @@ public class BiotakTrigger extends Study {
         settings.setString(S_RULER_END, endPrice + "|" + endTime);
         logRulerDebug(methodName, "Saved ruler points to settings");
         
+        // CRITICAL: Set ruler state to ACTIVE after creating all components
         rulerState = RulerState.ACTIVE;
-        logRulerInfo(methodName, "Default ruler created successfully and set to ACTIVE state");
+        logRulerInfo(methodName, "Centered default ruler created successfully and set to ACTIVE state");
         
         // Calculate and log initial measurements
         double priceDiff = endPrice - startPrice;
         double pips = Math.abs(priceDiff) * 10; // Assuming 1 pip = 0.1
-        logRulerInfo(methodName, "Initial ruler measurement: %.1f pips, price diff: %.5f", pips, priceDiff);
+        logRulerInfo(methodName, "Initial ruler measurement: %.1f pips, price diff: %.5f, time span: %.1f hours", 
+            pips, priceDiff, timeSpan / (60.0 * 60.0 * 1000.0));
+        
+        // IMPORTANT: Double-check that the state was actually set
+        if (rulerState != RulerState.ACTIVE) {
+            logRulerError(methodName, "CRITICAL ERROR: rulerState failed to set to ACTIVE!");
+            rulerState = RulerState.ACTIVE; // Force it
+        }
     }
     
     /**
