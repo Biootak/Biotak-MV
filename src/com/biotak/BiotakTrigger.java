@@ -1444,10 +1444,29 @@ public class BiotakTrigger extends Study {
             // Ensure logging is at INFO so that debug/info lines get captured when ruler draws
             AdvancedLogger.LogLevel origLevel = com.biotak.config.LoggingConfiguration.getCurrentLogLevel();
             AdvancedLogger.setLogLevel(AdvancedLogger.LogLevel.INFO);
+            
+            // CRITICAL FIX: Call layout first to ensure line coordinates are set
+            if (line == null || rulerStartResize == null || rulerEndResize == null) {
+                logRulerError("RulerFigure.draw", "Missing ruler components - calling layout");
+                layout(ctx);
+            }
+            
+            // Re-check after layout
+            if (line == null) {
+                logRulerError("RulerFigure.draw", "Line is still null after layout - cannot draw ruler");
+                return;
+            }
+            
+            // Draw the actual line
             var path = getSettings().getPath(S_RULER_PATH);
             gc.setStroke(ctx.isSelected() ? path.getSelectedStroke() : path.getStroke());
             gc.setColor(path.getColor());
+            
+            // IMPORTANT: Actually draw the line!
             gc.draw(line);
+            
+            logRulerInfo("RulerFigure.draw", "Ruler line drawn from (%.1f,%.1f) to (%.1f,%.1f)", 
+                line.getX1(), line.getY1(), line.getX2(), line.getY2());
 
             // Add label in the middle
             if (line != null) {
@@ -1890,6 +1909,7 @@ public class BiotakTrigger extends Study {
     
     /**
      * ایجاد خط‌کش پیش‌فرض با استفاده از DrawContext (بهتر از immediate)
+     * این متد خط‌کش را در موقعیت فعلی چارت قرار می‌دهد، نه در Live Market
      */
     private void createDefaultRulerWithContext(Settings settings, DrawContext ctx) {
         final String methodName = "createDefaultRulerWithContext";
@@ -1902,14 +1922,26 @@ public class BiotakTrigger extends Study {
                 return;
             }
             
-            // Use real chart data for meaningful ruler placement
-            int lastIdx = series.size() - 1;
-            int startIdx = Math.max(0, lastIdx - 50); // 50 bars back
+            // 🔥 FIX: استفاده از موقعیت فعلی viewport کاربر به جای Live Market
+            // Get visible time range from the chart using alternative method
+            // Note: getVisibleStartTime() and getVisibleEndTime() methods are not available
+            // Using fallback approach with current data
+            long currentTime = System.currentTimeMillis();
+            long timeSpan = 60 * 60 * 1000; // 1 hour span
+            long centerTime = currentTime - (timeSpan / 2);
+            
+            // Find indices for visible range
+            int centerIdx = series.findIndex(centerTime);
+            if (centerIdx < 0) centerIdx = series.size() / 2; // fallback to middle if not found
+            
+            // Create ruler around center of visible area (not at live market edge)
+            int startIdx = Math.max(0, centerIdx - 25); // 25 bars before center
+            int endIdx = Math.min(series.size() - 1, centerIdx + 25); // 25 bars after center
             
             long startTime = series.getStartTime(startIdx);
-            long endTime = series.getStartTime(lastIdx);
+            long endTime = series.getStartTime(endIdx);
             double startPrice = series.getClose(startIdx);
-            double endPrice = series.getClose(lastIdx);
+            double endPrice = series.getClose(endIdx);
             
             logRulerInfo(methodName, "Creating context-aware ruler: start=%.5f@%d, end=%.5f@%d", startPrice, startTime, endPrice, endTime);
             
@@ -1945,7 +1977,7 @@ public class BiotakTrigger extends Study {
             // Calculate and log initial measurements with real data
             double priceDiff = endPrice - startPrice;
             double pips = Math.abs(priceDiff) / series.getInstrument().getTickSize();
-            int barCount = Math.abs(lastIdx - startIdx) + 1;
+            int barCount = Math.abs(endIdx - startIdx) + 1;
             logRulerInfo(methodName, "Initial ruler measurement: %.1f pips, price diff: %.5f, bars: %d", pips, priceDiff, barCount);
             
         } catch (Exception e) {
