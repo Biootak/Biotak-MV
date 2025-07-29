@@ -595,6 +595,29 @@ public final class TimeframeUtil {
     }
     
     /**
+     * Finds the closest TRUE fractal timeframe (powers of 4: 1, 4, 16, 64, 256...) to the given minutes.
+     * This method focuses only on the real fractal sequence, not standard or power-of-3 timeframes.
+     */
+    private static Map.Entry<Integer, String> findClosestFractalTimeframe(int minutes) {
+        // Only search in the FRACTAL_MINUTES_MAP (powers of 2/4 sequence)
+        Map.Entry<Integer, String> fractalLower = FRACTAL_MINUTES_MAP.floorEntry(minutes);
+        Map.Entry<Integer, String> fractalHigher = FRACTAL_MINUTES_MAP.ceilingEntry(minutes);
+        
+        // Find the closest fractal entry
+        TreeMap<Integer, Map.Entry<Integer, String>> distanceMap = new TreeMap<>();
+        
+        addIfNotNull(distanceMap, fractalLower, minutes);
+        addIfNotNull(distanceMap, fractalHigher, minutes);
+        
+        // Return the fractal entry with the smallest distance
+        if (!distanceMap.isEmpty()) {
+            return distanceMap.firstEntry().getValue();
+        }
+        
+        return null;
+    }
+    
+    /**
      * Helper method to add an entry to the distance map if it's not null
      */
     private static void addIfNotNull(TreeMap<Integer, Map.Entry<Integer, String>> distanceMap, 
@@ -966,9 +989,10 @@ public final class TimeframeUtil {
      * Gets the nearest fractal timeframe to the given timeframe string.
      * For example, if input is M90 (90 minutes), it returns H1+M4 (64 minutes)
      * which is the closest fractal timeframe.
+     * This method specifically looks for the TRUE fractal timeframes (powers of 4): 1, 4, 16, 64, 256, 1024...
      * 
      * @param timeframeLabel The timeframe label (e.g., "M90", "H1+M30")
-     * @return The nearest fractal timeframe string
+     * @return The nearest fractal timeframe string based on powers of 4
      */
     public static String getNearestFractalTimeframe(String timeframeLabel) {
         if (timeframeLabel == null || timeframeLabel.isEmpty()) {
@@ -981,8 +1005,8 @@ public final class TimeframeUtil {
             return "-";
         }
         
-        // Find the closest fractal timeframe from all available maps
-        Map.Entry<Integer, String> closestEntry = findClosestTimeframe(currentMinutes);
+        // Find the closest FRACTAL timeframe (power of 4 sequence: 1, 4, 16, 64, 256...)
+        Map.Entry<Integer, String> closestEntry = findClosestFractalTimeframe(currentMinutes);
         
         if (closestEntry != null) {
             return closestEntry.getValue();

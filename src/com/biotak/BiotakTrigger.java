@@ -1848,28 +1848,25 @@ case M_STEP -> {
                  int atrMinVal = TimeframeUtil.parseCompoundTimeframe(bestATRLabel);
                  String atrStr2 = (atrMinVal > 0 ? atrMinVal + "m" : "-");
                  
-                 // Add nearest fractal timeframe info
-                 String nearestLabel = TimeframeUtil.getNearestFractalTimeframe(bestLabel);
-                 int nearestMinutes = TimeframeUtil.parseCompoundTimeframe(nearestLabel);
-                 String nearestStr1 = "Near F: " + nearestLabel;
-                 String nearestStr2 = (nearestMinutes > 0 ? nearestMinutes + "m" : "-");
+                // Add nearest fractal timeframe info (only timeframe, no minutes)
+                String nearestLabel = TimeframeUtil.getNearestFractalTimeframe(bestLabel);
+                String nearestStr1 = "Near F: " + nearestLabel;
 
-                 // Arrange lines in requested grouped order with separators
-                 String sep = "-------------";
-                 String[] lines = {
-                     pipsStr,
-                     sep,
-                     matchStr1,
-                     matchStr2,
-                     nearestStr1,
-                     nearestStr2,
-                     sep,
-                     barsStr,
-                     timeStr,
-                     sep,
-                     atrStr1,
-                     atrStr2
-                 };
+                // Arrange lines in requested grouped order with separators
+                String sep = "-------------";
+                String[] lines = {
+                    pipsStr,
+                    sep,
+                    matchStr1,
+                    matchStr2,
+                    nearestStr1,
+                    sep,
+                    barsStr,
+                    timeStr,
+                    sep,
+                    atrStr1,
+                    atrStr2
+                };
 
                 // Only show ruler info if ruler is selected or "Always Show Ruler Info" is enabled
                 boolean showInfo = ctx.isSelected() || getSettings().getBoolean(S_ALWAYS_SHOW_RULER_INFO, false);
