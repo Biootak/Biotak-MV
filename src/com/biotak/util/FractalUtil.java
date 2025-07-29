@@ -151,7 +151,7 @@ public final class FractalUtil {
         java.util.function.BiConsumer<Integer,String> adder = (min,label)->{
             if (label==null||label.isEmpty()) return;
             if (out.containsKey(label)) return;
-            double perc   = TimeframeUtil.getTimeframePercentage(min);
+            double perc   = TimeframeUtil.getTimeframePercentageFromMinutes(min);
             double thPts  = THCalculator.calculateTHPoints(inst, basePrice, perc) * tick;
             double mVal   = mScale * thPts;
             if (mVal>0) out.put(label, mVal);

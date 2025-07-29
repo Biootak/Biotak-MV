@@ -1586,7 +1586,7 @@ public void onMouseDown(Point loc, DrawContext ctx) {
                              double closePrice = series.getBidClose(series.size()-1);
                              while (highMin - lowMin > 1) {
                                  int mid = (lowMin + highMin) / 2;
-                                 double perc   = TimeframeUtil.getTimeframePercentage(mid);
+                                double perc   = TimeframeUtil.getTimeframePercentageFromMinutes(mid);
                                  double thPts  = THCalculator.calculateTHPoints(series.getInstrument(), closePrice, perc) * tick;
                                   // Logger.debug(String.format("[Refine] LiveBid=%.5f perc=%.3f thPts=%.2f leg=%.1f", closePrice, perc, thPts, legPip));
                                  double mVal   = TH_TO_M_FACTOR * thPts;

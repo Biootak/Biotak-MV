@@ -42,10 +42,10 @@ public class MethodDiscoveryExample {
         // گزینه 1: TimeframeUtil.getTimeframePercentage() with int parameter
         try {
             long start = System.nanoTime();
-            double percentage1 = TimeframeUtil.getTimeframePercentage(minutes);
+            double percentage1 = TimeframeUtil.getTimeframePercentageFromMinutes(minutes);
             long end = System.nanoTime();
             
-            System.out.printf("✅ TimeframeUtil.getTimeframePercentage(int): %.4f%% (%.3fms)%n", 
+            System.out.printf("✅ TimeframeUtil.getTimeframePercentageFromMinutes(int): %.4f%% (%.3fms)%n",
                              percentage1, (end - start) / 1_000_000.0);
             
             // اعتبارسنجی
@@ -53,7 +53,7 @@ public class MethodDiscoveryExample {
             assert percentage1 < 100 : "Percentage too high";
             
         } catch (Exception e) {
-            System.out.println("❌ TimeframeUtil.getTimeframePercentage(int) failed: " + e.getMessage());
+            System.out.println("❌ TimeframeUtil.getTimeframePercentageFromMinutes(int) failed: " + e.getMessage());
         }
         
         // گزینه 2: OptimizedCalculations.calculateTimeframePercentageOptimized()

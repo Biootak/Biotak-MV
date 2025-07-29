@@ -167,7 +167,7 @@ public final class TimeframeUtil {
      * @param minutes total minutes (must be >0)
      * @return computed percentage for the given timeframe length
      */
-    public static double getTimeframePercentage(int minutes) {
+    public static double getTimeframePercentageFromMinutes(int minutes) {
         if (minutes <= 0) minutes = 1;
         com.motivewave.platform.sdk.common.BarSize bs = com.motivewave.platform.sdk.common.BarSize.getBarSize(minutes);
         return getTimeframePercentage(bs);
