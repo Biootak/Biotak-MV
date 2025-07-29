@@ -99,6 +99,15 @@ public class BiotakTrigger extends Study {
 
     // Stores SS/LS base TH when lock option is enabled
     private double lockedBaseTH = Double.NaN;
+    
+    // Stores locked values for all level types when lock all option is enabled
+    private double lockedTHValue = Double.NaN;
+    private double lockedPatternValue = Double.NaN;
+    private double lockedTriggerValue = Double.NaN;
+    private double lockedStructureValue = Double.NaN;
+    private double lockedControlValue = Double.NaN;
+    private double lockedMValue = Double.NaN;
+    private double lockedCustomPrice = Double.NaN;
     private double thValue;
     private double patternTH;
     private double triggerTH;
@@ -326,7 +335,7 @@ public class BiotakTrigger extends Study {
             basisOptions.add(new NVP(b.toString(), b.name()));
         }
         grp.addRow(new DiscreteDescriptor(S_SSLS_BASIS, "SS/LS Timeframe", SSLSBasisType.STRUCTURE.name(), basisOptions));
-        grp.addRow(new BooleanDescriptor(Constants.S_LOCK_SSLS_LEVELS, "Lock SS/LS Levels", false));
+        grp.addRow(new BooleanDescriptor(Constants.S_LOCK_ALL_LEVELS, "Lock All Levels", false));
         // Quick settings could be added later if desired
         
         // ----------------- QUICK SETTINGS (Toolbar/Panels) -----------------
@@ -347,7 +356,7 @@ public class BiotakTrigger extends Study {
         // 4) SS/LS options when users switch mode
         sd.addQuickSettings(S_SSLS_BASIS,  // Basis for SS/LS (Structure/Pattern/Trigger)
                             S_LS_FIRST,    // Draw LS before SS?
-                            Constants.S_LOCK_SSLS_LEVELS,
+                            Constants.S_LOCK_ALL_LEVELS,
                             Constants.S_MSTEP_BASIS,
                             Constants.S_M_LEVEL_PATH);
 
@@ -896,42 +905,62 @@ public void onMouseDown(Point loc, DrawContext ctx) {
             if (needCustomAnchor) {
                 long anchorTime = endTime; // stick to last bar's time so point on right edge
 
-                // --- draggable point ---
-                if (customPricePoint == null) {
-                    customPricePoint = new ResizePoint(ResizeType.VERTICAL, true);
-                    // Enable MotiveWave's native magnet snapping
-                    customPricePoint.setSnapToLocation(true);
-                }
-                // Determine price to place the point: use saved custom price if available, otherwise last close price
+                // Check if Lock All Levels is enabled to determine custom price behavior
+                boolean lockAllLevels = getSettings().getBoolean(Constants.S_LOCK_ALL_LEVELS, false);
+                double finalCustomPrice;
+                
+                // Always get the current saved custom price first
                 double savedPrice = settings.getDouble(S_CUSTOM_PRICE, Double.NaN);
                 if (Double.isNaN(savedPrice) || savedPrice == 0) {
                     savedPrice = series.getClose(totalBars - 1);
+                    settings.setDouble(S_CUSTOM_PRICE, savedPrice);
                 }
-                // No manual snapping here; rely on MotiveWave's native magnet when the user drags the point.
+                
+                if (lockAllLevels && !Double.isNaN(lockedCustomPrice)) {
+                    // Use locked custom price (previously stored)
+                    finalCustomPrice = lockedCustomPrice;
+                } else if (lockAllLevels) {
+                    // First time locking - store current saved price as locked value
+                    lockedCustomPrice = savedPrice;
+                    finalCustomPrice = savedPrice;
+                } else {
+                    // Not locked - use current saved price
+                    finalCustomPrice = savedPrice;
+                }
 
-                customPricePoint.setLocation(anchorTime, savedPrice);
-                addFigure(customPricePoint);
+                // --- draggable point (only if not locked) ---
+                if (!lockAllLevels) {
+                    if (customPricePoint == null) {
+                        customPricePoint = new ResizePoint(ResizeType.VERTICAL, true);
+                        // Enable MotiveWave's native magnet snapping
+                        customPricePoint.setSnapToLocation(true);
+                    }
+                    customPricePoint.setLocation(anchorTime, finalCustomPrice);
+                    addFigure(customPricePoint);
+                } else {
+                    // When locked, don't add the draggable point
+                    customPricePoint = null;
+                }
 
                 // --- numeric label ---
                 if (customPriceLabel == null) customPriceLabel = new PriceLabel();
-                String priceText = series.getInstrument().format(savedPrice);
-                customPriceLabel.setData(anchorTime, savedPrice, priceText);
+                String priceText = series.getInstrument().format(finalCustomPrice);
+                customPriceLabel.setData(anchorTime, finalCustomPrice, priceText);
                 addFigure(customPriceLabel);
 
-                // Draw/update custom price horizontal line (now draggable)
+                // Draw/update custom price horizontal line
                 PathInfo customPricePath = getSettings().getPath(S_CUSTOM_PRICE_PATH);
-                customPriceLine = new CustomPriceLine(startTime, endTime, savedPrice, customPricePath);
+                customPriceLine = new CustomPriceLine(startTime, endTime, finalCustomPrice, customPricePath);
                 addFigure(customPriceLine);
-                // Logger.debug("CustomPriceLine created and added at price: " + savedPrice);
                 
-                // Add the invisible ResizePoint for line dragging
-                ResizePoint lineResizePoint = customPriceLine.getLineResizePoint();
-                if (lineResizePoint != null) {
-                    addFigure(lineResizePoint);
-                    // Logger.debug("LineResizePoint added for line dragging");
-                } else {
-                    // Logger.debug("ERROR: LineResizePoint is null!");
+                // Add the invisible ResizePoint for line dragging (only if not locked)
+                if (!lockAllLevels) {
+                    ResizePoint lineResizePoint = customPriceLine.getLineResizePoint();
+                    if (lineResizePoint != null) {
+                        addFigure(lineResizePoint);
+                    }
                 }
+                // Note: When locked, we simply don't add the line resize point to make line non-draggable
 
                 // Additional visual labeling can be explored later if needed.
             }
@@ -1046,6 +1075,19 @@ public void onMouseDown(Point loc, DrawContext ctx) {
             // ------------------------------------------------------------------
             switch (currentMode) {
                 case TH_STEP -> {
+                    // Check for lock all levels functionality
+                    boolean lockAllLevels = getSettings().getBoolean(Constants.S_LOCK_ALL_LEVELS, false);
+                    double finalTHValue = thValue;
+                    
+                    if (lockAllLevels && !Double.isNaN(lockedTHValue)) {
+                        // Use locked TH value
+                        finalTHValue = lockedTHValue;
+                    } else if (lockAllLevels) {
+                        // First time locking - store current value
+                        lockedTHValue = thValue;
+                        finalTHValue = thValue;
+                    }
+                    
                     if (getSettings().getBoolean(S_SHOW_TH_LEVELS, true)) {
                         List<Figure> thFigures = LevelDrawer.drawTHLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, thBasePrice, startTime, endTime);
                         for (Figure f : thFigures) addFigure(f);
@@ -1057,12 +1099,12 @@ public void onMouseDown(Point loc, DrawContext ctx) {
                             getSettings().getString(S_SSLS_BASIS, SSLSBasisType.STRUCTURE.name()), SSLSBasisType.STRUCTURE);
                     if (basis == null) basis = SSLSBasisType.STRUCTURE;
 
-                    // Lock behaviour: if user enabled lock, we calculate baseTH only once per study session
-                    boolean lockLevels = getSettings().getBoolean(Constants.S_LOCK_SSLS_LEVELS, false);
+                    // Unified lock behavior: use the same lock system as other modes
+                    boolean lockAllLevels = getSettings().getBoolean(Constants.S_LOCK_ALL_LEVELS, false);
 
                     double baseTHForSession;
 
-                    if (lockLevels && !Double.isNaN(lockedBaseTH)) {
+                    if (lockAllLevels && !Double.isNaN(lockedBaseTH)) {
                         // Already locked, use stored value
                         baseTHForSession = lockedBaseTH;
                     } else {
@@ -1085,7 +1127,7 @@ public void onMouseDown(Point loc, DrawContext ctx) {
                             default -> baseTHCalc = structureValue;
                         }
                         baseTHForSession = baseTHCalc;
-                        if (lockLevels) lockedBaseTH = baseTHForSession;
+                        if (lockAllLevels) lockedBaseTH = baseTHForSession;
                     }
 
                     double ssValue = baseTHForSession * SS_MULTIPLIER;
@@ -1095,26 +1137,53 @@ public void onMouseDown(Point loc, DrawContext ctx) {
                     List<Figure> sslsFigures = LevelDrawer.drawSSLSLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, ssValue, lsValue, drawLsFirst, startTime, endTime);
                     for (Figure f : sslsFigures) addFigure(f);
                 }
-                case CONTROL_STEP -> {
+case CONTROL_STEP -> {
                     // Draw levels based on the new fractal sequence  P → S → SS → C → LS
                     // (LS corresponds to the movement capacity of the next higher fractal timeframe)
 
                     // Calculate Control (C) value as the midpoint between SS and LS (7 T for the current TF)
                     double controlValue = (shortStep + longStep) / 2.0;
+                    
+                    // Check for lock all levels functionality
+                    boolean lockAllLevels = getSettings().getBoolean(Constants.S_LOCK_ALL_LEVELS, false);
+                    double finalControlValue = controlValue;
+                    
+                    if (lockAllLevels && !Double.isNaN(lockedControlValue)) {
+                        // Use locked Control value
+                        finalControlValue = lockedControlValue;
+                    } else if (lockAllLevels) {
+                        // First time locking - store current value
+                        lockedControlValue = controlValue;
+                        finalControlValue = controlValue;
+                    }
 
-                    List<Figure> controlFigures = LevelDrawer.drawControlLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, patternValue, structureValue, shortStep, controlValue, longStep, startTime, endTime);
+                    List<Figure> controlFigures = LevelDrawer.drawControlLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, patternValue, structureValue, shortStep, finalControlValue, longStep, startTime, endTime);
                     for (Figure f : controlFigures) addFigure(f);
                 }
-                case M_STEP -> {
+case M_STEP -> {
                     double controlValue = (shortStep + longStep) / 2.0;
-                    double mDistance = controlValue * ATR_FACTOR;
+                    
+                    // Check for lock all levels functionality
+                    boolean lockAllLevels = getSettings().getBoolean(Constants.S_LOCK_ALL_LEVELS, false);
+                    double finalControlValue = controlValue;
+                    
+                    if (lockAllLevels && !Double.isNaN(lockedControlValue)) {
+                        // Use locked Control value for M-step calculations
+                        finalControlValue = lockedControlValue;
+                    } else if (lockAllLevels) {
+                        // First time locking - store current value
+                        lockedControlValue = controlValue;
+                        finalControlValue = controlValue;
+                    }
+                    
+                    double mDistance = finalControlValue * ATR_FACTOR;
                     com.biotak.enums.MStepBasisType basis = com.biotak.util.EnumUtil.safeEnum(com.biotak.enums.MStepBasisType.class,
                             getSettings().getString(Constants.S_MSTEP_BASIS, com.biotak.enums.MStepBasisType.C_BASED.name()),
                             com.biotak.enums.MStepBasisType.C_BASED);
                     if (basis == null) basis = com.biotak.enums.MStepBasisType.C_BASED;
                     java.util.List<Figure> mFigures;
                     if (basis == com.biotak.enums.MStepBasisType.C_BASED) {
-                        mFigures = LevelDrawer.drawMLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, controlValue, startTime, endTime);
+                        mFigures = LevelDrawer.drawMLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, finalControlValue, startTime, endTime);
                     } else {
                         mFigures = LevelDrawer.drawMEqualLevels(getSettings(), midpointPrice, finalHigh, finalLow, mDistance, startTime, endTime);
                     }
@@ -1179,6 +1248,13 @@ public void onMouseDown(Point loc, DrawContext ctx) {
         } else if (rp == rulerEndResize) {
             getSettings().setString(S_RULER_END, rp.getValue() + "|" + rp.getTime());
         } else if (rp == customPricePoint) {
+            // Check if levels are locked before allowing price change
+            boolean lockAllLevels = getSettings().getBoolean(Constants.S_LOCK_ALL_LEVELS, false);
+            if (lockAllLevels) {
+                // Don't allow custom price changes when locked
+                return;
+            }
+            
             // Persist the new custom price and sync the line
             double newPrice = rp.getValue();
             getSettings().setDouble(S_CUSTOM_PRICE, newPrice);
@@ -1191,6 +1267,13 @@ public void onMouseDown(Point loc, DrawContext ctx) {
             lastCustomMoveTime = System.currentTimeMillis();
             drawFigures(ctx.getDataContext().getDataSeries().size() - 1, ctx.getDataContext());
         } else if (customPriceLine != null && rp == customPriceLine.getLineResizePoint()) {
+            // Check if levels are locked before allowing line drag
+            boolean lockAllLevels = getSettings().getBoolean(Constants.S_LOCK_ALL_LEVELS, false);
+            if (lockAllLevels) {
+                // Don't allow custom price line changes when locked
+                return;
+            }
+            
             // User finished dragging the invisible line ResizePoint (line itself)
             double newPrice = rp.getValue();
             long currentTime = System.currentTimeMillis();
@@ -1240,6 +1323,13 @@ public void onMouseDown(Point loc, DrawContext ctx) {
             rulerFigure.layout(ctx);
         }
         else if (rp == customPricePoint) {
+            // Check if levels are locked before allowing drag
+            boolean lockAllLevels = getSettings().getBoolean(Constants.S_LOCK_ALL_LEVELS, false);
+            if (lockAllLevels) {
+                // Don't allow custom price changes when locked
+                return;
+            }
+            
             // As the user drags the golden point, update the custom price and sync the line
             // Logger.debug("onResize: customPricePoint drag detected, newPrice = " + rp.getValue());
             double newPrice = rp.getValue();
@@ -1259,6 +1349,13 @@ public void onMouseDown(Point loc, DrawContext ctx) {
             // Light update during drag - full recalculation happens in onEndResize
         }
         else if (rp instanceof LineResizePoint) {
+            // Check if levels are locked before allowing line drag
+            boolean lockAllLevels = getSettings().getBoolean(Constants.S_LOCK_ALL_LEVELS, false);
+            if (lockAllLevels) {
+                // Don't allow custom price line changes when locked
+                return;
+            }
+            
             // User is dragging the invisible line ResizePoint (dragging the line itself)
             double newPrice = rp.getValue();
             long currentTime = System.currentTimeMillis();
