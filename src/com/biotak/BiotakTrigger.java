@@ -498,19 +498,27 @@ public class BiotakTrigger extends Study {
             
             // Handle panel button clicks even without DrawContext
             if (infoPanel != null) {
-                // Check if click is on minimize button
-                if (infoPanel.isInMinimizeButton(loc.x, loc.y)) {
-                    boolean newState = !settings.getBoolean(S_PANEL_MINIMIZED, false);
-                    settings.setBoolean(S_PANEL_MINIMIZED, newState);
-                    infoPanel.setMinimized(newState);
-                    AdvancedLogger.info("BiotakTrigger", "onClick", "Minimize button clicked, new state: %s", newState);
-                    return false; // prevent default behavior
-                }
-                // Check if click is on ruler button
-                else if (infoPanel.isInRulerButton(loc.x, loc.y)) {
-                    // Handle ruler button click even without DrawContext
-                    handleRulerButtonClickWithoutContext(settings);
-                    return false; // prevent default behavior
+                // First check if click is anywhere inside the panel area
+                if (infoPanel.contains(loc.x, loc.y, null)) {
+                    // Check if click is on minimize button
+                    if (infoPanel.isInMinimizeButton(loc.x, loc.y)) {
+                        boolean newState = !settings.getBoolean(S_PANEL_MINIMIZED, false);
+                        settings.setBoolean(S_PANEL_MINIMIZED, newState);
+                        infoPanel.setMinimized(newState);
+                        AdvancedLogger.info("BiotakTrigger", "onClick", "Minimize button clicked, new state: %s", newState);
+                        return false; // prevent default behavior
+                    }
+                    // Check if click is on ruler button
+                    else if (infoPanel.isInRulerButton(loc.x, loc.y)) {
+                        // Handle ruler button click even without DrawContext
+                        handleRulerButtonClickWithoutContext(settings);
+                        return false; // prevent default behavior
+                    }
+                    // Click is inside panel but not on buttons - prevent default behavior
+                    else {
+                        AdvancedLogger.info("BiotakTrigger", "onClick", "Click inside panel area, preventing default behavior");
+                        return false; // prevent default behavior for any panel click
+                    }
                 }
             }
             
@@ -536,26 +544,32 @@ public class BiotakTrigger extends Study {
                 DataContext dc = ctx.getDataContext();
                 int lastIdx = dc.getDataSeries().size() - 1;
                 drawFigures(lastIdx, dc);
+                AdvancedLogger.info("BiotakTrigger", "onClick", "Minimize button handled, preventing default behavior");
                 return false; // prevent default behavior
             }
             // Check if click is on ruler button
             else if (infoPanel.isInRulerButton(loc.x, loc.y)) {
                 handleRulerButtonClick(settings, ctx);
+                AdvancedLogger.info("BiotakTrigger", "onClick", "Ruler button handled, preventing default behavior");
                 return false; // prevent default behavior
             }
-            // Detect double-click inside panel to reset Custom Price quickly
-            long nowClick = System.currentTimeMillis();
-            if (nowClick - lastClickTime < 350) {
-                DataSeries series = ctx.getDataContext().getDataSeries();
-                if (series.size() > 0) {
-                    double lc = series.getClose(series.size() - 1);
-                    settings.setDouble(S_CUSTOM_PRICE, lc);
-                    lastCustomMoveTime = nowClick;
-                    drawFigures(series.size() - 1, ctx.getDataContext());
+            // Any other click inside panel - handle double-click for custom price reset
+            else {
+                long nowClick = System.currentTimeMillis();
+                if (nowClick - lastClickTime < 350) {
+                    DataSeries series = ctx.getDataContext().getDataSeries();
+                    if (series.size() > 0) {
+                        double lc = series.getClose(series.size() - 1);
+                        settings.setDouble(S_CUSTOM_PRICE, lc);
+                        lastCustomMoveTime = nowClick;
+                        drawFigures(series.size() - 1, ctx.getDataContext());
+                        AdvancedLogger.info("BiotakTrigger", "onClick", "Double-click custom price reset handled");
+                    }
                 }
+                lastClickTime = nowClick;
+                AdvancedLogger.info("BiotakTrigger", "onClick", "Click inside panel handled, preventing default behavior");
+                return false; // prevent default behavior for any panel click
             }
-            lastClickTime = nowClick;
-            return false; // prevent default behavior when clicking panel
         }
         
         // CRITICAL: Handle ruler state clicks for point selection OUTSIDE the panel
@@ -591,6 +605,7 @@ public class BiotakTrigger extends Study {
                 logRulerStateTransition("onClick", oldState, rulerState, "Start point selected successfully");
                 
                 AdvancedLogger.info("BiotakTrigger", "onClick", "=== START POINT SELECTION COMPLETED ===");
+                AdvancedLogger.info("BiotakTrigger", "onClick", "Ruler start point handled, preventing default behavior");
                 return false; // prevent default behavior
             } catch (Exception e) {
                 logRulerError("onClick", "Failed to set start point: " + e.getMessage());
@@ -642,14 +657,15 @@ public class BiotakTrigger extends Study {
                 drawFigures(lastIdx, dc);
                 
                 AdvancedLogger.info("BiotakTrigger", "onClick", "=== END POINT SELECTION COMPLETED ===");
+                AdvancedLogger.info("BiotakTrigger", "onClick", "Ruler end point handled, preventing default behavior");
                 return false; // prevent default behavior
             } catch (Exception e) {
                 logRulerError("onClick", "Failed to set end point: " + e.getMessage());
                 return true;
             }
         }
-        AdvancedLogger.info("BiotakTrigger", "onClick", "=== CLICK EVENT END === No ruler action taken, allowing default behavior");
-        return true; // allow default behavior for clicks outside panel
+        AdvancedLogger.info("BiotakTrigger", "onClick", "=== CLICK EVENT END === No special handling needed, allowing default behavior");
+        return true; // allow default behavior for clicks outside panel and ruler states
     }
     
     // Store the latest DrawContext for later use by onClick/other handlers
