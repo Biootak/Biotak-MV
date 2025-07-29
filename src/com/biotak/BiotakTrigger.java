@@ -616,6 +616,13 @@ public class BiotakTrigger extends Study {
             AdvancedLogger.info("BiotakTrigger", "onClick", "=== RULER END POINT SELECTION ===");
             AdvancedLogger.info("BiotakTrigger", "onClick", "End point selection in progress at pixel location: x=%d, y=%d", loc.x, loc.y);
             
+            // CRITICAL: Add extra validation to ensure we're really in the right state
+            if (rulerStartResize == null) {
+                AdvancedLogger.error("BiotakTrigger", "onClick", "CRITICAL ERROR: WAITING_FOR_END but rulerStartResize is null!");
+                rulerState = RulerState.INACTIVE;
+                return true; // Allow default behavior due to invalid state
+            }
+            
             DataSeries series = ctx.getDataContext().getDataSeries();
             try {
                 long time = ctx.translate2Time(loc.getX());
@@ -629,6 +636,9 @@ public class BiotakTrigger extends Study {
                 if (rulerEndResize == null) {
                     rulerEndResize = new ResizePoint(ResizeType.ALL, true);
                     rulerEndResize.setSnapToLocation(true);
+                    AdvancedLogger.info("BiotakTrigger", "onClick", "Created new rulerEndResize for end point");
+                } else {
+                    AdvancedLogger.info("BiotakTrigger", "onClick", "Using existing rulerEndResize for end point");
                 }
                 
                 rulerEndResize.setLocation(coord.getTime(), coord.getValue());
@@ -650,6 +660,9 @@ public class BiotakTrigger extends Study {
                     AdvancedLogger.info("BiotakTrigger", "onClick", "Using existing RulerFigure");
                 }
                 
+                // CRITICAL: Add delay before redraw to prevent event conflicts
+                AdvancedLogger.info("BiotakTrigger", "onClick", "CRITICAL: About to call drawFigures - this should complete ruler setup");
+                
                 // Redraw to show completed ruler
                 DataContext dc = ctx.getDataContext();
                 int lastIdx = dc.getDataSeries().size() - 1;
@@ -657,11 +670,17 @@ public class BiotakTrigger extends Study {
                 drawFigures(lastIdx, dc);
                 
                 AdvancedLogger.info("BiotakTrigger", "onClick", "=== END POINT SELECTION COMPLETED ===");
-                AdvancedLogger.info("BiotakTrigger", "onClick", "Ruler end point handled, preventing default behavior");
-                return false; // prevent default behavior
+                AdvancedLogger.info("BiotakTrigger", "onClick", "CRITICAL: Ruler end point handled, FORCING false return to prevent settings dialog");
+                
+                // CRITICAL: Force immediate return to prevent any further processing
+                return false; // prevent default behavior - MUST NOT open settings
             } catch (Exception e) {
+                AdvancedLogger.error("BiotakTrigger", "onClick", "CRITICAL ERROR in end point selection: %s", e.getMessage());
+                AdvancedLogger.error("BiotakTrigger", "onClick", "Exception stack: %s", java.util.Arrays.toString(e.getStackTrace()));
                 logRulerError("onClick", "Failed to set end point: " + e.getMessage());
-                return true;
+                // Reset ruler state on error
+                rulerState = RulerState.INACTIVE;
+                return false; // Still prevent default behavior even on error
             }
         }
         AdvancedLogger.info("BiotakTrigger", "onClick", "=== CLICK EVENT END === No special handling needed, allowing default behavior");
