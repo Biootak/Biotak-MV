@@ -191,21 +191,35 @@ public final class TimeframeUtil {
         
         double result;
         
-        // Exact lookup for power-of-2 fractal timeframes to keep legacy table values
-        int totalMinutes = getTotalMinutes(barSize);
-        if (totalMinutes > 0 && FRACTAL_MINUTES_MAP.containsKey(totalMinutes)) {
-            String lbl = FRACTAL_MINUTES_MAP.get(totalMinutes);
-            result = FRACTAL_PERCENTAGES.getOrDefault(lbl, 0.02);
-        }
-        // Special case for S16 (≈1 %) used در نسخهٔ اصلی بیوتاک
-        else if (barSize.getIntervalType() == Enums.IntervalType.SECOND && barSize.getInterval() == 16) {
-            result = FRACTAL_PERCENTAGES.getOrDefault("S16", 0.01);
+        // Handle seconds-based timeframes first (fractal timeframes)
+        if (barSize.getIntervalType() == Enums.IntervalType.SECOND) {
+            int seconds = barSize.getInterval();
+            
+            // Special case for S16 (1% - base fractal second timeframe)
+            if (seconds == 16) {
+                result = FRACTAL_PERCENTAGES.getOrDefault("S16", 0.01);
+            }
+            else {
+                // For fractal seconds-based timeframes, calculate relative to S16
+                // S16 = 1%, so other seconds follow the same fractal ratio as minutes
+                // Formula: 0.01 * √(seconds / 16) to maintain fractal relationship
+                double ratio = (double) seconds / 16.0;
+                result = 0.01 * Math.sqrt(ratio);
+            }
         }
         else {
-            // Generic closed-form: 0.02 × √(minutes)
-            double minutesEquivalent = getTotalSeconds(barSize) / 60.0; // supports seconds/hours/days/…
-            if (minutesEquivalent <= 0) minutesEquivalent = 1.0;
-            result = 0.02 * Math.sqrt(minutesEquivalent);
+            // Exact lookup for power-of-2 fractal timeframes to keep legacy table values
+            int totalMinutes = getTotalMinutes(barSize);
+            if (totalMinutes > 0 && FRACTAL_MINUTES_MAP.containsKey(totalMinutes)) {
+                String lbl = FRACTAL_MINUTES_MAP.get(totalMinutes);
+                result = FRACTAL_PERCENTAGES.getOrDefault(lbl, 0.02);
+            }
+            else {
+                // Generic closed-form for minute-based timeframes: 0.02 × √(minutes)
+                double minutesEquivalent = getTotalSeconds(barSize) / 60.0; // supports seconds/hours/days/…
+                if (minutesEquivalent <= 0) minutesEquivalent = 1.0;
+                result = 0.02 * Math.sqrt(minutesEquivalent);
+            }
         }
         
         // Cache the result
