@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="3840" height="2160" viewBox="0 0 3840 2160" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="faviconGradient4K" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea"/>
+      <stop offset="100%" style="stop-color:#764ba2"/>
+    </linearGradient>
+    
+    <linearGradient id="centerGrad4K" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#11998e"/>
+      <stop offset="100%" style="stop-color:#38ef7d"/>
+    </linearGradient>
+    
+    <filter id="shadow4K">
+      <feDropShadow dx="12" dy="12" stdDeviation="24" flood-color="#000000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+  
+  <!-- Background Circle -->
+  <circle cx="1920" cy="1080" r="1020" fill="url(#faviconGradient4K)" filter="url(#shadow4K)"/>
+  
+  <!-- Letter B -->
+  <g transform="translate(960, 960)">
+    <path d="M 320 480 
+             L 320 1560
+             L 960 1560
+             C 1280 1560, 1408 1380, 1408 1200
+             C 1408 1020, 1280 900, 1088 900
+             L 960 900
+             C 1152 900, 1280 720, 1280 540
+             C 1280 360, 1152 480, 960 480
+             Z" 
+          fill="#ffffff" opacity="0.9"/>
+    
+    <!-- Dot -->
+    <circle cx="1600" cy="720" r="64" fill="url(#centerGrad4K)"/>
+    
+    <!-- Small Line -->
+    <rect x="1600" y="1200" width="256" height="32" rx="16" fill="#ffffff" opacity="0.7"/>
+  </g>
+</svg>

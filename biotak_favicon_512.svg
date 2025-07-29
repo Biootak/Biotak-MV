@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="faviconGradient512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea"/>
+      <stop offset="100%" style="stop-color:#764ba2"/>
+    </linearGradient>
+    
+    <linearGradient id="centerGrad512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#11998e"/>
+      <stop offset="100%" style="stop-color:#38ef7d"/>
+    </linearGradient>
+    
+    <!-- سایه پیشرفته برای عمق بیشتر -->
+    <filter id="shadow512">
+      <feDropShadow dx="4" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+    
+    <!-- گرادیان درخشندگی -->
+    <radialGradient id="shine512" cx="30%" cy="30%">
+      <stop offset="0%" style="stop-color:#ffffff" stop-opacity="0.2"/>
+      <stop offset="100%" style="stop-color:#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  
+  <!-- پس زمینه دایره ای -->
+  <circle cx="256" cy="256" r="240" fill="url(#faviconGradient512)" filter="url(#shadow512)"/>
+  
+  <!-- لایه درخشندگی -->
+  <circle cx="256" cy="256" r="240" fill="url(#shine512)"/>
+  
+  <!-- حرف B استایل شده -->
+  <g transform="translate(120, 120)">
+    <!-- قسمت اول B با جزئیات بیشتر -->
+    <path d="M 40 64 
+             L 40 208
+             L 120 208
+             C 160 208, 176 184, 176 160
+             C 176 136, 160 120, 136 120
+             L 120 120
+             C 144 120, 160 96, 160 72
+             C 160 48, 144 64, 120 64
+             Z" 
+          fill="#ffffff" opacity="0.9"/>
+    
+    <!-- نقطه تاکیدی بزرگتر -->
+    <circle cx="200" cy="96" r="16" fill="url(#centerGrad512)"/>
+    
+    <!-- خط کوچک -->
+    <rect x="200" y="160" width="64" height="8" rx="4" fill="#ffffff" opacity="0.7"/>
+    
+    <!-- جزئیات اضافی برای سایز بزرگ -->
+    <circle cx="220" cy="180" r="3" fill="url(#centerGrad512)" opacity="0.6"/>
+  </g>
+  
+</svg>

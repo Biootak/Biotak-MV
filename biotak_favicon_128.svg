@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="faviconGradient128" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea"/>
+      <stop offset="100%" style="stop-color:#764ba2"/>
+    </linearGradient>
+    
+    <linearGradient id="centerGrad128" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#11998e"/>
+      <stop offset="100%" style="stop-color:#38ef7d"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- پس زمینه دایره ای -->
+  <circle cx="64" cy="64" r="60" fill="url(#faviconGradient128)"/>
+  
+  <!-- حرف B استایل شده -->
+  <g transform="translate(30, 30)">
+    <!-- قسمت اول B -->
+    <path d="M 10 16 
+             L 10 52
+             L 30 52
+             C 40 52, 44 46, 44 40
+             C 44 34, 40 30, 34 30
+             L 30 30
+             C 36 30, 40 24, 40 18
+             C 40 12, 36 16, 30 16
+             Z" 
+          fill="#ffffff" opacity="0.9"/>
+    
+    <!-- نقطه تاکیدی -->
+    <circle cx="50" cy="24" r="4" fill="url(#centerGrad128)"/>
+    
+    <!-- خط کوچک -->
+    <rect x="50" y="40" width="16" height="2" rx="1" fill="#ffffff" opacity="0.7"/>
+  </g>
+  
+</svg>

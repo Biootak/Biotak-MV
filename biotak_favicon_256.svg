@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="faviconGradient256" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea"/>
+      <stop offset="100%" style="stop-color:#764ba2"/>
+    </linearGradient>
+    
+    <linearGradient id="centerGrad256" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#11998e"/>
+      <stop offset="100%" style="stop-color:#38ef7d"/>
+    </linearGradient>
+    
+    <!-- سایه برای عمق بیشتر -->
+    <filter id="shadow256">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  
+  <!-- پس زمینه دایره ای -->
+  <circle cx="128" cy="128" r="120" fill="url(#faviconGradient256)" filter="url(#shadow256)"/>
+  
+  <!-- حرف B استایل شده -->
+  <g transform="translate(60, 60)">
+    <!-- قسمت اول B -->
+    <path d="M 20 32 
+             L 20 104
+             L 60 104
+             C 80 104, 88 92, 88 80
+             C 88 68, 80 60, 68 60
+             L 60 60
+             C 72 60, 80 48, 80 36
+             C 80 24, 72 32, 60 32
+             Z" 
+          fill="#ffffff" opacity="0.9"/>
+    
+    <!-- نقطه تاکیدی -->
+    <circle cx="100" cy="48" r="8" fill="url(#centerGrad256)"/>
+    
+    <!-- خط کوچک -->
+    <rect x="100" y="80" width="32" height="4" rx="2" fill="#ffffff" opacity="0.7"/>
+  </g>
+  
+</svg>
