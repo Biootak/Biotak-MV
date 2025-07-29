@@ -112,7 +112,7 @@
   <!-- متن توضیحی -->
   <text x="130" y="95" font-family="'Segoe UI', Arial, sans-serif" 
         font-size="14" font-weight="400" fill="#667eea" opacity="0.8">
-    Biotechnology & Innovation Solutions
+    Biotechnology &amp; Innovation Solutions
   </text>
   
   <!-- شبکه مولکولی -->
