@@ -596,8 +596,8 @@ public class InfoPanel extends Figure {
                 gc.setColor(new Color(120, 100, 0, 180)); // Dark gold background
                 gc.fillRoundRect(textX - padding, currentY - fm.getAscent(), lineWidth + (padding * 2), fm.getHeight(), 8, 8);
                 
-                // Draw the text with a dark color for better visibility on light background
-                gc.setColor(new Color(0, 0, 0)); // Black text for maximum visibility
+                // Draw the text with theme-appropriate color for better visibility
+                gc.setColor(theme.contentColor); // Use theme content color for maximum visibility
                 gc.drawString(line, textX, currentY);
             } else {
                 // Check if the line contains an arrow symbol
@@ -610,16 +610,16 @@ public class InfoPanel extends Figure {
                     int beforeWidth = fm.stringWidth(beforeArrow);
                     int arrowWidth = fm.stringWidth(arrow);
                     
-                    // Draw the text before the arrow in black
-                    gc.setColor(Color.BLACK);
+                    // Draw the text before the arrow in theme color
+                    gc.setColor(theme.contentColor);
                     gc.drawString(beforeArrow, textX, currentY);
                     
                     // Draw the arrow in dark green
                     gc.setColor(new Color(0, 100, 0)); // Dark green
                     gc.drawString(arrow, textX + beforeWidth, currentY);
                     
-                    // Draw the text after the arrow in black
-                    gc.setColor(Color.BLACK);
+                    // Draw the text after the arrow in theme color
+                    gc.setColor(theme.contentColor);
                     gc.drawString(afterArrow, textX + beforeWidth + arrowWidth, currentY);
                 } 
                 else if (line.contains("▼")) {
@@ -631,21 +631,21 @@ public class InfoPanel extends Figure {
                     int beforeWidth = fm.stringWidth(beforeArrow);
                     int arrowWidth = fm.stringWidth(arrow);
                     
-                    // Draw the text before the arrow in black
-                    gc.setColor(Color.BLACK);
+                    // Draw the text before the arrow in theme color
+                    gc.setColor(theme.contentColor);
                     gc.drawString(beforeArrow, textX, currentY);
                     
                     // Draw the arrow in dark red
                     gc.setColor(new Color(139, 0, 0)); // Dark red
                     gc.drawString(arrow, textX + beforeWidth, currentY);
                     
-                    // Draw the text after the arrow in black
-                    gc.setColor(Color.BLACK);
+                    // Draw the text after the arrow in theme color
+                    gc.setColor(theme.contentColor);
                     gc.drawString(afterArrow, textX + beforeWidth + arrowWidth, currentY);
                 }
                 else {
-                    // No arrows, draw the entire line in black
-                    gc.setColor(Color.BLACK);
+                    // No arrows, draw the entire line in theme color
+                    gc.setColor(theme.contentColor);
                     gc.drawString(line, textX, currentY);
                 }
             }
