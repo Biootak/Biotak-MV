@@ -639,22 +639,22 @@ public class BiotakTrigger extends Study {
                 return true;
             }
         }
-        
         AdvancedLogger.info("BiotakTrigger", "onClick", "=== CLICK EVENT END === No ruler action taken, allowing default behavior");
         return true; // allow default behavior for clicks outside panel
     }
     
-    // Keep old method for backward compatibility but make it call onClick
-    public void onMouseDown(Point loc, DrawContext ctx) {
-        // Store the DrawContext for use in onClick method
-        this.lastDrawContext = ctx;
-        onClick(loc, 0); // Call the standard SDK method with no modifier flags
-    }
-    
+    // Store the latest DrawContext for later use by onClick/other handlers
+public void onMouseDown(Point loc, DrawContext ctx) {
+    // Persist the DrawContext so that onClick (triggered on mouse release) has access to it
+    this.lastDrawContext = ctx;
+    // Do NOT call onClick here – MotiveWave will invoke it automatically on mouse release.
+}
+
     /**
      * Handle mouse movement for dynamic ruler tracking
      */
     public void onMouseMove(Point loc, DrawContext ctx) {
+// ... (rest of the code remains the same)
         // Store DrawContext for SDK 7 compatibility
         this.lastDrawContext = ctx;
         
