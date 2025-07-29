@@ -1867,17 +1867,27 @@ case M_STEP -> {
                 boolean showInfo = ctx.isSelected() || getSettings().getBoolean(S_ALWAYS_SHOW_RULER_INFO, false);
                 
                 if (showInfo) {
-                    // Calculate max width and total height
+                    // Set the ruler font first to ensure correct measurements
+                    FontInfo rulerFontInfo = getSettings().getFont(S_RULER_FONT);
+                    Font rulerFont = rulerFontInfo != null ? rulerFontInfo.getFont() : getSettings().getFont(S_FONT).getFont();
+                    gc.setFont(rulerFont);
+                    
+                    // Calculate max width and total height with correct font
                     java.awt.font.FontRenderContext frc = gc.getFontRenderContext();
                     double maxWidth = 0;
-                    double lineHeight = gc.getFont().getLineMetrics("A", frc).getHeight();
+                    java.awt.font.LineMetrics baseLM = gc.getFont().getLineMetrics("Ag", frc); // Use characters with ascenders and descenders
+                    double lineHeight = baseLM.getHeight();
+                    
+                    // Calculate the actual width for each line with proper font metrics
                     for (String ln : lines) {
-                        double w = gc.getFont().getStringBounds(ln, frc).getWidth();
+                        java.awt.geom.Rectangle2D bounds = gc.getFont().getStringBounds(ln, frc);
+                        double w = bounds.getWidth();
                         if (w > maxWidth) maxWidth = w;
                     }
-                    int padding = 5;
-                    int boxWidth = (int) maxWidth + 2 * padding;
-                    int boxHeight = (int) (lineHeight * lines.length) + 2 * padding;
+                    
+                    int padding = 8; // Increased padding for better readability
+                    int boxWidth = (int) Math.ceil(maxWidth) + 2 * padding;
+                    int boxHeight = (int) Math.ceil(lineHeight * lines.length) + 2 * padding;
 
                     int boxX = (int) (midX - boxWidth / 2);
                     // Position box touching the line at midpoint
@@ -1927,11 +1937,6 @@ case M_STEP -> {
 
                     // Set text color
                     gc.setColor(txtCol);
-                    
-                    // Use ruler font setting if available, otherwise use default font
-                    FontInfo rulerFontInfo = getSettings().getFont(S_RULER_FONT);
-                    Font rulerFont = rulerFontInfo != null ? rulerFontInfo.getFont() : getSettings().getFont(S_FONT).getFont();
-                    gc.setFont(rulerFont);
                     // Draw each line centered
                     java.awt.font.LineMetrics lm = gc.getFont().getLineMetrics("A", frc);
                     int y = boxY + (int) lm.getAscent() + padding;
