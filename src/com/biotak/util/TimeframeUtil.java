@@ -961,4 +961,34 @@ public final class TimeframeUtil {
         }
         return minutes > 0 ? minutes : -1;
     }
-} 
+    
+    /**
+     * Gets the nearest fractal timeframe to the given timeframe string.
+     * For example, if input is M90 (90 minutes), it returns H1+M4 (64 minutes)
+     * which is the closest fractal timeframe.
+     * 
+     * @param timeframeLabel The timeframe label (e.g., "M90", "H1+M30")
+     * @return The nearest fractal timeframe string
+     */
+    public static String getNearestFractalTimeframe(String timeframeLabel) {
+        if (timeframeLabel == null || timeframeLabel.isEmpty()) {
+            return "-";
+        }
+        
+        // Parse the current timeframe to get total minutes
+        int currentMinutes = parseCompoundTimeframe(timeframeLabel);
+        if (currentMinutes <= 0) {
+            return "-";
+        }
+        
+        // Find the closest fractal timeframe from all available maps
+        Map.Entry<Integer, String> closestEntry = findClosestTimeframe(currentMinutes);
+        
+        if (closestEntry != null) {
+            return closestEntry.getValue();
+        }
+        
+        // If no exact match found, return the original timeframe
+        return timeframeLabel;
+    }
+}

@@ -1847,6 +1847,12 @@ case M_STEP -> {
                  String atrStr1 = String.format("ATR×3 : %s", bestATRLabel);
                  int atrMinVal = TimeframeUtil.parseCompoundTimeframe(bestATRLabel);
                  String atrStr2 = (atrMinVal > 0 ? atrMinVal + "m" : "-");
+                 
+                 // Add nearest fractal timeframe info
+                 String nearestLabel = TimeframeUtil.getNearestFractalTimeframe(bestLabel);
+                 int nearestMinutes = TimeframeUtil.parseCompoundTimeframe(nearestLabel);
+                 String nearestStr1 = "Near F: " + nearestLabel;
+                 String nearestStr2 = (nearestMinutes > 0 ? nearestMinutes + "m" : "-");
 
                  // Arrange lines in requested grouped order with separators
                  String sep = "-------------";
@@ -1855,6 +1861,8 @@ case M_STEP -> {
                      sep,
                      matchStr1,
                      matchStr2,
+                     nearestStr1,
+                     nearestStr2,
                      sep,
                      barsStr,
                      timeStr,
