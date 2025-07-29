@@ -41,9 +41,12 @@ buildNumber.properties
 .gradle/
 build/
 
-# Files
+# Log files
 *.log
 biotak_log.txt
+logs/
+biotak_*.log
+performance_monitor.log
 nul
 
 # OS specific files
