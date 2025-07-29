@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400" height="150" viewBox="0 0 400 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- گرادیانت اصلی متن -->
+    <linearGradient id="textGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e3c72"/>
+      <stop offset="30%" style="stop-color:#2a5298"/>
+      <stop offset="70%" style="stop-color:#00b4db"/>
+      <stop offset="100%" style="stop-color:#0083b0"/>
+    </linearGradient>
+    
+    <!-- گرادیانت DNA -->
+    <linearGradient id="dnaGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4facfe"/>
+      <stop offset="100%" style="stop-color:#00f2fe"/>
+    </linearGradient>
+    
+    <!-- گرادیانت برگ‌ها -->
+    <linearGradient id="leafGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#56ab2f"/>
+      <stop offset="100%" style="stop-color:#a8e6cf"/>
+    </linearGradient>
+    
+    <!-- گرادیانت دایره مرکزی -->
+    <radialGradient id="centerGradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#667eea"/>
+      <stop offset="100%" style="stop-color:#764ba2"/>
+    </radialGradient>
+    
+    <!-- سایه متن -->
+    <filter id="textShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="3" dy="3" stdDeviation="4" flood-color="#00000030"/>
+    </filter>
+    
+    <!-- درخشش -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge> 
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- انیمیشن چرخش -->
+    <animateTransform id="rotate" attributeName="transform" type="rotate" 
+                      values="0 50 75;360 50 75" dur="20s" repeatCount="indefinite"/>
+  </defs>
+  
+  <!-- پس‌زمینه شیشه‌ای -->
+  <rect width="400" height="150" fill="url(#centerGradient)" opacity="0.1" rx="20" ry="20"/>
+  
+  <!-- حلقه DNA پیشرفته -->
+  <g transform="translate(30, 30)" filter="url(#glow)">
+    <!-- DNA حلقوی -->
+    <g>
+      <animateTransform attributeName="transform" type="rotate" 
+                        values="0 45 45;360 45 45" dur="15s" repeatCount="indefinite"/>
+      
+      <!-- رشته اول -->
+      <path d="M 45 10 
+               A 35 35 0 0 1 80 45
+               A 35 35 0 0 1 45 80
+               A 35 35 0 0 1 10 45
+               A 35 35 0 0 1 45 10" 
+            stroke="url(#dnaGradient)" stroke-width="4" fill="none" opacity="0.8"/>
+      
+      <!-- رشته دوم -->
+      <path d="M 45 20 
+               A 25 25 0 0 0 70 45
+               A 25 25 0 0 0 45 70
+               A 25 25 0 0 0 20 45
+               A 25 25 0 0 0 45 20" 
+            stroke="url(#dnaGradient)" stroke-width="4" fill="none" opacity="0.6"/>
+      
+      <!-- اتصالات DNA -->
+      <g stroke="#4facfe" stroke-width="2" opacity="0.7">
+        <line x1="45" y1="10" x2="45" y2="20">
+          <animate attributeName="opacity" values="0.3;1;0.3" dur="2s" repeatCount="indefinite"/>
+        </line>
+        <line x1="70" y1="45" x2="80" y2="45">
+          <animate attributeName="opacity" values="0.3;1;0.3" dur="2.5s" repeatCount="indefinite"/>
+        </line>
+        <line x1="45" y1="70" x2="45" y2="80">
+          <animate attributeName="opacity" values="0.3;1;0.3" dur="3s" repeatCount="indefinite"/>
+        </line>
+        <line x1="10" y1="45" x2="20" y2="45">
+          <animate attributeName="opacity" values="0.3;1;0.3" dur="2.2s" repeatCount="indefinite"/>
+        </line>
+      </g>
+    </g>
+    
+    <!-- مرکز DNA -->
+    <circle cx="45" cy="45" r="8" fill="url(#centerGradient)" opacity="0.9">
+      <animate attributeName="r" values="6;10;6" dur="3s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- متن اصلی BIOTAK -->
+  <text x="130" y="65" font-family="'Segoe UI', Arial, sans-serif" 
+        font-size="36" font-weight="900" 
+        fill="url(#textGradient)" filter="url(#textShadow)">
+    BIOTAK
+  </text>
+  
+  <!-- خط طلایی زیر متن -->
+  <rect x="130" y="75" width="140" height="3" rx="1.5">
+    <animate attributeName="fill" 
+             values="#ff6b6b;#4ecdc4;#45b7d1;#96ceb4;#ffeaa7;#ff6b6b" 
+             dur="6s" repeatCount="indefinite"/>
+  </rect>
+  
+  <!-- متن توضیحی -->
+  <text x="130" y="95" font-family="'Segoe UI', Arial, sans-serif" 
+        font-size="14" font-weight="400" fill="#667eea" opacity="0.8">
+    Biotechnology & Innovation Solutions
+  </text>
+  
+  <!-- شبکه مولکولی -->
+  <g transform="translate(290, 25)" opacity="0.6">
+    <!-- مولکول‌های متحرک -->
+    <circle cx="30" cy="20" r="6" fill="#56ab2f">
+      <animateTransform attributeName="transform" type="rotate" 
+                        values="0 30 20;360 30 20" dur="8s" repeatCount="indefinite"/>
+    </circle>
+    
+    <circle cx="50" cy="40" r="4" fill="#4facfe">
+      <animateTransform attributeName="transform" type="rotate" 
+                        values="0 50 40;-360 50 40" dur="12s" repeatCount="indefinite"/>
+    </circle>
+    
+    <circle cx="20" cy="50" r="5" fill="#ff6b6b">
+      <animateTransform attributeName="transform" type="rotate" 
+                        values="0 20 50;360 20 50" dur="10s" repeatCount="indefinite"/>
+    </circle>
+    
+    <circle cx="60" cy="15" r="3" fill="#ffeaa7">
+      <animate attributeName="r" values="2;5;2" dur="4s" repeatCount="indefinite"/>
+    </circle>
+    
+    <!-- اتصالات شبکه -->
+    <g stroke="#667eea" stroke-width="1" opacity="0.4">
+      <line x1="30" y1="20" x2="50" y2="40">
+        <animate attributeName="opacity" values="0.2;0.8;0.2" dur="3s" repeatCount="indefinite"/>
+      </line>
+      <line x1="50" y1="40" x2="20" y2="50">
+        <animate attributeName="opacity" values="0.2;0.8;0.2" dur="4s" repeatCount="indefinite"/>
+      </line>
+      <line x1="30" y1="20" x2="60" y2="15">
+        <animate attributeName="opacity" values="0.2;0.8;0.2" dur="5s" repeatCount="indefinite"/>
+      </line>
+    </g>
+  </g>
+  
+  <!-- برگ‌های زنده -->
+  <g transform="translate(280, 80)" opacity="0.7">
+    <!-- برگ اول -->
+    <path d="M 20 10 
+             C 35 5, 45 15, 40 30 
+             C 35 40, 25 35, 20 25
+             C 15 15, 15 10, 20 10" 
+          fill="url(#leafGradient)">
+      <animateTransform attributeName="transform" type="rotate" 
+                        values="0 25 20;10 25 20;0 25 20" dur="6s" repeatCount="indefinite"/>
+    </path>
+    
+    <!-- رگبرگ -->
+    <path d="M 20 10 Q 25 20, 40 30" stroke="#2d5016" stroke-width="1" fill="none" opacity="0.6"/>
+    
+    <!-- برگ دوم -->
+    <path d="M 40 35 
+             C 55 30, 65 40, 60 55 
+             C 55 65, 45 60, 40 50
+             C 35 40, 35 35, 40 35" 
+          fill="url(#leafGradient)" opacity="0.8">
+      <animateTransform attributeName="transform" type="rotate" 
+                        values="0 45 45;-8 45 45;0 45 45" dur="7s" repeatCount="indefinite"/>
+    </path>
+    
+    <!-- رگبرگ دوم -->
+    <path d="M 40 35 Q 45 45, 60 55" stroke="#2d5016" stroke-width="1" fill="none" opacity="0.6"/>
+  </g>
+  
+  <!-- ذرات درخشان -->
+  <g>
+    <circle cx="100" cy="30" r="1.5" fill="#ffeaa7">
+      <animate attributeName="opacity" values="0;1;0" dur="2s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="30;25;30" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    
+    <circle cx="320" cy="120" r="1" fill="#ff6b6b">
+      <animate attributeName="opacity" values="0;1;0" dur="3s" repeatCount="indefinite"/>
+      <animate attributeName="cx" values="320;325;320" dur="4s" repeatCount="indefinite"/>
+    </circle>
+    
+    <circle cx="150" cy="110" r="1.2" fill="#4facfe">
+      <animate attributeName="opacity" values="0;1;0" dur="2.5s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- خطوط انرژی -->
+  <g stroke="#667eea" stroke-width="0.5" opacity="0.3">
+    <path d="M 110 60 Q 140 50, 170 65">
+      <animate attributeName="opacity" values="0.1;0.6;0.1" dur="4s" repeatCount="indefinite"/>
+    </path>
+    <path d="M 270 45 Q 300 35, 330 50">
+      <animate attributeName="opacity" values="0.1;0.6;0.1" dur="5s" repeatCount="indefinite"/>
+    </path>
+  </g>
+  
+</svg>
