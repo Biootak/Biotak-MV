@@ -82,8 +82,8 @@ public final class FractalUtil {
     public static double[] getHistoricalRange(DataSeries series, Settings settings,
                                               double cachedHigh, double cachedLow, boolean manualMode) {
         if (manualMode) {
-            double manualHigh = settings.getDouble(com.biotak.util.Constants.S_MANUAL_HIGH, 0);
-            double manualLow  = settings.getDouble(com.biotak.util.Constants.S_MANUAL_LOW, 0);
+            double manualHigh = settings.getDouble(com.biotak.config.SettingsRepository.S_MANUAL_HIGH, 0);
+            double manualLow  = settings.getDouble(com.biotak.config.SettingsRepository.S_MANUAL_LOW, 0);
             return new double[]{manualHigh, manualLow};
         }
 

@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static com.biotak.util.Constants.*;
+import static com.biotak.config.SettingsRepository.*;
 
 public class LevelDrawer {
 
