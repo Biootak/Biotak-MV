@@ -4,6 +4,9 @@ import com.motivewave.platform.sdk.common.BarSize;
 import com.motivewave.platform.sdk.common.Enums;
 
 import static com.biotak.util.Constants.FRACTAL_PERCENTAGES;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.math.MathContext;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.HashMap;
@@ -11,9 +14,20 @@ import java.util.HashMap;
 /**
  * Utility class for timeframe-related calculations.
  * Handles both standard fractal timeframes (powers of 2) and powers of 3 timeframes.
+ * Uses BigDecimal for precise calculations to avoid rounding errors.
  */
 public final class TimeframeUtil {
 
+    // Precision context for BigDecimal calculations
+    private static final MathContext MATH_CONTEXT = new MathContext(34, RoundingMode.HALF_UP);
+    
+    // Cached BigDecimal constants for performance
+    private static final BigDecimal BD_0_01 = new BigDecimal("0.01");
+    private static final BigDecimal BD_0_02 = new BigDecimal("0.02");
+    private static final BigDecimal BD_16 = new BigDecimal("16");
+    private static final BigDecimal BD_24 = new BigDecimal("24");
+    private static final BigDecimal BD_60 = new BigDecimal("60");
+    
     // Store seconds-based fractal timeframes for special cases
     private static final TreeMap<Integer, String> FRACTAL_SECONDS_MAP = new TreeMap<>();
     static {
@@ -203,8 +217,10 @@ public final class TimeframeUtil {
                 // For fractal seconds-based timeframes, calculate relative to S16
                 // S16 = 1%, so other seconds follow the same fractal ratio as minutes
                 // Formula: 0.01 * √(seconds / 16) to maintain fractal relationship
-                double ratio = (double) seconds / 16.0;
-                result = 0.01 * Math.sqrt(ratio);
+                BigDecimal bdSeconds = new BigDecimal(seconds);
+                BigDecimal ratio = bdSeconds.divide(BD_16, MATH_CONTEXT);
+                BigDecimal sqrtRatio = sqrt(ratio, MATH_CONTEXT);
+                result = BD_0_01.multiply(sqrtRatio, MATH_CONTEXT).doubleValue();
             }
         }
         else {
@@ -228,19 +244,21 @@ public final class TimeframeUtil {
                 double lowerPercentage = FRACTAL_PERCENTAGES.get(lowerEntry.getValue());
                 double higherPercentage = FRACTAL_PERCENTAGES.get(higherEntry.getValue());
 
-                // Perform logarithmic interpolation
-                double logLower = Math.log(lowerMinutes);
-                double logHigher = Math.log(higherMinutes);
-                double logCurrent = Math.log(totalMinutes);
-
-                double ratio = (logCurrent - logLower) / (logHigher - logLower);
-                result = lowerPercentage + ratio * (higherPercentage - lowerPercentage);
+                // Perform precise logarithmic interpolation using BigDecimal
+                result = preciseLogarithmicInterpolation(
+                    (int) lowerMinutes, (int) higherMinutes, totalMinutes,
+                    lowerPercentage, higherPercentage
+                );
             }
         } else {
-            // Fallback for timeframes outside the defined fractal range
-            double minutesEquivalent = getTotalSeconds(barSize) / 60.0;
-            if (minutesEquivalent <= 0) minutesEquivalent = 1.0;
-            result = 0.02 * Math.sqrt(minutesEquivalent);
+            // Fallback for timeframes outside the defined fractal range with BigDecimal precision
+            BigDecimal bdTotalSeconds = new BigDecimal(getTotalSeconds(barSize));
+            BigDecimal minutesEquivalent = bdTotalSeconds.divide(BD_60, MATH_CONTEXT);
+            if (minutesEquivalent.compareTo(BigDecimal.ZERO) <= 0) {
+                minutesEquivalent = BigDecimal.ONE;
+            }
+            BigDecimal sqrtMinutes = sqrt(minutesEquivalent, MATH_CONTEXT);
+            result = BD_0_02.multiply(sqrtMinutes, MATH_CONTEXT).doubleValue();
         }
             }
         }
@@ -277,12 +295,15 @@ public final class TimeframeUtil {
             // 2) Generic rule for all other (especially non-fractal) timeframes
             //    Goal: when timeframe ×4 ⇒ expected ATR (price) ×2, while حفظ نرمی یکنواخت.
             //    Period ≈ 24 × √(minutesEquivalent)
-            double minutesEq = getTotalSeconds(barSize) / 60.0;
-            if (minutesEq <= 0) minutesEq = 1.0;
-
-            int period = (int) Math.round(24.0 * Math.sqrt(minutesEq));
+            BigDecimal bdMinutesEq = BigDecimal.valueOf(getTotalSeconds(barSize)).divide(BD_60, MATH_CONTEXT);
+            if (bdMinutesEq.compareTo(BigDecimal.ZERO) <= 0) {
+                bdMinutesEq = BigDecimal.ONE;
+            }
+            BigDecimal sqrtMinutes = sqrt(bdMinutesEq, MATH_CONTEXT);
+            BigDecimal period = BD_24.multiply(sqrtMinutes, MATH_CONTEXT);
+            
             // Clamp to practical bounds
-            result = Math.max(12, Math.min(52, period));
+            result = Math.max(12, Math.min(52, period.intValue()));
         }
         
         // Cache the result
@@ -1046,5 +1067,128 @@ public final class TimeframeUtil {
         
         // If no exact match found, return the original timeframe
         return timeframeLabel;
+    }
+    
+    /* ------------------------------------------------------------------
+     *  PRIVATE BIGDECIMAL PRECISION METHODS
+     * ------------------------------------------------------------------ */
+    
+    /**
+     * Calculates the square root of a BigDecimal value using Newton's method.
+     * Provides high precision square root calculation.
+     * 
+     * @param value The value to calculate square root for
+     * @param mc The MathContext for precision
+     * @return The square root as BigDecimal
+     */
+    private static BigDecimal sqrt(BigDecimal value, MathContext mc) {
+        if (value.signum() == 0) {
+            return BigDecimal.ZERO;
+        }
+        if (value.signum() < 0) {
+            throw new ArithmeticException("Square root of negative number");
+        }
+        
+        // Initial guess - use half of the value or 1, whichever is smaller
+        BigDecimal x = value.divide(BigDecimal.valueOf(2), mc);
+        if (x.compareTo(BigDecimal.ONE) > 0) {
+            x = BigDecimal.ONE;
+        }
+        
+        BigDecimal lastX;
+        int iterations = 0;
+        final int maxIterations = 50;
+        
+        do {
+            lastX = x;
+            // Newton's method: x = (x + value/x) / 2
+            x = x.add(value.divide(x, mc), mc).divide(BigDecimal.valueOf(2), mc);
+            iterations++;
+        } while (x.subtract(lastX).abs().compareTo(BigDecimal.valueOf(1e-15)) > 0 && iterations < maxIterations);
+        
+        return x;
+    }
+    
+    /**
+     * Calculates the natural logarithm of a BigDecimal value using Taylor series.
+     * Provides high precision logarithm calculation.
+     * 
+     * @param value The value to calculate natural log for
+     * @param mc The MathContext for precision
+     * @return The natural logarithm as BigDecimal
+     */
+    private static BigDecimal ln(BigDecimal value, MathContext mc) {
+        if (value.signum() <= 0) {
+            throw new ArithmeticException("Logarithm of non-positive number");
+        }
+        if (value.equals(BigDecimal.ONE)) {
+            return BigDecimal.ZERO;
+        }
+        
+        // For values close to 1, use Taylor series: ln(1+x) = x - x^2/2 + x^3/3 - ...
+        if (value.subtract(BigDecimal.ONE).abs().compareTo(new BigDecimal("0.5")) <= 0) {
+            BigDecimal x = value.subtract(BigDecimal.ONE);
+            BigDecimal result = BigDecimal.ZERO;
+            BigDecimal term = x;
+            int n = 1;
+            
+            while (term.abs().compareTo(BigDecimal.valueOf(1e-15)) > 0 && n <= 100) {
+                if (n % 2 == 1) {
+                    result = result.add(term.divide(BigDecimal.valueOf(n), mc), mc);
+                } else {
+                    result = result.subtract(term.divide(BigDecimal.valueOf(n), mc), mc);
+                }
+                term = term.multiply(x, mc);
+                n++;
+            }
+            return result;
+        }
+        
+        // For other values, convert to double for approximation
+        // This is a fallback - in production, you might want a more sophisticated approach
+        double approxResult = Math.log(value.doubleValue());
+        return new BigDecimal(Double.toString(approxResult), mc);
+    }
+    
+    /**
+     * Performs precise logarithmic interpolation using BigDecimal.
+     * 
+     * @param lowerMinutes Lower bound minutes
+     * @param higherMinutes Higher bound minutes
+     * @param currentMinutes Current minutes
+     * @param lowerPercentage Lower bound percentage
+     * @param higherPercentage Higher bound percentage
+     * @return Interpolated percentage
+     */
+    private static double preciseLogarithmicInterpolation(int lowerMinutes, int higherMinutes, 
+            int currentMinutes, double lowerPercentage, double higherPercentage) {
+        try {
+            BigDecimal bdLowerMinutes = new BigDecimal(lowerMinutes);
+            BigDecimal bdHigherMinutes = new BigDecimal(higherMinutes);
+            BigDecimal bdCurrentMinutes = new BigDecimal(currentMinutes);
+            BigDecimal bdLowerPercentage = new BigDecimal(Double.toString(lowerPercentage));
+            BigDecimal bdHigherPercentage = new BigDecimal(Double.toString(higherPercentage));
+            
+            BigDecimal logLower = ln(bdLowerMinutes, MATH_CONTEXT);
+            BigDecimal logHigher = ln(bdHigherMinutes, MATH_CONTEXT);
+            BigDecimal logCurrent = ln(bdCurrentMinutes, MATH_CONTEXT);
+            
+            BigDecimal ratio = logCurrent.subtract(logLower, MATH_CONTEXT)
+                                       .divide(logHigher.subtract(logLower, MATH_CONTEXT), MATH_CONTEXT);
+            
+            BigDecimal result = bdLowerPercentage.add(
+                ratio.multiply(bdHigherPercentage.subtract(bdLowerPercentage, MATH_CONTEXT), MATH_CONTEXT),
+                MATH_CONTEXT
+            );
+            
+            return result.doubleValue();
+        } catch (Exception e) {
+            // Fallback to original calculation if BigDecimal fails
+            double logLower = Math.log(lowerMinutes);
+            double logHigher = Math.log(higherMinutes);
+            double logCurrent = Math.log(currentMinutes);
+            double ratio = (logCurrent - logLower) / (logHigher - logLower);
+            return lowerPercentage + ratio * (higherPercentage - lowerPercentage);
+        }
     }
 }

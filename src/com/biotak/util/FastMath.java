@@ -89,15 +89,16 @@ public final class FastMath {
     }
     
     /**
-     * Fast rounding to specified decimal places
+     * Fast rounding to specified decimal places with improved precision
      */
     public static double fastRound(double value, int decimalPlaces) {
         if (decimalPlaces == 0) {
             return Math.round(value);
         }
         
-        double multiplier = fastPow10(decimalPlaces);
-        return Math.round(value * multiplier) / multiplier;
+        // Use BigDecimal for precise rounding to avoid floating point errors
+        java.math.BigDecimal bd = java.math.BigDecimal.valueOf(value);
+        return bd.setScale(decimalPlaces, java.math.RoundingMode.HALF_UP).doubleValue();
     }
     
     /**
