@@ -156,23 +156,6 @@ public class BiotakTrigger extends Study {
     // Keep last DataContext for quick redraws triggered by key events
     private DrawContext lastDrawContext;
     
-    // Enhanced logging methods for ruler debugging
-    private void logRulerStateTransition(String method, RulerState oldState, RulerState newState, String additionalInfo) {
-        AdvancedLogger.ruler(AdvancedLogger.LogLevel.INFO, method, "Ruler state transition: %s → %s | %s", 
-            oldState, newState, additionalInfo);
-    }
-    
-    private void logRulerDebug(String method, String message) {
-        AdvancedLogger.ruler(AdvancedLogger.LogLevel.DEBUG, method, message);
-    }
-    
-    private void logRulerInfo(String method, String message, Object... args) {
-        AdvancedLogger.ruler(AdvancedLogger.LogLevel.INFO, method, message, args);
-    }
-    
-    private void logRulerError(String method, String message) {
-        AdvancedLogger.ruler(AdvancedLogger.LogLevel.ERROR, method, "ERROR: %s", message);
-    }
 
     public BiotakTrigger() {
         super();
@@ -602,13 +585,12 @@ public class BiotakTrigger extends Study {
                 
                 RulerState oldState = rulerState;
                 rulerState = RulerState.WAITING_FOR_END;
-                logRulerStateTransition("onClick", oldState, rulerState, "Start point selected successfully");
                 
                 AdvancedLogger.info("BiotakTrigger", "onClick", "=== START POINT SELECTION COMPLETED ===");
                 AdvancedLogger.info("BiotakTrigger", "onClick", "Ruler start point handled, preventing default behavior");
                 return false; // prevent default behavior
             } catch (Exception e) {
-                logRulerError("onClick", "Failed to set start point: " + e.getMessage());
+                AdvancedLogger.error("BiotakTrigger", "onClick", "Failed to set start point: %s", e.getMessage());
                 return true;
             }
         }
@@ -650,7 +632,6 @@ public class BiotakTrigger extends Study {
                 
                 RulerState oldState = rulerState;
                 rulerState = RulerState.ACTIVE;
-                logRulerStateTransition("onClick", oldState, rulerState, "End point selected, ruler completed");
                 
                 // Create and layout ruler figure
                 if (rulerFigure == null) {
@@ -677,7 +658,6 @@ public class BiotakTrigger extends Study {
             } catch (Exception e) {
                 AdvancedLogger.error("BiotakTrigger", "onClick", "CRITICAL ERROR in end point selection: %s", e.getMessage());
                 AdvancedLogger.error("BiotakTrigger", "onClick", "Exception stack: %s", java.util.Arrays.toString(e.getStackTrace()));
-                logRulerError("onClick", "Failed to set end point: " + e.getMessage());
                 // Reset ruler state on error
                 rulerState = RulerState.INACTIVE;
                 return false; // Still prevent default behavior even on error
@@ -687,12 +667,6 @@ public class BiotakTrigger extends Study {
         return true; // allow default behavior for clicks outside panel and ruler states
     }
     
-    // Store the latest DrawContext for later use by onClick/other handlers
-public void onMouseDown(Point loc, DrawContext ctx) {
-    // Persist the DrawContext so that onClick (triggered on mouse release) has access to it
-    this.lastDrawContext = ctx;
-    // Do NOT call onClick here – MotiveWave will invoke it automatically on mouse release.
-}
 
     /**
      * Handle mouse movement for dynamic ruler tracking
@@ -746,7 +720,7 @@ public void onMouseDown(Point loc, DrawContext ctx) {
                 AdvancedLogger.debug("BiotakTrigger", "onMouseMove", "Dynamic ruler update completed");
                 
             } catch (Exception e) {
-                logRulerError("onMouseMove", "Mouse move coordinate conversion failed: " + e.getMessage());
+                AdvancedLogger.error("BiotakTrigger", "onMouseMove", "Mouse move coordinate conversion failed: %s", e.getMessage());
                 AdvancedLogger.debug("BiotakTrigger", "onMouseMove", "Exception details: %s", e.toString());
             }
         } else {
@@ -757,18 +731,6 @@ public void onMouseDown(Point loc, DrawContext ctx) {
     }
     
     
-    /**
-     * Get the current DrawContext from the chart
-     * This is needed for SDK 7 compatibility
-     */
-    private DrawContext getDrawContext() {
-        // If lastDrawContext is already set, use it
-        if (lastDrawContext != null) return lastDrawContext;
-        
-        // In SDK 7, we can't directly get DrawContext without it being passed to us
-        // So we have to return null and handle this case in onClick
-        return null;
-    }
 
     @Override
     public void calculate(int index, DataContext ctx) {
@@ -1561,13 +1523,13 @@ case M_STEP -> {
             
             // CRITICAL FIX: Call layout first to ensure line coordinates are set
             if (line == null || rulerStartResize == null || rulerEndResize == null) {
-                logRulerError("RulerFigure.draw", "Missing ruler components - calling layout");
+                AdvancedLogger.error("BiotakTrigger", "RulerFigure.draw", "Missing ruler components - calling layout");
                 layout(ctx);
             }
             
             // Re-check after layout
             if (line == null) {
-                logRulerError("RulerFigure.draw", "Line is still null after layout - cannot draw ruler");
+                AdvancedLogger.error("BiotakTrigger", "RulerFigure.draw", "Line is still null after layout - cannot draw ruler");
                 return;
             }
             
@@ -1579,7 +1541,7 @@ case M_STEP -> {
             // IMPORTANT: Actually draw the line!
             gc.draw(line);
             
-            logRulerInfo("RulerFigure.draw", "Ruler line drawn from (%.1f,%.1f) to (%.1f,%.1f)", 
+            AdvancedLogger.info("BiotakTrigger", "RulerFigure.draw", "Ruler line drawn from (%.1f,%.1f) to (%.1f,%.1f)", 
                 line.getX1(), line.getY1(), line.getX2(), line.getY2());
 
             // Add label in the middle
@@ -1976,11 +1938,11 @@ case M_STEP -> {
         final String methodName = "handleRulerButtonClickWithoutContext";
         boolean showRuler = settings.getBoolean(S_SHOW_RULER, false);
         
-        logRulerInfo(methodName, "Method called - current showRuler=" + showRuler + ", rulerState=" + rulerState);
-        logRulerDebug(methodName, "InfoPanel exists: " + (infoPanel != null));
-        logRulerDebug(methodName, "RulerStartResize exists: " + (rulerStartResize != null));
-        logRulerDebug(methodName, "RulerEndResize exists: " + (rulerEndResize != null));
-        logRulerDebug(methodName, "RulerFigure exists: " + (rulerFigure != null));
+            AdvancedLogger.info("BiotakTrigger", methodName, "Method called - current showRuler=%s, rulerState=%s", showRuler, rulerState);
+            AdvancedLogger.debug("BiotakTrigger", methodName, "InfoPanel exists: %s", (infoPanel != null));
+            AdvancedLogger.debug("BiotakTrigger", methodName, "RulerStartResize exists: %s", (rulerStartResize != null));
+            AdvancedLogger.debug("BiotakTrigger", methodName, "RulerEndResize exists: %s", (rulerEndResize != null));
+            AdvancedLogger.debug("BiotakTrigger", methodName, "RulerFigure exists: %s", (rulerFigure != null));
         
         // CRITICAL FIX: Check both setting and actual state for more robust operation
         boolean shouldActivateRuler = (!showRuler || rulerState == RulerState.INACTIVE);
@@ -1990,26 +1952,26 @@ case M_STEP -> {
             RulerState oldState = rulerState;
             settings.setBoolean(S_SHOW_RULER, true);
             
-            logRulerStateTransition(methodName, oldState, RulerState.ACTIVE, "Enabling ruler with default points (no context)");
+            AdvancedLogger.info("BiotakTrigger", methodName, "State transition: %s -> %s: %s", oldState, RulerState.ACTIVE, "Enabling ruler with default points (no context)");
             
             // Create a functional default ruler instead of waiting for context
             createDefaultRulerImmediate(settings);
             
             if (infoPanel != null) {
                 infoPanel.setRulerActive(true);
-                logRulerDebug(methodName, "Set InfoPanel ruler active to true");
+                AdvancedLogger.debug("BiotakTrigger", methodName, "Set InfoPanel ruler active to true");
             } else {
-                logRulerError(methodName, "InfoPanel is null, cannot update ruler active state");
+                AdvancedLogger.error("BiotakTrigger", methodName, "InfoPanel is null, cannot update ruler active state");
             }
             
-            logRulerInfo(methodName, "Ruler enabled with default points, immediately functional");
+            AdvancedLogger.info("BiotakTrigger", methodName, "Ruler enabled with default points, immediately functional");
             
             // Force redraw to show the ruler
             try {
                 // Trigger onBarUpdate to refresh the display
                 scheduleRulerRedraw();
             } catch (Exception e) {
-                logRulerError(methodName, "Failed to schedule ruler redraw: " + e.getMessage());
+                AdvancedLogger.error("BiotakTrigger", methodName, "Failed to schedule ruler redraw: %s", e.getMessage());
             }
             
         } else {
@@ -2018,20 +1980,20 @@ case M_STEP -> {
             rulerState = RulerState.INACTIVE;
             settings.setBoolean(S_SHOW_RULER, false);
             
-            logRulerStateTransition(methodName, oldState, rulerState, "Disabling ruler mode (no context)");
+            AdvancedLogger.info("BiotakTrigger", methodName, "State transition: %s -> %s: %s", oldState, rulerState, "Disabling ruler mode (no context)");
             
             if (infoPanel != null) {
                 infoPanel.setRulerActive(false);
-                logRulerDebug(methodName, "Set InfoPanel ruler active to false");
+                AdvancedLogger.debug("BiotakTrigger", methodName, "Set InfoPanel ruler active to false");
             }
             
             // Clear ruler components
             clearRulerComponents();
             
-            logRulerInfo(methodName, "Ruler disabled and cleared");
+            AdvancedLogger.info("BiotakTrigger", methodName, "Ruler disabled and cleared");
         }
         
-        logRulerInfo(methodName, "Method completed - final rulerState=" + rulerState);
+        AdvancedLogger.info("BiotakTrigger", methodName, "Method completed - final rulerState=%s", rulerState);
     }
     
     /**
@@ -2044,7 +2006,7 @@ case M_STEP -> {
         try {
             DataSeries series = ctx.getDataContext().getDataSeries();
             if (series.size() < 2) {
-                logRulerError(methodName, "Not enough data points, falling back to immediate creation");
+                AdvancedLogger.error("BiotakTrigger", methodName, "Not enough data points, falling back to immediate creation");
                 createDefaultRulerImmediate(settings);
                 return;
             }
@@ -2085,46 +2047,46 @@ case M_STEP -> {
             double startPrice = ctx.translate2Value(startScreenY);
             double endPrice = ctx.translate2Value(endScreenY);
             
-            logRulerInfo(methodName, "Creating screen-centered ruler: start=%.5f@%d, end=%.5f@%d", startPrice, startTime, endPrice, endTime);
-            logRulerInfo(methodName, "Screen center: (%.1f, %.1f), Chart bounds: %s", screenCenterX, screenCenterY, chartBounds);
+            AdvancedLogger.info("BiotakTrigger", methodName, "Creating screen-centered ruler: start=%.5f@%d, end=%.5f@%d", startPrice, startTime, endPrice, endTime);
+            AdvancedLogger.info("BiotakTrigger", methodName, "Screen center: (%.1f, %.1f), Chart bounds: %s", screenCenterX, screenCenterY, chartBounds);
             
             // Create ruler resize points
             if (rulerStartResize == null) {
                 rulerStartResize = new ResizePoint(ResizeType.ALL, true);
                 rulerStartResize.setSnapToLocation(true);
-                logRulerDebug(methodName, "Created new ruler start resize point at screen center");
+                AdvancedLogger.debug("BiotakTrigger", methodName, "Created new ruler start resize point at screen center");
             }
             rulerStartResize.setLocation(startTime, startPrice);
             
             if (rulerEndResize == null) {
                 rulerEndResize = new ResizePoint(ResizeType.ALL, true);
                 rulerEndResize.setSnapToLocation(true);
-                logRulerDebug(methodName, "Created new ruler end resize point at screen center");
+                AdvancedLogger.debug("BiotakTrigger", methodName, "Created new ruler end resize point at screen center");
             }
             rulerEndResize.setLocation(endTime, endPrice);
             
             // Create ruler figure
             if (rulerFigure == null) {
                 rulerFigure = new RulerFigure();
-                logRulerDebug(methodName, "Created new ruler figure for screen center");
+                AdvancedLogger.debug("BiotakTrigger", methodName, "Created new ruler figure for screen center");
             }
             
             // Save points to settings
             settings.setString(S_RULER_START, startPrice + "|" + startTime);
             settings.setString(S_RULER_END, endPrice + "|" + endTime);
-            logRulerDebug(methodName, "Saved screen-centered ruler points to settings");
+            AdvancedLogger.debug("BiotakTrigger", methodName, "Saved screen-centered ruler points to settings");
             
             rulerState = RulerState.ACTIVE;
-            logRulerInfo(methodName, "Screen-centered ruler created successfully and set to ACTIVE state");
+            AdvancedLogger.info("BiotakTrigger", methodName, "Screen-centered ruler created successfully and set to ACTIVE state");
             
             // Calculate and log initial measurements
             double priceDiff = endPrice - startPrice;
             double pips = Math.abs(priceDiff) / series.getInstrument().getTickSize();
             long timeDiff = Math.abs(endTime - startTime);
-            logRulerInfo(methodName, "Initial ruler measurement: %.1f pips, price diff: %.5f, time span: %d ms", pips, priceDiff, timeDiff);
+            AdvancedLogger.info("BiotakTrigger", methodName, "Initial ruler measurement: %.1f pips, price diff: %.5f, time span: %d ms", pips, priceDiff, timeDiff);
             
         } catch (Exception e) {
-            logRulerError(methodName, "Error creating screen-centered ruler: " + e.getMessage());
+            AdvancedLogger.error("BiotakTrigger", methodName, "Error creating screen-centered ruler: %s", e.getMessage());
             // Fallback to immediate creation
             createDefaultRulerImmediate(settings);
         }
@@ -2146,7 +2108,7 @@ case M_STEP -> {
             double customPrice = settings.getDouble(S_CUSTOM_PRICE, Double.NaN);
             if (!Double.isNaN(customPrice) && customPrice > 0) {
                 currentPrice = customPrice;
-                logRulerDebug(methodName, "Using custom price as current price: " + currentPrice);
+                AdvancedLogger.debug("BiotakTrigger", methodName, "Using custom price as current price: %s", currentPrice);
             }
             
             // اگر تاریخ بالا یا پایین در تنظیمات موجود باشد، قیمت را بر اساس آن تنظیم کن
@@ -2156,10 +2118,10 @@ case M_STEP -> {
             if (!Double.isNaN(historicalHigh) && !Double.isNaN(historicalLow) && historicalHigh > historicalLow) {
                 // استفاده از نقطه میانی بین بالاترین و پایین‌ترین قیمت تاریخی
                 currentPrice = (historicalHigh + historicalLow) / 2.0;
-                logRulerDebug(methodName, "Using midpoint of historical range as current price: " + currentPrice);
+                AdvancedLogger.debug("BiotakTrigger", methodName, "Using midpoint of historical range as current price: %s", currentPrice);
             }
         } catch (Exception e) {
-            logRulerDebug(methodName, "Could not get current price, using default: " + currentPrice);
+            AdvancedLogger.debug("BiotakTrigger", methodName, "Could not get current price, using default: %s", currentPrice);
         }
         
         // ایجاد نقاط قابل استفاده خط‌کش با فاصله مناسب
@@ -2174,49 +2136,49 @@ case M_STEP -> {
         long startTime = centerTime - (timeSpan / 2); // 1 ساعت قبل
         long endTime = centerTime + (timeSpan / 2);   // 1 ساعت بعد
         
-        logRulerInfo(methodName, "Creating centered default ruler: start=%.5f@%d, end=%.5f@%d", startPrice, startTime, endPrice, endTime);
-        logRulerInfo(methodName, "Ruler spans %.1f hours with price range of %.2f (%.3f%% of current price)", 
+        AdvancedLogger.info("BiotakTrigger", methodName, "Creating centered default ruler: start=%.5f@%d, end=%.5f@%d", startPrice, startTime, endPrice, endTime);
+        AdvancedLogger.info("BiotakTrigger", methodName, "Ruler spans %.1f hours with price range of %.2f (%.3f%% of current price)", 
             timeSpan / (60.0 * 60.0 * 1000.0), priceRange, (priceRange / currentPrice) * 100);
         
         // Create ruler resize points
         if (rulerStartResize == null) {
             rulerStartResize = new ResizePoint(ResizeType.ALL, true);
             rulerStartResize.setSnapToLocation(true);
-            logRulerDebug(methodName, "Created new ruler start resize point");
+            AdvancedLogger.debug("BiotakTrigger", methodName, "Created new ruler start resize point");
         }
         rulerStartResize.setLocation(startTime, startPrice);
         
         if (rulerEndResize == null) {
             rulerEndResize = new ResizePoint(ResizeType.ALL, true);
             rulerEndResize.setSnapToLocation(true);
-            logRulerDebug(methodName, "Created new ruler end resize point");
+            AdvancedLogger.debug("BiotakTrigger", methodName, "Created new ruler end resize point");
         }
         rulerEndResize.setLocation(endTime, endPrice);
         
         // Create ruler figure
         if (rulerFigure == null) {
             rulerFigure = new RulerFigure();
-            logRulerDebug(methodName, "Created new ruler figure");
+            AdvancedLogger.debug("BiotakTrigger", methodName, "Created new ruler figure");
         }
         
         // Save points to settings
         settings.setString(S_RULER_START, startPrice + "|" + startTime);
         settings.setString(S_RULER_END, endPrice + "|" + endTime);
-        logRulerDebug(methodName, "Saved ruler points to settings");
+        AdvancedLogger.debug("BiotakTrigger", methodName, "Saved ruler points to settings");
         
         // CRITICAL: Set ruler state to ACTIVE after creating all components
         rulerState = RulerState.ACTIVE;
-        logRulerInfo(methodName, "Centered default ruler created successfully and set to ACTIVE state");
+        AdvancedLogger.info("BiotakTrigger", methodName, "Centered default ruler created successfully and set to ACTIVE state");
         
         // Calculate and log initial measurements
         double priceDiff = endPrice - startPrice;
         double pips = Math.abs(priceDiff) * 10; // Assuming 1 pip = 0.1
-        logRulerInfo(methodName, "Initial ruler measurement: %.1f pips, price diff: %.5f, time span: %.1f hours", 
+        AdvancedLogger.info("BiotakTrigger", methodName, "Initial ruler measurement: %.1f pips, price diff: %.5f, time span: %.1f hours", 
             pips, priceDiff, timeSpan / (60.0 * 60.0 * 1000.0));
         
         // IMPORTANT: Double-check that the state was actually set
         if (rulerState != RulerState.ACTIVE) {
-            logRulerError(methodName, "CRITICAL ERROR: rulerState failed to set to ACTIVE!");
+            AdvancedLogger.error("BiotakTrigger", methodName, "CRITICAL ERROR: rulerState failed to set to ACTIVE!");
             rulerState = RulerState.ACTIVE; // Force it
         }
     }
@@ -2229,22 +2191,22 @@ case M_STEP -> {
         
         if (rulerStartResize != null) {
             rulerStartResize = null;
-            logRulerDebug(methodName, "Cleared ruler start point");
+            AdvancedLogger.debug("BiotakTrigger", methodName, "Cleared ruler start point");
         }
         if (rulerEndResize != null) {
             rulerEndResize = null;
-            logRulerDebug(methodName, "Cleared ruler end point");
+            AdvancedLogger.debug("BiotakTrigger", methodName, "Cleared ruler end point");
         }
         if (rulerFigure != null) {
             rulerFigure = null;
-            logRulerDebug(methodName, "Cleared ruler figure");
+            AdvancedLogger.debug("BiotakTrigger", methodName, "Cleared ruler figure");
         }
         
         // Clear saved settings
         Settings settings = getSettings();
         settings.setString(S_RULER_START, null);
         settings.setString(S_RULER_END, null);
-        logRulerDebug(methodName, "Cleared ruler settings");
+        AdvancedLogger.debug("BiotakTrigger", methodName, "Cleared ruler settings");
     }
     
     /**
@@ -2260,15 +2222,15 @@ case M_STEP -> {
             public void run() {
                 try {
                     // Force a calculation update which will trigger drawing
-                    logRulerDebug(methodName, "Triggering scheduled redraw");
+                    AdvancedLogger.debug("BiotakTrigger", methodName, "Triggering scheduled redraw");
                     
                     // This will be called by MotiveWave automatically
                     // We just need to ensure our ruler is ready when it does
                     if (rulerState == RulerState.ACTIVE && rulerFigure != null) {
-                        logRulerInfo(methodName, "Ruler is ready for rendering");
+                        AdvancedLogger.info("BiotakTrigger", methodName, "Ruler is ready for rendering");
                     }
                 } catch (Exception e) {
-                    logRulerError(methodName, "Error in scheduled redraw: " + e.getMessage());
+                    AdvancedLogger.error("BiotakTrigger", methodName, "Error in scheduled redraw: " + e.getMessage());
                 }
             }
         }, 100); // 100ms delay
@@ -2281,19 +2243,19 @@ case M_STEP -> {
         final String methodName = "handleRulerButtonClick";
         boolean showRuler = settings.getBoolean(S_SHOW_RULER, false);
         
-        logRulerInfo(methodName, "Method called - current showRuler=" + showRuler + ", rulerState=" + rulerState);
-        logRulerDebug(methodName, "DrawContext available: " + (ctx != null));
-        logRulerDebug(methodName, "InfoPanel exists: " + (infoPanel != null));
-        logRulerDebug(methodName, "RulerStartResize exists: " + (rulerStartResize != null));
-        logRulerDebug(methodName, "RulerEndResize exists: " + (rulerEndResize != null));
-        logRulerDebug(methodName, "RulerFigure exists: " + (rulerFigure != null));
+        AdvancedLogger.info("BiotakTrigger", methodName, "Method called - current showRuler=" + showRuler + ", rulerState=" + rulerState);
+        AdvancedLogger.debug("BiotakTrigger", methodName, "DrawContext available: " + (ctx != null));
+        AdvancedLogger.debug("BiotakTrigger", methodName, "InfoPanel exists: " + (infoPanel != null));
+        AdvancedLogger.debug("BiotakTrigger", methodName, "RulerStartResize exists: " + (rulerStartResize != null));
+        AdvancedLogger.debug("BiotakTrigger", methodName, "RulerEndResize exists: " + (rulerEndResize != null));
+        AdvancedLogger.debug("BiotakTrigger", methodName, "RulerFigure exists: " + (rulerFigure != null));
         
         if (!showRuler || rulerState == RulerState.INACTIVE) {
             // Enable ruler mode - CREATE IMMEDIATE RULER WITH DEFAULT POINTS
             RulerState oldState = rulerState;
             settings.setBoolean(S_SHOW_RULER, true);
             
-            logRulerStateTransition(methodName, oldState, RulerState.ACTIVE, "Enabling ruler mode with immediate default ruler");
+            AdvancedLogger.info("BiotakTrigger", methodName, "State transition: %s -> %s: %s", oldState, RulerState.ACTIVE, "Enabling ruler mode with immediate default ruler");
             
             // Create default ruler immediately with DrawContext available
             if (ctx != null) {
@@ -2304,45 +2266,45 @@ case M_STEP -> {
             
             if (infoPanel != null) {
                 infoPanel.setRulerActive(true);
-                logRulerDebug(methodName, "Set InfoPanel ruler active to true");
+                AdvancedLogger.debug("BiotakTrigger", methodName, "Set InfoPanel ruler active to true");
             } else {
-                logRulerError(methodName, "InfoPanel is null, cannot update ruler active state");
+                AdvancedLogger.error("BiotakTrigger", methodName, "InfoPanel is null, cannot update ruler active state");
             }
             
-            logRulerInfo(methodName, "Ruler enabled with immediate default ruler");
+            AdvancedLogger.info("BiotakTrigger", methodName, "Ruler enabled with immediate default ruler");
         } else {
             // Disable ruler mode - regardless of current state (ACTIVE, WAITING_FOR_START, WAITING_FOR_END)
             RulerState oldState = rulerState;
             rulerState = RulerState.INACTIVE;
             settings.setBoolean(S_SHOW_RULER, false);
             
-            logRulerStateTransition(methodName, oldState, rulerState, "Disabling ruler mode");
+            AdvancedLogger.info("BiotakTrigger", methodName, "State transition: %s -> %s: %s", oldState, rulerState, "Disabling ruler mode");
             
             if (infoPanel != null) {
                 infoPanel.setRulerActive(false);
-                logRulerDebug(methodName, "Set InfoPanel ruler active to false");
+                AdvancedLogger.debug("BiotakTrigger", methodName, "Set InfoPanel ruler active to false");
             } else {
-                logRulerError(methodName, "InfoPanel is null, cannot update ruler active state");
+                AdvancedLogger.error("BiotakTrigger", methodName, "InfoPanel is null, cannot update ruler active state");
             }
             
             // Clear ruler components
             clearRulerComponents();
             
-            logRulerInfo(methodName, "Ruler disabled and cleared");
+            AdvancedLogger.info("BiotakTrigger", methodName, "Ruler disabled and cleared");
         }
         
         // Redraw all figures to update ruler visibility
         if (ctx != null) {
             DataContext dc = ctx.getDataContext();
             int lastIdx = dc.getDataSeries().size() - 1;
-            logRulerDebug(methodName, "Calling drawFigures to redraw with lastIdx=" + lastIdx);
+            AdvancedLogger.debug("BiotakTrigger", methodName, "Calling drawFigures to redraw with lastIdx=" + lastIdx);
             drawFigures(lastIdx, dc);
-            logRulerDebug(methodName, "drawFigures completed");
+            AdvancedLogger.debug("BiotakTrigger", methodName, "drawFigures completed");
         } else {
-            logRulerError(methodName, "DrawContext is null, cannot redraw figures");
+            AdvancedLogger.error("BiotakTrigger", methodName, "DrawContext is null, cannot redraw figures");
         }
         
-        logRulerInfo(methodName, "Method completed - final rulerState=" + rulerState);
+        AdvancedLogger.info("BiotakTrigger", methodName, "Method completed - final rulerState=" + rulerState);
     }
     
     // Note: Cursor management is not available in MotiveWave SDK
