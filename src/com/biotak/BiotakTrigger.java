@@ -13,22 +13,18 @@ import com.biotak.config.SettingsService;
 import com.biotak.config.BiotakConfig;
 import static com.biotak.config.SettingsRepository.*;
 import com.motivewave.platform.sdk.common.*;
-import com.motivewave.platform.sdk.common.desc.*;
 import com.motivewave.platform.sdk.common.menu.MenuDescriptor;
 import com.motivewave.platform.sdk.common.menu.MenuItem;
 import com.motivewave.platform.sdk.common.menu.MenuSeparator;
-import com.motivewave.platform.sdk.draw.Line;
 import com.motivewave.platform.sdk.draw.Figure;
 import com.motivewave.platform.sdk.draw.ResizePoint;
 import com.motivewave.platform.sdk.study.Study;
 import com.motivewave.platform.sdk.study.StudyHeader;
 
 import java.awt.Font;
-import java.awt.Cursor;
 import java.awt.Rectangle;
 
 import java.awt.Point;
-import java.util.ArrayList;
 import java.util.List;
 
 import com.motivewave.platform.sdk.common.Enums.ResizeType;
@@ -63,13 +59,6 @@ public class BiotakTrigger extends Study {
     public static final String S_CUSTOM_PRICE   = "customPrice"; // stores user-defined custom price
     public final static String S_HISTORICAL_BARS = "historicalBars";
 
-    // ---------------- New Constants ----------------
-    private static final String S_P_LEVEL_PATH  = "pLevelPath";
-    private static final String S_S_LEVEL_PATH  = "sLevelPath";
-    private static final String S_SS_LEVEL_PATH = "ssLevelPath";
-    private static final String S_C_LEVEL_PATH  = "cLevelPath";
-    private static final String S_LS_LEVEL_PATH = "lsLevelPath";
-    private static final String S_M_LEVEL_PATH  = "mLevelPath";
     // Add constants for Leg Ruler
     // (Leg Ruler constants removed)
     public static final String S_SHOW_RULER = "showRuler";
@@ -85,8 +74,7 @@ public class BiotakTrigger extends Study {
     public static final String S_RULER_START = "rulerStart";
     public static final String S_RULER_END = "rulerEnd";
 
-    private long lastClickTime = 0;              // for double-click detection
-    private long lastCustomMoveTime = 0;         // for fade-in highlight
+    private long lastClickTime = 0;              // for double-click detection        // for fade-in highlight
    
     private InfoPanel infoPanel;
     private ResizePoint customPricePoint; // draggable point for custom price
@@ -104,25 +92,9 @@ public class BiotakTrigger extends Study {
     
     // Stores locked values for all level types when lock all option is enabled
     private double lockedTHValue = Double.NaN;
-    private double lockedPatternValue = Double.NaN;
-    private double lockedTriggerValue = Double.NaN;
-    private double lockedStructureValue = Double.NaN;
     private double lockedControlValue = Double.NaN;
-    private double lockedMValue = Double.NaN;
     private double lockedCustomPrice = Double.NaN;
-    private double thValue;
-    private double patternTH;
-    private double triggerTH;
-    private double structureTH;
-    private double higherPatternTH;
-
-    // --- M values (SS + C + LS) for each fractal level ---
-    private double mValue;           // current timeframe
-    private double patternM;
-    private double triggerM;
-    private double structureM;
-    private double higherPatternM;
-
+    
     // Human-readable labels for each TH value (Current, Pattern, Trigger, Structure, Higher)
     private String[] tfLabels = {"", "", "", "", ""};
 
@@ -155,6 +127,22 @@ public class BiotakTrigger extends Study {
     // Keep last DataContext for quick redraws triggered by key events
     private DrawContext lastDrawContext;
     
+    // Track custom price movement timing
+    private long lastCustomMoveTime = 0;
+    
+    // TH and M values for different timeframes
+    private double thValue = Double.NaN;
+    private double patternTH = Double.NaN;
+    private double triggerTH = Double.NaN;
+    private double structureTH = Double.NaN;
+    private double higherPatternTH = Double.NaN;
+    
+    // M values (M = TH * TH_TO_M_FACTOR)
+    private double mValue = Double.NaN;
+    private double patternM = Double.NaN;
+    private double triggerM = Double.NaN;
+    private double structureM = Double.NaN;
+    private double higherPatternM = Double.NaN;
 
     public BiotakTrigger() {
         super();
@@ -1811,13 +1799,4 @@ public class BiotakTrigger extends Study {
         }, 100); // 100ms delay
     }
     
-    /**
-     * Handle ruler button click to toggle ruler state and wait for user selection
-     */
-    /**
-     * Handle ruler button click (simplified version)
-     */
-    private void handleRulerButtonClick(Settings settings, DrawContext ctx) {
-        toggleRuler(settings, ctx);
-    }
 }
