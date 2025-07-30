@@ -76,7 +76,6 @@ public class SettingsService {
         List<NVP> options = new ArrayList<>();
         options.add(new NVP("Equal TH Steps", StepCalculationMode.TH_STEP.name()));
         options.add(new NVP("SS / LS Steps", StepCalculationMode.SS_LS_STEP.name()));
-        options.add(new NVP("TPC / Control Steps", StepCalculationMode.CONTROL_STEP.name()));
         options.add(new NVP("M (C×3) Steps", StepCalculationMode.M_STEP.name()));
         options.add(new NVP("E Steps", StepCalculationMode.E_STEP.name()));
         return options;

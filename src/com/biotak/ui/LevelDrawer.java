@@ -244,118 +244,6 @@ public class LevelDrawer {
         return step % 4 == 0;
     }
 
-    /**
-     * Draws levels based on the harmonic T–P–S–SS–C–LS sequence described by user.
-     * The distance pattern (multiples of T) between consecutive levels is: 1,1,2,2,1,1 (then repeats).
-     *
-     * @param series        Data series for instrument info
-     * @param midpointPrice Reference price (anchor)
-     * @param highestHigh   Upper bound to stop drawing
-     * @param lowestLow     Lower bound to stop drawing
-     * @param tValue        Trigger value (T) expressed in price units
-     * @param startTime     Start timestamp for lines
-     * @param endTime       End timestamp for lines
-     */
-    public static List<Figure> drawControlLevels(
-            Settings settings,
-            DataSeries series,
-            double midpointPrice,
-            double highestHigh,
-            double lowestLow,
-            double patternValue,
-            double structureValue,
-            double shortStepValue,
-            double controlValue,
-            double longStepValue,
-            long startTime,
-            long endTime) {
-
-        // Validate inputs
-        if (patternValue <= 0 || structureValue <= 0 || shortStepValue <= 0 || controlValue <= 0 || longStepValue <= 0) {
-            AdvancedLogger.warn("LevelDrawer", "drawControlLevels", "Invalid fractal values – cannot draw Control-Based levels.");
-            return new ArrayList<>();
-        }
-
-        // ------------------------------------------------------------------
-        // Build the repeating distance/label pattern that defines the T-P-C
-        // ladder. After the first 5 distances (P,S,SS,C,LS), the sequence is
-        // repeated (cyclic) and applied cumulatively until we exceed either
-        // the chart range (highestHigh/lowestLow) or the user-defined maximum
-        // levels (S_MAX_LEVELS_ABOVE / BELOW).
-        // ------------------------------------------------------------------
-        final double[] valuePattern  = new double[]{patternValue, structureValue, shortStepValue, controlValue, longStepValue};
-        final String[] labelPattern  = new String[]{"P", "S", "SS", "C", "LS"};
-        final int patternLen = valuePattern.length;
-
-        boolean showLabels = settings.getBoolean(S_SHOW_LEVEL_LABELS, true);
-        int maxLevelsAbove = settings.getInteger(S_MAX_LEVELS_ABOVE);
-        int maxLevelsBelow = settings.getInteger(S_MAX_LEVELS_BELOW);
-
-        List<Figure> figures = new ArrayList<>();
-
-        // -------------------- ABOVE MIDPOINT --------------------
-        int drawnAbove = 0;
-        double cumulative = 0;
-        int stepCount = 0; // Logical step counter (1-based once incremented)
-        while (drawnAbove < maxLevelsAbove) {
-            double dist = valuePattern[stepCount % patternLen];
-            cumulative += dist;
-            stepCount++;
-            double priceLevel = midpointPrice + cumulative;
-            if (priceLevel > highestHigh) break;
-
-            if (!shouldDrawStep(settings, stepCount)) {
-                continue;
-            }
-            PathInfo path = getPathForLevel(settings, stepCount);
-            if (path == null && settings.getBoolean(S_SHOW_TRIGGER_LEVELS)) {
-                path = getControlLevelPath(settings, labelPattern[(stepCount-1) % patternLen]);
-            }
-            if (path != null) {
-                figures.add(new Line(new Coordinate(startTime, priceLevel), new Coordinate(endTime, priceLevel), path));
-                if (showLabels) {
-                    figures.add(new LevelLabel(endTime, priceLevel, labelPattern[(stepCount-1) % patternLen]));
-                }
-                drawnAbove++;
-            }
-        }
-
-        // -------------------- BELOW MIDPOINT --------------------
-        int drawnBelow = 0;
-        cumulative = 0;
-        stepCount = 0;
-        while (drawnBelow < maxLevelsBelow) {
-            double dist = valuePattern[stepCount % patternLen];
-            cumulative += dist;
-            stepCount++;
-            double priceLevel = midpointPrice - cumulative;
-            if (priceLevel < lowestLow) break;
-
-            if (!shouldDrawStep(settings, stepCount)) {
-                continue;
-            }
-            PathInfo path = getPathForLevel(settings, stepCount);
-            if (path == null && settings.getBoolean(S_SHOW_TRIGGER_LEVELS)) {
-                path = getControlLevelPath(settings, labelPattern[(stepCount-1) % patternLen]);
-            }
-            if (path != null) {
-                figures.add(new Line(new Coordinate(startTime, priceLevel), new Coordinate(endTime, priceLevel), path));
-                if (showLabels) {
-                    figures.add(new LevelLabel(endTime, priceLevel, labelPattern[(stepCount-1) % patternLen]));
-                }
-                drawnBelow++;
-            }
-        }
-        return figures;
-    }
-
-    /**
-     * Returns the path (color/width) configured for a Control-Step label.
-     */
-    public static PathInfo getControlLevelPath(Settings settings, String lbl) {
-        // Use a unified appearance: fall back to Trigger path for all control labels.
-        return settings.getPath(S_TRIGGER_PATH);
-    }
 
     /**
      * Draws Control-increment levels (distance = C). Every third level (3C) is
@@ -397,7 +285,7 @@ public class LevelDrawer {
             }
             PathInfo path = getPathForLevel(settings, logicalStep);
             if (path == null && settings.getBoolean(S_SHOW_TRIGGER_LEVELS)) {
-                path = getControlLevelPath(settings, lbl);
+                path = settings.getPath(S_TRIGGER_PATH);
             }
             if (path != null) {
                 figs.add(new Line(new Coordinate(startTime, priceAbove), new Coordinate(endTime, priceAbove), path));
@@ -425,7 +313,7 @@ public class LevelDrawer {
 
             PathInfo path = getPathForLevel(settings, logicalStep);
             if (path == null && settings.getBoolean(S_SHOW_TRIGGER_LEVELS)) {
-                path = getControlLevelPath(settings, lbl2);
+                path = settings.getPath(S_TRIGGER_PATH);
             }
             if (path != null) {
                 figs.add(new Line(new Coordinate(startTime, priceBelow), new Coordinate(endTime, priceBelow), path));
@@ -470,7 +358,7 @@ public class LevelDrawer {
             PathInfo path = getPathForLevel(settings, step);
             if (path == null) {
                 boolean triggerOn = settings.getBoolean(S_SHOW_TRIGGER_LEVELS);
-                path = triggerOn ? getControlLevelPath(settings, "M") : settings.getPath(S_STRUCT_L1_PATH);
+                path = triggerOn ? settings.getPath(S_TRIGGER_PATH) : settings.getPath(S_STRUCT_L1_PATH);
             }
             if (path != null) {
                 figs.add(new Line(new Coordinate(startTime, price), new Coordinate(endTime, price), path));
@@ -487,7 +375,7 @@ public class LevelDrawer {
             PathInfo path = getPathForLevel(settings, step);
             if (path == null) {
                 boolean triggerOn = settings.getBoolean(S_SHOW_TRIGGER_LEVELS);
-                path = triggerOn ? getControlLevelPath(settings, "M") : settings.getPath(S_STRUCT_L1_PATH);
+                path = triggerOn ? settings.getPath(S_TRIGGER_PATH) : settings.getPath(S_STRUCT_L1_PATH);
             }
             if (path != null) {
                 figs.add(new Line(new Coordinate(startTime, price), new Coordinate(endTime, price), path));
@@ -531,7 +419,7 @@ public class LevelDrawer {
             if (path == null) {
                 boolean triggerOn = settings.getBoolean(S_SHOW_TRIGGER_LEVELS);
                 if (triggerOn) {
-                    path = getControlLevelPath(settings, "E");
+                    path = settings.getPath(S_TRIGGER_PATH);
                 }
             }
             if (path != null) {
@@ -550,7 +438,7 @@ public class LevelDrawer {
             if (path == null) {
                 boolean triggerOn = settings.getBoolean(S_SHOW_TRIGGER_LEVELS);
                 if (triggerOn) {
-                    path = getControlLevelPath(settings, "E");
+                    path = settings.getPath(S_TRIGGER_PATH);
                 }
             }
             if (path != null) {

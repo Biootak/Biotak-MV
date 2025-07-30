@@ -491,7 +491,7 @@ public class BiotakTrigger extends Study {
                 for (Figure f : histFigures) addFigure(f);
             }
             double midpointPrice;
-            if (currentMode == StepCalculationMode.SS_LS_STEP || currentMode == StepCalculationMode.CONTROL_STEP) {
+            if (currentMode == StepCalculationMode.SS_LS_STEP) {
                 // Force use of custom price as anchor; if not set, default to last close
                 double cp = getSettings().getDouble(S_CUSTOM_PRICE, Double.NaN);
                 if (Double.isNaN(cp) || cp == 0) {
@@ -507,9 +507,8 @@ public class BiotakTrigger extends Study {
             String startTypeStr = getSettings().getString(S_START_POINT, THStartPointType.MIDPOINT.name());
             THStartPointType spType = THStartPointType.valueOf(startTypeStr);
 
-            // Always need custom-price anchor when mode is SS_LS_STEP or CONTROL_STEP (baseline)
+            // Always need custom-price anchor when mode is SS_LS_STEP (baseline)
             boolean needCustomAnchor = (currentMode == StepCalculationMode.SS_LS_STEP ||
-                                        currentMode == StepCalculationMode.CONTROL_STEP ||
                                         spType == THStartPointType.CUSTOM_PRICE);
 
             if (needCustomAnchor) {
@@ -746,29 +745,6 @@ public class BiotakTrigger extends Study {
 
                     List<Figure> sslsFigures = LevelDrawer.drawSSLSLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, ssValue, lsValue, drawLsFirst, startTime, endTime);
                     for (Figure f : sslsFigures) addFigure(f);
-                }
-case CONTROL_STEP -> {
-                    // Draw levels based on the new fractal sequence  P → S → SS → C → LS
-                    // (LS corresponds to the movement capacity of the next higher fractal timeframe)
-
-                    // Calculate Control (C) value as the midpoint between SS and LS (7 T for the current TF)
-                    double controlValue = (shortStep + longStep) / 2.0;
-                    
-                    // Check for lock all levels functionality
-                    boolean lockAllLevels = getSettings().getBoolean(S_LOCK_ALL_LEVELS, false);
-                    double finalControlValue = controlValue;
-                    
-                    if (lockAllLevels && !Double.isNaN(lockedControlValue)) {
-                        // Use locked Control value
-                        finalControlValue = lockedControlValue;
-                    } else if (lockAllLevels) {
-                        // First time locking - store current value
-                        lockedControlValue = controlValue;
-                        finalControlValue = controlValue;
-                    }
-
-                    List<Figure> controlFigures = LevelDrawer.drawControlLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, patternValue, structureValue, shortStep, finalControlValue, longStep, startTime, endTime);
-                    for (Figure f : controlFigures) addFigure(f);
                 }
                 case M_STEP -> {
                     double controlValue = (shortStep + longStep) / 2.0;
