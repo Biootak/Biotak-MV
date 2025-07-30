@@ -175,7 +175,7 @@ public class ComprehensivePerformanceTest {
             return;
         }
 
-        long threadId = Thread.currentThread().getId();
+        long threadId = Thread.currentThread().threadId();
         
         // Test 1: Math operations
         long startCpuTime = threadBean.getThreadCpuTime(threadId);
@@ -474,7 +474,7 @@ public class ComprehensivePerformanceTest {
             return;
         }
         
-        long threadId = Thread.currentThread().getId();
+        long threadId = Thread.currentThread().threadId();
         
         // Test different CPU-intensive operations
         testMathOperationsPerformance(threadId);

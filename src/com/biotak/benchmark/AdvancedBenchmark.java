@@ -151,7 +151,7 @@ public class AdvancedBenchmark {
         System.out.println("🏃 Running CPU benchmark: " + name + " (" + iterations + " iterations)");
         
         List<Long> times = new ArrayList<>();
-        long threadId = Thread.currentThread().getId();
+        long threadId = Thread.currentThread().threadId();
         
         // Warm-up
         try {

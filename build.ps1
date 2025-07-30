@@ -94,7 +94,7 @@ Write-Info "Found $($javaFiles.Count) Java source files"
 Write-Info "Compiling main sources..."
 
 try {
-    & "$JAVA_HOME\bin\javac" -cp $MWAVE_SDK_JAR -d $BUILD_DIR -nowarn -Xlint:unchecked $javaFiles
+    & "$JAVA_HOME\bin\javac" -cp $MWAVE_SDK_JAR -d $BUILD_DIR -Xlint:deprecation -Xlint:unchecked $javaFiles
     if ($LASTEXITCODE -ne 0) {
         throw "Compilation failed with exit code $LASTEXITCODE"
     }

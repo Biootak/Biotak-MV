@@ -204,7 +204,7 @@ public class DeepPerformanceAnalysis {
             return;
         }
         
-        long threadId = Thread.currentThread().getId();
+        long threadId = Thread.currentThread().threadId();
         
         // Test 1: Math operations under stress
         long startCpuTime = threadBean.getThreadCpuTime(threadId);
@@ -218,8 +218,8 @@ public class DeepPerformanceAnalysis {
             result += FastMath.fastLog2(price * 1000);
             result += FastMath.fastAbs(price - 1.05);
             
-            // Simulate percentage calculations
-            result += OptimizedCalculations.calculateTimeframePercentageOptimized((int)(Math.random() * 1440));
+            // Simulate percentage calculations (removed MotiveWave dependency)
+            result += Math.random() * 100.0; // Simple random calculation instead
             
             // String operations (CPU intensive)
             if (i % 100 == 0) {
