@@ -279,8 +279,8 @@ public class FractalCalculator {
             double patternTFPercentage = TimeframeUtil.getTimeframePercentage(patternBarSize);
             double triggerTFPercentage = TimeframeUtil.getTimeframePercentage(triggerBarSize);
             
-            // Calculate TH values (in price) based on these percentages
-            double basePrice = series.getClose(series.size() - 2);
+            // Calculate TH values (in price) based on these percentages using live bid price
+            double basePrice = series.getBidClose(series.size() - 1);
             double structureTHValue = (basePrice * structureTFPercentage) / 100.0;
             double patternTHValue = (basePrice * patternTFPercentage) / 100.0;
             double triggerTHValue = (basePrice * triggerTFPercentage) / 100.0;

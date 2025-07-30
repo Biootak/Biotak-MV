@@ -895,10 +895,10 @@ public void onMouseDown(Point loc, DrawContext ctx) {
                 }
             }
 
-            // برای محاسبه TH از 200 کندل آخر استفاده می‌کنیم
+            // برای محاسبه TH از قیمت لایو Bid استفاده می‌کنیم
             int totalBars    = series.size();
             int lookback     = Math.min(200, totalBars);
-            double thBasePrice = series.getClose(totalBars - 2); // Use previous bar's close for TH calculation.
+            double thBasePrice = series.getBidClose(totalBars - 1); // Use current live bid price for TH calculation.
             
             // Use the first and last bar times directly for line drawing
             long startTime = series.getStartTime(0);
@@ -1408,33 +1408,19 @@ case M_STEP -> {
             getSettings().setDouble(S_CUSTOM_PRICE, newPrice);
             // Logger.debug("onResize: Settings updated with new price: " + newPrice);
             
-            // Update the custom price line position
             if (customPriceLine != null) {
                 customPriceLine.updatePrice(newPrice);
-                // Logger.debug("onResize: CustomPriceLine.updatePrice() called");
             }
             
-            // Update ResizePoint location
             rp.setLocation(rp.getTime(), newPrice);
-            // Logger.debug("onResize: ResizePoint location updated to: (" + rp.getTime() + ", " + newPrice + ")");
             
-            // Sync the visible ResizePoint position if it exists
             if (customPricePoint != null) {
                 customPricePoint.setLocation(customPricePoint.getTime(), newPrice);
-                // Logger.debug("onResize: CustomPricePoint synchronized to: (" + customPricePoint.getTime() + ", " + newPrice + ")");
             }
             
-            // Force layout update for smoother dragging
             if (lastDrawContext != null) {
                 customPriceLine.layout(lastDrawContext);
-                // Logger.debug("onResize: CustomPriceLine.layout() called");
             }
-            
-            // Note: Redraw will happen automatically through layout updates
-            // Logger.debug("onResize: Layout and synchronization completed");
-            // Logger.debug("=== LINE DRAG EVENT END ===");
-            
-            // Light update during drag - full recalculation happens in onEndResize
         }
     }
 
@@ -1445,11 +1431,8 @@ case M_STEP -> {
         return getSettings().getInteger(S_HISTORICAL_BARS, 100000);
     }
 
-    // Enable live updates so drawing persists on chart updates
     @Override
     public void onBarUpdate(DataContext ctx) {
-        // Logger.debug("BiotakTrigger: onBarUpdate called");
-        // Call calculate on the latest bar index for live rendering
         int lastIdx = ctx.getDataSeries().size() - 1;
         calculate(lastIdx, ctx);
     }
@@ -1513,8 +1496,6 @@ case M_STEP -> {
         BarSize higherPatternBarSize = TimeframeUtil.getPatternBarSize(structureBarSize);
         double higherPatternPercent = TimeframeUtil.getTimeframePercentage(higherPatternBarSize);
         double higherPatternTH = THCalculator.calculateTHPoints(instrument, basePrice, higherPatternPercent) * instrument.getTickSize();
-            // Log live bid price and calculated TH steps for verification
-            // Logger.debug(String.format("LiveBid=%.5f | PatternTH=%.1f | TriggerTH=%.1f | StructureTH=%.1f | HigherPatternTH=%.1f", basePrice, patternTH, triggerTH, structureTH, higherPatternTH));
         infoPanel.setUpwardFractalInfo(FractalCalculator.formatTimeframeString(higherPatternBarSize), FractalCalculator.formatTimeframeString(structureBarSize), higherPatternTH, structureTH);
         // Set instance fields
         this.thValue = thValue;
