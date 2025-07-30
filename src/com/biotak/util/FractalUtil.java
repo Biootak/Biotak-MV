@@ -135,7 +135,7 @@ public final class FractalUtil {
 
     private static double calcTH(Instrument inst, BarSize size, double basePrice, double tick) {
         double perc = TimeframeUtil.getTimeframePercentage(size);
-        return THCalculator.calculateTHPoints(inst, basePrice, perc) * tick;
+        return com.biotak.util.OptimizedCalculations.calculateTHPoints(inst, basePrice, perc) * tick;
     }
 
     /**
@@ -152,7 +152,7 @@ public final class FractalUtil {
             if (label==null||label.isEmpty()) return;
             if (out.containsKey(label)) return;
             double perc   = TimeframeUtil.getTimeframePercentageFromMinutes(min);
-            double thPts  = THCalculator.calculateTHPoints(inst, basePrice, perc) * tick;
+            double thPts  = com.biotak.util.OptimizedCalculations.calculateTHPoints(inst, basePrice, perc) * tick;
             double mVal   = mScale * thPts;
             if (mVal>0) out.put(label, mVal);
         };

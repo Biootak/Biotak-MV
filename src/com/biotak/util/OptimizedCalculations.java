@@ -89,6 +89,14 @@ public final class OptimizedCalculations {
     }
     
     /**
+     * Calculates the step size in points for the TH levels.
+     * This is the main TH calculation method used throughout the application.
+     */
+    public static double calculateTHPoints(Instrument instrument, double price, double percentage) {
+        return calculateTHOptimized(instrument, price, percentage);
+    }
+    
+    /**
      * Optimized TH calculation with reduced precision for performance
      */
     public static double calculateTHOptimized(Instrument instrument, double basePrice, double percentage) {

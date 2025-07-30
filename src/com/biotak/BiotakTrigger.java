@@ -3,7 +3,6 @@ package com.biotak;
 import com.biotak.enums.THStartPointType;
 import com.biotak.enums.PanelPosition;
 import com.biotak.enums.RulerState;
-import com.biotak.util.THCalculator;
 import com.biotak.util.TimeframeUtil;
 import com.biotak.debug.AdvancedLogger;
 import com.biotak.util.Constants;
@@ -1008,19 +1007,19 @@ public class BiotakTrigger extends Study {
         // Pattern timeframe (one level down)
         BarSize patternBarSize = TimeframeUtil.getPatternBarSize(barSize);
         double patternTFPercent = TimeframeUtil.getTimeframePercentage(patternBarSize);
-        double patternTH = THCalculator.calculateTHPoints(instrument, basePrice, patternTFPercent) * instrument.getTickSize();
+        double patternTH = com.biotak.util.OptimizedCalculations.calculateTHPoints(instrument, basePrice, patternTFPercent) * instrument.getTickSize();
         // Trigger timeframe (two levels down)
         BarSize triggerBarSize = TimeframeUtil.getTriggerBarSize(barSize);
         double triggerTFPercent = TimeframeUtil.getTimeframePercentage(triggerBarSize);
-        double triggerTH = THCalculator.calculateTHPoints(instrument, basePrice, triggerTFPercent) * instrument.getTickSize();
+        double triggerTH = com.biotak.util.OptimizedCalculations.calculateTHPoints(instrument, basePrice, triggerTFPercent) * instrument.getTickSize();
         infoPanel.setDownwardFractalInfo(FractalCalculator.formatTimeframeString(patternBarSize), FractalCalculator.formatTimeframeString(triggerBarSize), patternTH, triggerTH);
         // Structure timeframe (one level up) and its pattern
         BarSize structureBarSize = TimeframeUtil.getStructureBarSize(barSize);
         double structureTFPercent = TimeframeUtil.getTimeframePercentage(structureBarSize);
-        double structureTH = THCalculator.calculateTHPoints(instrument, basePrice, structureTFPercent) * instrument.getTickSize();
+        double structureTH = com.biotak.util.OptimizedCalculations.calculateTHPoints(instrument, basePrice, structureTFPercent) * instrument.getTickSize();
         BarSize higherPatternBarSize = TimeframeUtil.getPatternBarSize(structureBarSize);
         double higherPatternPercent = TimeframeUtil.getTimeframePercentage(higherPatternBarSize);
-        double higherPatternTH = THCalculator.calculateTHPoints(instrument, basePrice, higherPatternPercent) * instrument.getTickSize();
+        double higherPatternTH = com.biotak.util.OptimizedCalculations.calculateTHPoints(instrument, basePrice, higherPatternPercent) * instrument.getTickSize();
         infoPanel.setUpwardFractalInfo(FractalCalculator.formatTimeframeString(higherPatternBarSize), FractalCalculator.formatTimeframeString(structureBarSize), higherPatternTH, structureTH);
         // Set instance fields
         this.thValue = thValue;
@@ -1225,7 +1224,7 @@ public class BiotakTrigger extends Study {
                              while (highMin - lowMin > 1) {
                                  int mid = (lowMin + highMin) / 2;
                                 double perc   = TimeframeUtil.getTimeframePercentageFromMinutes(mid);
-                                 double thPts  = THCalculator.calculateTHPoints(series.getInstrument(), closePrice, perc) * tick;
+                                 double thPts  = com.biotak.util.OptimizedCalculations.calculateTHPoints(series.getInstrument(), closePrice, perc) * tick;
                                   // Logger.debug(String.format("[Refine] LiveBid=%.5f perc=%.3f thPts=%.2f leg=%.1f", closePrice, perc, thPts, legPip));
                                  double mVal   = TH_TO_M_FACTOR * thPts;
                                  double mPips  = Math.round(mVal / tick * 10.0) / 10.0;

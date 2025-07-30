@@ -2,7 +2,6 @@ package com.biotak.ui;
 
 import com.biotak.enums.THStartPointType;
 import com.biotak.debug.AdvancedLogger;
-import com.biotak.util.THCalculator;
 import com.biotak.util.TimeframeUtil;
 import com.biotak.core.FractalCalculator;
 import com.motivewave.platform.sdk.common.Coordinate;
@@ -83,7 +82,7 @@ public class LevelDrawer {
      */
     public static List<Figure> drawTHLevels(Settings settings, DataSeries series, double midpointPrice, double highestHigh, double lowestLow, double thBasePrice, long startTime, long endTime) {
         double timeframePercentage = TimeframeUtil.getTimeframePercentage(series.getBarSize());
-        double thStepInPoints = THCalculator.calculateTHPoints(series.getInstrument(), thBasePrice, timeframePercentage);
+        double thStepInPoints = com.biotak.util.OptimizedCalculations.calculateTHPoints(series.getInstrument(), thBasePrice, timeframePercentage);
 
         if (thStepInPoints <= 0) {
             AdvancedLogger.warn("LevelDrawer", "drawTHLevels", "Invalid TH step value (<=0). Cannot draw TH levels.");
