@@ -69,5 +69,15 @@ public class SettingsRepository {
     public static final String S_SHOW_LEVEL_LABELS = "showLevelLabels";
     public static final String S_LOCK_SSLS_LEVELS = "lockSsLsLevels";
     public static final String S_LOCK_ALL_LEVELS = "lockAllLevels";
+
+    // Globally-locked value storage keys
+    public static final String S_LOCKED_TH_VALUE = "lockedTHValue";
+    public static final String S_LOCKED_TH_ORIGIN_TIMEFRAME = "lockedTHOriginTimeframe";
+    public static final String S_LOCKED_CONTROL_VALUE = "lockedControlValue";
+    public static final String S_LOCKED_CONTROL_ORIGIN_TIMEFRAME = "lockedControlOriginTimeframe";
+    public static final String S_LOCKED_BASE_TH_VALUE = "lockedBaseTHValue";
+    public static final String S_LOCKED_BASE_TH_ORIGIN_TIMEFRAME = "lockedBaseTHOriginTimeframe";
+    public static final String S_LOCKED_CUSTOM_PRICE_VALUE = "lockedCustomPriceValue";
+    public static final String S_LOCKED_CUSTOM_PRICE_ORIGIN_TIMEFRAME = "lockedCustomPriceOriginTimeframe";
 }
 

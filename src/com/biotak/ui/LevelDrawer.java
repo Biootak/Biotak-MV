@@ -80,9 +80,7 @@ public class LevelDrawer {
     /**
      * Calculates and draws all the "TH" (Trigger and Structure) levels above and below the midpoint.
      */
-    public static List<Figure> drawTHLevels(Settings settings, DataSeries series, double midpointPrice, double highestHigh, double lowestLow, double thBasePrice, long startTime, long endTime) {
-        double timeframePercentage = TimeframeUtil.getTimeframePercentage(series.getBarSize());
-        double thStepInPoints = com.biotak.util.OptimizedCalculations.calculateTHPoints(series.getInstrument(), thBasePrice, timeframePercentage);
+    public static List<Figure> drawTHLevels(Settings settings, DataSeries series, double midpointPrice, double highestHigh, double lowestLow, double thStepInPoints, long startTime, long endTime) {
 
         if (thStepInPoints <= 0) {
             AdvancedLogger.warn("LevelDrawer", "drawTHLevels", "Invalid TH step value (<=0). Cannot draw TH levels.");

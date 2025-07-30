@@ -671,59 +671,74 @@ public class BiotakTrigger extends Study {
             // ------------------------------------------------------------------
             switch (currentMode) {
                 case TH_STEP -> {
-                    // Check for lock all levels functionality
                     boolean lockAllLevels = getSettings().getBoolean(S_LOCK_ALL_LEVELS, false);
-                    double finalTHValue = thValue;
-                    
-                    if (lockAllLevels && !Double.isNaN(lockedTHValue)) {
-                        // Use locked TH value
-                        finalTHValue = lockedTHValue;
-                    } else if (lockAllLevels) {
-                        // First time locking - store current value
-                        lockedTHValue = thValue;
-                        finalTHValue = thValue;
+                    double finalThStepInPoints;
+
+                    if (lockAllLevels) {
+                        // Try to get the globally-locked TH value
+                        double globallyLockedTH = getSettings().getDouble(S_LOCKED_TH_VALUE, Double.NaN);
+
+                        if (!Double.isNaN(globallyLockedTH)) {
+                            // A globally-locked value exists; use it for all timeframes
+                            finalThStepInPoints = globallyLockedTH;
+                            AdvancedLogger.info("BiotakTrigger", "drawFigures", "Using globally-locked TH value: %.5f", finalThStepInPoints);
+                        } else {
+                            // No globally-locked value exists; this is the first time locking
+                            // Calculate TH step for the current timeframe
+                            double timeframePercentage = TimeframeUtil.getTimeframePercentage(series.getBarSize());
+                            finalThStepInPoints = com.biotak.util.OptimizedCalculations.calculateTHPoints(series.getInstrument(), thBasePrice, timeframePercentage);
+
+                            // Store this value as the new global lock
+                            getSettings().setDouble(S_LOCKED_TH_VALUE, finalThStepInPoints);
+                            getSettings().setString(S_LOCKED_TH_ORIGIN_TIMEFRAME, series.getBarSize().toString());
+
+                            AdvancedLogger.info("BiotakTrigger", "drawFigures", "Locking global TH value to %.5f from timeframe %s", 
+                                finalThStepInPoints, series.getBarSize().toString());
+                        }
+                    } else {
+                        // Lock is disabled; calculate TH step normally for the current timeframe
+                        double timeframePercentage = TimeframeUtil.getTimeframePercentage(series.getBarSize());
+                        finalThStepInPoints = com.biotak.util.OptimizedCalculations.calculateTHPoints(series.getInstrument(), thBasePrice, timeframePercentage);
+                        
+                        // Also, ensure any old global lock values are cleared
+                        getSettings().setDouble(S_LOCKED_TH_VALUE, Double.NaN);
+                        getSettings().setString(S_LOCKED_TH_ORIGIN_TIMEFRAME, null);
                     }
-                    
+
                     if (getSettings().getBoolean(S_SHOW_TH_LEVELS, true)) {
-                        List<Figure> thFigures = LevelDrawer.drawTHLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, thBasePrice, startTime, endTime);
+                        List<Figure> thFigures = LevelDrawer.drawTHLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, finalThStepInPoints, startTime, endTime);
                         for (Figure f : thFigures) addFigure(f);
                     }
                 }
                 case SS_LS_STEP -> {
-                    // انتخاب مبنای TH بر اساس تنظیم کاربر
-                    SSLSBasisType basis = com.biotak.util.EnumUtil.safeEnum(SSLSBasisType.class,
-                            getSettings().getString(S_SSLS_BASIS, SSLSBasisType.STRUCTURE.name()), SSLSBasisType.STRUCTURE);
-                    if (basis == null) basis = SSLSBasisType.STRUCTURE;
-
-                    // Unified lock behavior: use the same lock system as other modes
                     boolean lockAllLevels = getSettings().getBoolean(S_LOCK_ALL_LEVELS, false);
-
                     double baseTHForSession;
 
-                    if (lockAllLevels && !Double.isNaN(lockedBaseTH)) {
-                        // Already locked, use stored value
-                        baseTHForSession = lockedBaseTH;
-                    } else {
-                        double baseTHCalc;
-                        switch (basis) {
-                            case PATTERN -> baseTHCalc = patternValue;
-                            case TRIGGER -> baseTHCalc = triggerValue;
-                            case AUTO -> {
-                                // حالت Auto (هوشمند)
-                                double rangeAbove  = finalHigh   - midpointPrice;
-                                double rangeBelow  = midpointPrice - finalLow;
-                                double allowedRange = Math.min(rangeAbove, rangeBelow);
-                                double[] candidates = new double[] { structureValue, patternValue, triggerValue };
-                                baseTHCalc = triggerValue;
-                                for (double candidate : candidates) {
-                                    if (LS_MULTIPLIER * candidate <= allowedRange) { baseTHCalc = candidate; break; }
-                                }
+                    if (lockAllLevels) {
+                        double globallyLockedBaseTH = getSettings().getDouble(S_LOCKED_BASE_TH_VALUE, Double.NaN);
+                        if (!Double.isNaN(globallyLockedBaseTH)) {
+                            baseTHForSession = globallyLockedBaseTH;
+                        } else {
+                            SSLSBasisType basis = com.biotak.util.EnumUtil.safeEnum(SSLSBasisType.class, getSettings().getString(S_SSLS_BASIS, SSLSBasisType.STRUCTURE.name()), SSLSBasisType.STRUCTURE);
+                            if (basis == null) basis = SSLSBasisType.STRUCTURE;
+                            switch (basis) {
+                                case PATTERN -> baseTHForSession = patternValue;
+                                case TRIGGER -> baseTHForSession = triggerValue;
+                                default -> baseTHForSession = structureValue;
                             }
-                            case STRUCTURE -> baseTHCalc = structureValue;
-                            default -> baseTHCalc = structureValue;
+                            getSettings().setDouble(S_LOCKED_BASE_TH_VALUE, baseTHForSession);
+                            getSettings().setString(S_LOCKED_BASE_TH_ORIGIN_TIMEFRAME, series.getBarSize().toString());
                         }
-                        baseTHForSession = baseTHCalc;
-                        if (lockAllLevels) lockedBaseTH = baseTHForSession;
+                    } else {
+                        SSLSBasisType basis = com.biotak.util.EnumUtil.safeEnum(SSLSBasisType.class, getSettings().getString(S_SSLS_BASIS, SSLSBasisType.STRUCTURE.name()), SSLSBasisType.STRUCTURE);
+                        if (basis == null) basis = SSLSBasisType.STRUCTURE;
+                        switch (basis) {
+                            case PATTERN -> baseTHForSession = patternValue;
+                            case TRIGGER -> baseTHForSession = triggerValue;
+                            default -> baseTHForSession = structureValue;
+                        }
+                        getSettings().setDouble(S_LOCKED_BASE_TH_VALUE, Double.NaN);
+                        getSettings().setString(S_LOCKED_BASE_TH_ORIGIN_TIMEFRAME, null);
                     }
 
                     double ssValue = baseTHForSession * SS_MULTIPLIER;
@@ -734,19 +749,23 @@ public class BiotakTrigger extends Study {
                     for (Figure f : sslsFigures) addFigure(f);
                 }
                 case M_STEP -> {
-                    double controlValue = (shortStep + longStep) / 2.0;
-                    
-                    // Check for lock all levels functionality
                     boolean lockAllLevels = getSettings().getBoolean(S_LOCK_ALL_LEVELS, false);
-                    double finalControlValue = controlValue;
-                    
-                    if (lockAllLevels && !Double.isNaN(lockedControlValue)) {
-                        // Use locked Control value for M-step calculations
-                        finalControlValue = lockedControlValue;
-                    } else if (lockAllLevels) {
-                        // First time locking - store current value
-                        lockedControlValue = controlValue;
+                    double controlValue = (shortStep + longStep) / 2.0;
+                    double finalControlValue;
+
+                    if (lockAllLevels) {
+                        double globallyLockedControlValue = getSettings().getDouble(S_LOCKED_CONTROL_VALUE, Double.NaN);
+                        if (!Double.isNaN(globallyLockedControlValue)) {
+                            finalControlValue = globallyLockedControlValue;
+                        } else {
+                            finalControlValue = controlValue;
+                            getSettings().setDouble(S_LOCKED_CONTROL_VALUE, finalControlValue);
+                            getSettings().setString(S_LOCKED_CONTROL_ORIGIN_TIMEFRAME, series.getBarSize().toString());
+                        }
+                    } else {
                         finalControlValue = controlValue;
+                        getSettings().setDouble(S_LOCKED_CONTROL_VALUE, Double.NaN);
+                        getSettings().setString(S_LOCKED_CONTROL_ORIGIN_TIMEFRAME, null);
                     }
                     
                     double mDistance = finalControlValue * ATR_FACTOR;
@@ -763,7 +782,25 @@ public class BiotakTrigger extends Study {
                     for (Figure f : mFigures) addFigure(f);
                 }
                 case E_STEP -> {
-                    double eDistance = thValue * 0.75;
+                    boolean lockAllLevels = getSettings().getBoolean(S_LOCK_ALL_LEVELS, false);
+                    double finalEThValue;
+
+                    if (lockAllLevels) {
+                        double globallyLockedTH = getSettings().getDouble(S_LOCKED_TH_VALUE, Double.NaN);
+                        if (!Double.isNaN(globallyLockedTH)) {
+                            finalEThValue = globallyLockedTH;
+                        } else {
+                            finalEThValue = thValue;
+                            getSettings().setDouble(S_LOCKED_TH_VALUE, finalEThValue);
+                            getSettings().setString(S_LOCKED_TH_ORIGIN_TIMEFRAME, series.getBarSize().toString());
+                        }
+                    } else {
+                        finalEThValue = thValue;
+                        getSettings().setDouble(S_LOCKED_TH_VALUE, Double.NaN);
+                        getSettings().setString(S_LOCKED_TH_ORIGIN_TIMEFRAME, null);
+                    }
+                    
+                    double eDistance = finalEThValue * 0.75;
                     java.util.List<Figure> eFigures = LevelDrawer.drawELevels(getSettings(), midpointPrice, finalHigh, finalLow, eDistance, startTime, endTime);
                     for (Figure f : eFigures) addFigure(f);
                 }
@@ -1797,5 +1834,23 @@ public class BiotakTrigger extends Study {
             }
         }, 100); // 100ms delay
     }
+    
+    /**
+     * Reset all locked values when lock all levels is disabled
+     */
+    private void resetLockedValues() {
+        // Clear local cache
+        lockedTHValue = Double.NaN;
+        lockedControlValue = Double.NaN;
+        lockedBaseTH = Double.NaN;
+        lockedCustomPrice = Double.NaN;
+        
+        // Clear global locked values from settings
+        getSettings().setDouble(S_LOCKED_TH_VALUE, Double.NaN);
+        getSettings().setString(S_LOCKED_TH_ORIGIN_TIMEFRAME, null);
+        
+        AdvancedLogger.info("BiotakTrigger", "resetLockedValues", "All local and global locked values have been reset");
+    }
+    
     
 }
