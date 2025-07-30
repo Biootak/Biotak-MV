@@ -770,7 +770,7 @@ case CONTROL_STEP -> {
                     List<Figure> controlFigures = LevelDrawer.drawControlLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, patternValue, structureValue, shortStep, finalControlValue, longStep, startTime, endTime);
                     for (Figure f : controlFigures) addFigure(f);
                 }
-case M_STEP -> {
+                case M_STEP -> {
                     double controlValue = (shortStep + longStep) / 2.0;
                     
                     // Check for lock all levels functionality
@@ -798,6 +798,11 @@ case M_STEP -> {
                         mFigures = LevelDrawer.drawMEqualLevels(getSettings(), midpointPrice, finalHigh, finalLow, mDistance, startTime, endTime);
                     }
                     for (Figure f : mFigures) addFigure(f);
+                }
+                case E_STEP -> {
+                    double eDistance = thValue * 0.75;
+                    java.util.List<Figure> eFigures = LevelDrawer.drawELevels(getSettings(), midpointPrice, finalHigh, finalLow, eDistance, startTime, endTime);
+                    for (Figure f : eFigures) addFigure(f);
                 }
             }
 

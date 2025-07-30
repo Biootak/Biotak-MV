@@ -499,4 +499,68 @@ public class LevelDrawer {
 
         return figs;
     }
-} 
+
+    /**
+     * Draws levels at equal spacing of eDistance, labelling each as \"E\".
+     */
+    public static List<Figure> drawELevels(
+            Settings settings,
+            double midpointPrice,
+            double highestHigh,
+            double lowestLow,
+            double eDistance,
+            long startTime,
+            long endTime) {
+
+        if (eDistance <= 0) {
+            AdvancedLogger.warn("LevelDrawer", "drawELevels", "Invalid E distance – cannot draw levels.");
+            return new java.util.ArrayList<>();
+        }
+
+        boolean showLabels = settings.getBoolean(S_SHOW_LEVEL_LABELS, true);
+        int maxAbove = settings.getInteger(S_MAX_LEVELS_ABOVE);
+        int maxBelow = settings.getInteger(S_MAX_LEVELS_BELOW);
+
+        java.util.List<Figure> figs = new java.util.ArrayList<>();
+
+        // Above
+        int step = 1;
+        double price = midpointPrice + eDistance;
+        while (price <= highestHigh && step <= maxAbove) {
+            PathInfo path = getPathForLevel(settings, step);
+            if (path == null) {
+                boolean triggerOn = settings.getBoolean(S_SHOW_TRIGGER_LEVELS);
+                if (triggerOn) {
+                    path = getControlLevelPath(settings, "E");
+                }
+            }
+            if (path != null) {
+                figs.add(new Line(new Coordinate(startTime, price), new Coordinate(endTime, price), path));
+                if (showLabels) figs.add(new LevelLabel(endTime, price, "E"));
+            }
+            step++;
+            price += eDistance;
+        }
+
+        // Below
+        step = 1;
+        price = midpointPrice - eDistance;
+        while (price >= lowestLow && step <= maxBelow) {
+            PathInfo path = getPathForLevel(settings, step);
+            if (path == null) {
+                boolean triggerOn = settings.getBoolean(S_SHOW_TRIGGER_LEVELS);
+                if (triggerOn) {
+                    path = getControlLevelPath(settings, "E");
+                }
+            }
+            if (path != null) {
+                figs.add(new Line(new Coordinate(startTime, price), new Coordinate(endTime, price), path));
+                if (showLabels) figs.add(new LevelLabel(endTime, price, "E"));
+            }
+            step++;
+            price -= eDistance;
+        }
+
+        return figs;
+    }
+}
