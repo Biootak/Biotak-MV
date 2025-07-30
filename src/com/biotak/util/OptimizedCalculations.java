@@ -79,14 +79,13 @@ public final class OptimizedCalculations {
     }
     
     /**
-     * Fast percentage calculation for timeframes
+     * Fast percentage calculation for timeframes using improved logarithmic interpolation
      */
     public static double calculateTimeframePercentageOptimized(int totalMinutes) {
         if (totalMinutes <= 0) totalMinutes = 1;
         
-        // Use fast square root for common values
-        double minutesEquivalent = totalMinutes;
-        return 0.02 * fastSqrt(minutesEquivalent);
+        // Use the improved TimeframeUtil method which handles logarithmic interpolation
+        return TimeframeUtil.getTimeframePercentageFromMinutes(totalMinutes);
     }
     
     /**

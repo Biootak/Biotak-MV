@@ -215,10 +215,33 @@ public final class TimeframeUtil {
                 result = FRACTAL_PERCENTAGES.getOrDefault(lbl, 0.02);
             }
             else {
-                // Generic closed-form for minute-based timeframes: 0.02 × √(minutes)
-                double minutesEquivalent = getTotalSeconds(barSize) / 60.0; // supports seconds/hours/days/…
-                if (minutesEquivalent <= 0) minutesEquivalent = 1.0;
-                result = 0.02 * Math.sqrt(minutesEquivalent);
+        // For non-fractal timeframes, interpolate between the two nearest fractal timeframes (logarithmic interpolation)
+        Map.Entry<Integer, String> lowerEntry = FRACTAL_MINUTES_MAP.floorEntry(totalMinutes);
+        Map.Entry<Integer, String> higherEntry = FRACTAL_MINUTES_MAP.ceilingEntry(totalMinutes);
+
+        if (lowerEntry != null && higherEntry != null) {
+            if (lowerEntry.getKey().equals(higherEntry.getKey())) {
+                result = FRACTAL_PERCENTAGES.get(lowerEntry.getValue());
+            } else {
+                double lowerMinutes = lowerEntry.getKey();
+                double higherMinutes = higherEntry.getKey();
+                double lowerPercentage = FRACTAL_PERCENTAGES.get(lowerEntry.getValue());
+                double higherPercentage = FRACTAL_PERCENTAGES.get(higherEntry.getValue());
+
+                // Perform logarithmic interpolation
+                double logLower = Math.log(lowerMinutes);
+                double logHigher = Math.log(higherMinutes);
+                double logCurrent = Math.log(totalMinutes);
+
+                double ratio = (logCurrent - logLower) / (logHigher - logLower);
+                result = lowerPercentage + ratio * (higherPercentage - lowerPercentage);
+            }
+        } else {
+            // Fallback for timeframes outside the defined fractal range
+            double minutesEquivalent = getTotalSeconds(barSize) / 60.0;
+            if (minutesEquivalent <= 0) minutesEquivalent = 1.0;
+            result = 0.02 * Math.sqrt(minutesEquivalent);
+        }
             }
         }
         
@@ -985,6 +1008,15 @@ public final class TimeframeUtil {
         return minutes > 0 ? minutes : -1;
     }
     
+    /**
+     * Gets the nearest fractal timeframe to the given timeframe string.
+     * For example, if input is M90 (90 minutes), it returns H1+M4 (64 minutes)
+     * which is the closest fractal timeframe.
+     * This method specifically looks for the TRUE fractal timeframes (powers of 4): 1, 4, 16, 64, 256, 1024...
+     * 
+     * @param timeframeLabel The timeframe label (e.g., "M90", "H1+M30")
+     * @return The nearest fractal timeframe string based on powers of 4
+     */
     /**
      * Gets the nearest fractal timeframe to the given timeframe string.
      * For example, if input is M90 (90 minutes), it returns H1+M4 (64 minutes)
