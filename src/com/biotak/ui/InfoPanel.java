@@ -503,61 +503,87 @@ public class InfoPanel extends Figure {
         StringBuilder sb = PoolManager.getStringBuilder();
         
         try {
+            // Headers for the table-like format
+            hierarchyLines.add("HEADER:TH:C:E:TP");
+
             if (higherStructureTF != null && !higherStructureTF.isEmpty()) {
                 sb.setLength(0);
-                double cVal = higherStructureTH * 1.75;
-                double thPip = com.biotak.util.UnitConverter.priceToPip(higherStructureTH, instrument);
+                double th = higherStructureTH;
+                double cVal = th * 1.75;
+                double thPip = com.biotak.util.UnitConverter.priceToPip(th, instrument);
                 double cPip = com.biotak.util.UnitConverter.priceToPip(cVal, instrument);
-                sb.append("▲ S [").append(higherStructureTF).append("]: ")
-                  .append(StringUtils.format1f(thPip)).append("  (C:")
-                  .append(StringUtils.format1f(cPip)).append(")");
+                double diffPip = cPip - thPip;
+                double tpPip = diffPip * 3; // TP = E * 3
+                sb.append("▲ S [").append(higherStructureTF).append("]:")
+                  .append(StringUtils.format1f(thPip)).append(":")
+                  .append(StringUtils.format1f(cPip)).append(":")
+                  .append(StringUtils.format1f(diffPip)).append(":")
+                  .append(StringUtils.format1f(tpPip));
                 hierarchyLines.add(sb.toString());
             }
             
             if (higherPatternTF != null && !higherPatternTF.isEmpty()) {
                 sb.setLength(0);
-                double cVal = higherPatternTH * 1.75;
-                double thPip = com.biotak.util.UnitConverter.priceToPip(higherPatternTH, instrument);
+                double th = higherPatternTH;
+                double cVal = th * 1.75;
+                double thPip = com.biotak.util.UnitConverter.priceToPip(th, instrument);
                 double cPip = com.biotak.util.UnitConverter.priceToPip(cVal, instrument);
-                sb.append("▲ P [").append(higherPatternTF).append("]: ")
-                  .append(StringUtils.format1f(thPip)).append("  (C:")
-                  .append(StringUtils.format1f(cPip)).append(")");
+                double diffPip = cPip - thPip;
+                double tpPip = diffPip * 3; // TP = E * 3
+                sb.append("▲ P [").append(higherPatternTF).append("]:")
+                  .append(StringUtils.format1f(thPip)).append(":")
+                  .append(StringUtils.format1f(cPip)).append(":")
+                  .append(StringUtils.format1f(diffPip)).append(":")
+                  .append(StringUtils.format1f(tpPip));
                 hierarchyLines.add(sb.toString());
             }
 
-            // Current timeframe – include star marker
+            // Current timeframe
             sb.setLength(0);
-            double cVal = thValue * 1.75;
-            double thPip = com.biotak.util.UnitConverter.priceToPip(thValue, instrument);
+            double th = thValue;
+            double cVal = th * 1.75;
+            double thPip = com.biotak.util.UnitConverter.priceToPip(th, instrument);
             double cPip = com.biotak.util.UnitConverter.priceToPip(cVal, instrument);
-            sb.append("■ [").append(timeframe).append("]: ")
-              .append(StringUtils.format1f(thPip)).append("  (C:")
-              .append(StringUtils.format1f(cPip)).append(") *");
+            double diffPip = cPip - thPip;
+            double tpPip = diffPip * 3; // TP = E * 3
+            sb.append("■ [").append(timeframe).append("]*:").append(StringUtils.format1f(thPip)).append(":")
+              .append(StringUtils.format1f(cPip)).append(":")
+              .append(StringUtils.format1f(diffPip)).append(":")
+              .append(StringUtils.format1f(tpPip));
             hierarchyLines.add(sb.toString());
 
             if (lowerPatternTF != null && !lowerPatternTF.isEmpty()) {
                 sb.setLength(0);
-                cVal = lowerPatternTH * 1.75;
-                thPip = com.biotak.util.UnitConverter.priceToPip(lowerPatternTH, instrument);
+                th = lowerPatternTH;
+                cVal = th * 1.75;
+                thPip = com.biotak.util.UnitConverter.priceToPip(th, instrument);
                 cPip = com.biotak.util.UnitConverter.priceToPip(cVal, instrument);
-                sb.append("▼ P [").append(lowerPatternTF).append("]: ")
-                  .append(StringUtils.format1f(thPip)).append("  (C:")
-                  .append(StringUtils.format1f(cPip)).append(")");
+                diffPip = cPip - thPip;
+                tpPip = diffPip * 3; // TP = E * 3
+                sb.append("▼ P [").append(lowerPatternTF).append("]:")
+                  .append(StringUtils.format1f(thPip)).append(":")
+                  .append(StringUtils.format1f(cPip)).append(":")
+                  .append(StringUtils.format1f(diffPip)).append(":")
+                  .append(StringUtils.format1f(tpPip));
                 hierarchyLines.add(sb.toString());
             }
             
             if (lowerTriggerTF != null && !lowerTriggerTF.isEmpty()) {
                 sb.setLength(0);
-                cVal = lowerTriggerTH * 1.75;
-                thPip = com.biotak.util.UnitConverter.priceToPip(lowerTriggerTH, instrument);
+                th = lowerTriggerTH;
+                cVal = th * 1.75;
+                thPip = com.biotak.util.UnitConverter.priceToPip(th, instrument);
                 cPip = com.biotak.util.UnitConverter.priceToPip(cVal, instrument);
-                sb.append("▼ T [").append(lowerTriggerTF).append("]: ")
-                  .append(StringUtils.format1f(thPip)).append("  (C:")
-                  .append(StringUtils.format1f(cPip)).append(")");
+                diffPip = cPip - thPip;
+                tpPip = diffPip * 3; // TP = E * 3
+                sb.append("▼ T [").append(lowerTriggerTF).append("]:")
+                  .append(StringUtils.format1f(thPip)).append(":")
+                  .append(StringUtils.format1f(cPip)).append(":")
+                  .append(StringUtils.format1f(diffPip)).append(":")
+                  .append(StringUtils.format1f(tpPip));
                 hierarchyLines.add(sb.toString());
             }
             
-            // Return a copy to avoid pool interference
             return new ArrayList<>(hierarchyLines);
         } finally {
             PoolManager.releaseStringBuilder(sb);
@@ -569,87 +595,73 @@ public class InfoPanel extends Figure {
                                      FontMetrics fm, Font font, int spacing, ColorTheme theme) {
         int currentY = y;
         
-        // Theme-appropriate separator line
         gc.setColor(theme.separatorColor);
         gc.setStroke(new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, new float[]{3.0f}, 0.0f));
         gc.drawLine(x + 10, currentY, x + panelWidth - 10, currentY);
-        currentY += SEPARATOR_PADDING; // Increased padding after separator line
-        
-        // Section Content - Centered single-column layout with special handling for current timeframe
+        currentY += SEPARATOR_PADDING;
+
         gc.setFont(font);
+
+        int labelWidth = (int)(panelWidth * 0.40); // 40% for timeframe label
+        int colWidth = (panelWidth - labelWidth) / 4; // Remaining 60% for 4 columns
+        
+        int labelX = x + 15;
+        int thX = x + labelWidth;
+        int cX = x + labelWidth + colWidth;
+        int eX = x + labelWidth + (2 * colWidth);
+        int tpX = x + labelWidth + (3 * colWidth);
+
         for (String line : lines) {
-            // Extract the timeframe from the string
-            String timeframeStr = extractTimeframeFromLine(line);
-            
-            // Check if this is the current timeframe (contains the * marker)
-            boolean isCurrentTimeframe = line.contains("*");
-            
-            int lineWidth = fm.stringWidth(line);
-            int textX = x + (panelWidth - lineWidth) / 2;
-            
-            // Only highlight the current timeframe in yellow
+            String[] parts = line.split(":");
+            if (parts.length != 5) continue;
+
+            String label = parts[0];
+            String thVal = parts[1];
+            String cVal = parts[2];
+            String eVal = parts[3];
+            String mVal = parts[4];
+
+            if ("HEADER".equals(label)) {
+                gc.setColor(theme.contentColor);
+                gc.drawString(thVal, thX, currentY);
+                gc.drawString(cVal, cX, currentY);
+                gc.drawString(eVal, eX, currentY);
+                gc.drawString(mVal, tpX, currentY);
+                currentY += fm.getHeight() + spacing;
+                continue;
+            }
+
+            boolean isCurrentTimeframe = label.contains("*");
             if (isCurrentTimeframe) {
-                // Use a very distinct background color for current timeframe
+                label = label.replace("*", "").trim();
+                
                 int padding = 6;
-                
-                // Use yellow for current timeframe
-                gc.setColor(new Color(120, 100, 0, 180)); // Dark gold background
-                gc.fillRoundRect(textX - padding, currentY - fm.getAscent(), lineWidth + (padding * 2), fm.getHeight(), 8, 8);
-                
-                // Draw the text with theme-appropriate color for better visibility
-                gc.setColor(theme.contentColor); // Use theme content color for maximum visibility
-                gc.drawString(line, textX, currentY);
-            } else {
-                // Check if the line contains an arrow symbol
-                if (line.contains("▲")) {
-                    // Draw the arrow in light green and the rest of the text in white
-                    String beforeArrow = line.substring(0, line.indexOf("▲"));
-                    String arrow = "▲";
-                    String afterArrow = line.substring(line.indexOf("▲") + 1);
-                    
-                    int beforeWidth = fm.stringWidth(beforeArrow);
-                    int arrowWidth = fm.stringWidth(arrow);
-                    
-                    // Draw the text before the arrow in theme color
-                    gc.setColor(theme.contentColor);
-                    gc.drawString(beforeArrow, textX, currentY);
-                    
-                    // Draw the arrow in dark green
-                    gc.setColor(new Color(0, 100, 0)); // Dark green
-                    gc.drawString(arrow, textX + beforeWidth, currentY);
-                    
-                    // Draw the text after the arrow in theme color
-                    gc.setColor(theme.contentColor);
-                    gc.drawString(afterArrow, textX + beforeWidth + arrowWidth, currentY);
-                } 
-                else if (line.contains("▼")) {
-                    // Draw the arrow in red and the rest of the text in white
-                    String beforeArrow = line.substring(0, line.indexOf("▼"));
-                    String arrow = "▼";
-                    String afterArrow = line.substring(line.indexOf("▼") + 1);
-                    
-                    int beforeWidth = fm.stringWidth(beforeArrow);
-                    int arrowWidth = fm.stringWidth(arrow);
-                    
-                    // Draw the text before the arrow in theme color
-                    gc.setColor(theme.contentColor);
-                    gc.drawString(beforeArrow, textX, currentY);
-                    
-                    // Draw the arrow in dark red
-                    gc.setColor(new Color(139, 0, 0)); // Dark red
-                    gc.drawString(arrow, textX + beforeWidth, currentY);
-                    
-                    // Draw the text after the arrow in theme color
-                    gc.setColor(theme.contentColor);
-                    gc.drawString(afterArrow, textX + beforeWidth + arrowWidth, currentY);
-                }
-                else {
-                    // No arrows, draw the entire line in theme color
-                    gc.setColor(theme.contentColor);
-                    gc.drawString(line, textX, currentY);
-                }
+                gc.setColor(new Color(120, 100, 0, 180));
+                gc.fillRoundRect(x + 5, currentY - fm.getAscent() - padding / 2, panelWidth - 10, fm.getHeight() + padding, 8, 8);
             }
             
+            gc.setColor(theme.contentColor);
+
+            if (label.contains("▲")) {
+                gc.setColor(new Color(0, 100, 0));
+                gc.drawString("▲", labelX, currentY);
+                gc.setColor(theme.contentColor);
+                gc.drawString(label.substring(label.indexOf("▲") + 1), labelX + fm.stringWidth("▲"), currentY);
+            } else if (label.contains("▼")) {
+                gc.setColor(new Color(139, 0, 0));
+                gc.drawString("▼", labelX, currentY);
+                gc.setColor(theme.contentColor);
+                gc.drawString(label.substring(label.indexOf("▼") + 1), labelX + fm.stringWidth("▼"), currentY);
+            } else {
+                gc.drawString(label, labelX, currentY);
+            }
+            
+            gc.setColor(theme.contentColor);
+            gc.drawString(thVal, thX, currentY);
+            gc.drawString(cVal, cX, currentY);
+            gc.drawString(eVal, eX, currentY);
+            gc.drawString(mVal, tpX, currentY);
+
             currentY += fm.getHeight() + spacing;
         }
     }
