@@ -104,12 +104,7 @@ public class BiotakTrigger extends Study {
     private boolean firstBarDrawn = false; // prevents repeated first-bar drawing/logging
     private static volatile boolean logLevelInitialized = false; // prevents repeated log level initialization
 
-    // Stores SS/LS base TH when lock option is enabled
-    private double lockedBaseTH = Double.NaN;
-    
     // Stores locked values for all level types when lock all option is enabled
-    private double lockedTHValue = Double.NaN;
-    private double lockedControlValue = Double.NaN;
     private double lockedCustomPrice = Double.NaN;
     
     // Human-readable labels for each TH value (Current, Pattern, Trigger, Structure, Higher)
@@ -144,22 +139,6 @@ public class BiotakTrigger extends Study {
     // Keep last DataContext for quick redraws triggered by key events
     private DrawContext lastDrawContext;
     
-    // Track custom price movement timing
-    private long lastCustomMoveTime = 0;
-    
-    // TH and M values for different timeframes
-    private double thValue = Double.NaN;
-    private double patternTH = Double.NaN;
-    private double triggerTH = Double.NaN;
-    private double structureTH = Double.NaN;
-    private double higherPatternTH = Double.NaN;
-    
-    // M values (M = TH * TH_TO_M_FACTOR)
-    private double mValue = Double.NaN;
-    private double patternM = Double.NaN;
-    private double triggerM = Double.NaN;
-    private double structureM = Double.NaN;
-    private double higherPatternM = Double.NaN;
 
     /**
      * سازنده کلاس - مقداردهی اولیه سیستم لاگ‌گذاری و اجزای اصلی
@@ -202,7 +181,6 @@ public class BiotakTrigger extends Study {
             if (ds.size() == 0) return;
             double lastClose = ds.getClose(ds.size() - 1);
             getSettings().setDouble(S_CUSTOM_PRICE, lastClose);
-            lastCustomMoveTime = System.currentTimeMillis();
             drawFigures(ds.size() - 1, ctx.getDataContext());
         }));
         // ---- Ruler context toggles ----
@@ -306,7 +284,6 @@ public class BiotakTrigger extends Study {
                     if (series.size() > 0) {
                         double lc = series.getClose(series.size() - 1);
                         settings.setDouble(S_CUSTOM_PRICE, lc);
-                        lastCustomMoveTime = nowClick;
                         drawFigures(series.size() - 1, ctx.getDataContext());
                     }
                 }
@@ -504,7 +481,6 @@ public class BiotakTrigger extends Study {
 
             // برای محاسبه TH از قیمت لایو Bid استفاده می‌کنیم
             int totalBars    = series.size();
-            int lookback     = Math.min(200, totalBars);
             double thBasePrice = series.getBidClose(totalBars - 1); // Use current live bid price for TH calculation.
             
             // Use the first and last bar times directly for line drawing
@@ -620,20 +596,14 @@ public class BiotakTrigger extends Study {
             
             // Consolidated TH calculations using FractalUtil
             var thBundle = com.biotak.util.FractalUtil.calculateTHBundle(series.getInstrument(), series.getBarSize(), thBasePrice);
-            double thValue          = thBundle.th();
-            double patternTH        = thBundle.pattern();
-            double triggerTH        = thBundle.trigger();
-            double structureTH      = thBundle.structure();
-            double higherPatternTH  = thBundle.higherPattern();
-
-            double pointValue = series.getInstrument().getTickSize();
+            double thValue = thBundle.th();
+            // Note: Other TH values (pattern, trigger, structure, higherPattern) are available from thBundle
+            // but are not used in this method - they are calculated separately in drawInfoPanel when needed
 
             BarSize patternBarSize     = TimeframeUtil.getPatternBarSize(series.getBarSize());
             BarSize triggerBarSize     = TimeframeUtil.getTriggerBarSize(series.getBarSize());
             BarSize structureBarSize   = TimeframeUtil.getStructureBarSize(series.getBarSize());
             BarSize higherPatternBarSize = TimeframeUtil.getPatternBarSize(structureBarSize);
-            // Set instance fields
-
             // 2) M values derived from TH →  M = SS + C + LS
             //    Detailed decomposition based on Biotak fractal relationships:
             //      • Structure  (S)  = TH (1 × TH)
@@ -646,11 +616,6 @@ public class BiotakTrigger extends Study {
             //      1.5 + 0.25 + 2 + 1 + 0.5 + 0.25 = 5.5 × TH (but Biotak spec uses 5.25)
             //    The original MT4 implementation uses a fixed coefficient of 5.25; we align with that.
             double mScale = TH_TO_M_FACTOR;
-            this.mValue          = mScale * thValue;
-            this.patternM        = mScale * patternTH;
-            this.triggerM        = mScale * triggerTH;
-            this.structureM      = mScale * structureTH;
-            this.higherPatternM  = mScale * higherPatternTH;
 
             // 3) Human-readable timeframe labels for ruler pop-up
             BarSize currBarSize = series.getBarSize();
@@ -867,6 +832,38 @@ public class BiotakTrigger extends Study {
                     List<Figure> eFigures = LevelDrawer.drawTHLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, finalEThStepInPoints, startTime, endTime);
                     for (Figure f : eFigures) addFigure(f);
                 }
+                case TP_STEP -> {
+                    // TP_STEP implementation - placeholder for now
+                    boolean lockAllLevels = getSettings().getBoolean(S_LOCK_ALL_LEVELS, false);
+                    double finalTpThStepInPoints;
+
+                    if (lockAllLevels) {
+                        double globallyLockedTH = getSettings().getDouble(S_LOCKED_TH_VALUE, Double.NaN);
+                        if (!Double.isNaN(globallyLockedTH)) {
+                            finalTpThStepInPoints = globallyLockedTH;
+                        } else {
+                            // Calculate TH step for TP mode - E * 3
+                            double timeframePercentage = TimeframeUtil.getTimeframePercentage(series.getBarSize());
+                            double thStepInPoints = com.biotak.util.OptimizedCalculations.calculateTHPoints(series.getInstrument(), thBasePrice, timeframePercentage);
+                            double eDistance = thStepInPoints * 0.75; // E = TH * 0.75
+                            finalTpThStepInPoints = eDistance * 3.0; // TP = E * 3
+                            getSettings().setDouble(S_LOCKED_TH_VALUE, finalTpThStepInPoints);
+                            getSettings().setString(S_LOCKED_TH_ORIGIN_TIMEFRAME, series.getBarSize().toString());
+                        }
+                    } else {
+                        // Calculate TH step for TP mode - E * 3
+                        double timeframePercentage = TimeframeUtil.getTimeframePercentage(series.getBarSize());
+                        double thStepInPoints = com.biotak.util.OptimizedCalculations.calculateTHPoints(series.getInstrument(), thBasePrice, timeframePercentage);
+                        double eDistance = thStepInPoints * 0.75; // E = TH * 0.75
+                        finalTpThStepInPoints = eDistance * 3.0; // TP = E * 3
+                        getSettings().setDouble(S_LOCKED_TH_VALUE, Double.NaN);
+                        getSettings().setString(S_LOCKED_TH_ORIGIN_TIMEFRAME, null);
+                    }
+                    
+                    // Use the same drawing method as TH_STEP but with TP distance
+                    List<Figure> tpFigures = LevelDrawer.drawTHLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, finalTpThStepInPoints, startTime, endTime);
+                    for (Figure f : tpFigures) addFigure(f);
+                }
             }
 
             // ------------------- LEG RULER -------------------
@@ -925,7 +922,6 @@ public class BiotakTrigger extends Study {
                 customPriceLine.updatePrice(newPrice);
             }
             
-            lastCustomMoveTime = System.currentTimeMillis();
             drawFigures(ctx.getDataContext().getDataSeries().size() - 1, ctx.getDataContext());
         } else if (customPriceLine != null && rp == customPriceLine.getLineResizePoint()) {
             // Check if levels are locked before allowing line drag
@@ -937,7 +933,6 @@ public class BiotakTrigger extends Study {
             
             // User finished dragging the invisible line ResizePoint (line itself)
             double newPrice = rp.getValue();
-            long currentTime = System.currentTimeMillis();
             
             // Logger.debug("=== LINE DRAG END EVENT START ===");
             // Logger.debug("onEndResize: LineResizePoint drag completed at time: " + currentTime);
@@ -961,8 +956,6 @@ public class BiotakTrigger extends Study {
                 // Logger.debug("onEndResize: CustomPricePoint synchronized to final position: (" + customPricePoint.getTime() + ", " + newPrice + ")");
             }
             
-            lastCustomMoveTime = currentTime;
-            // Logger.debug("onEndResize: lastCustomMoveTime updated to: " + lastCustomMoveTime);
             
             // Trigger full redraw with all levels recalculation
             drawFigures(ctx.getDataContext().getDataSeries().size() - 1, ctx.getDataContext());
@@ -1019,7 +1012,6 @@ public class BiotakTrigger extends Study {
             
             // User is dragging the invisible line ResizePoint (dragging the line itself)
             double newPrice = rp.getValue();
-            long currentTime = System.currentTimeMillis();
             
             // Logger.debug("=== LINE DRAG EVENT START ===");
             // Logger.debug("onResize: LineResizePoint drag detected at time: " + currentTime);
@@ -1108,27 +1100,22 @@ public class BiotakTrigger extends Study {
             double basePrice = series.getBidClose(series.size() - 1);
         // Pattern timeframe (one level down)
         BarSize patternBarSize = TimeframeUtil.getPatternBarSize(barSize);
-        double patternTFPercent = TimeframeUtil.getTimeframePercentage(patternBarSize);
-        double patternTH = com.biotak.util.OptimizedCalculations.calculateTHPoints(instrument, basePrice, patternTFPercent) * instrument.getTickSize();
-        // Trigger timeframe (two levels down)
         BarSize triggerBarSize = TimeframeUtil.getTriggerBarSize(barSize);
-        double triggerTFPercent = TimeframeUtil.getTimeframePercentage(triggerBarSize);
-        double triggerTH = com.biotak.util.OptimizedCalculations.calculateTHPoints(instrument, basePrice, triggerTFPercent) * instrument.getTickSize();
-        infoPanel.setDownwardFractalInfo(FractalCalculator.formatTimeframeString(patternBarSize), FractalCalculator.formatTimeframeString(triggerBarSize), patternTH, triggerTH);
+        infoPanel.setDownwardFractalInfo(
+            FractalCalculator.formatTimeframeString(patternBarSize), 
+            FractalCalculator.formatTimeframeString(triggerBarSize), 
+            com.biotak.util.OptimizedCalculations.calculateTHPoints(instrument, basePrice, TimeframeUtil.getTimeframePercentage(patternBarSize)) * instrument.getTickSize(),
+            com.biotak.util.OptimizedCalculations.calculateTHPoints(instrument, basePrice, TimeframeUtil.getTimeframePercentage(triggerBarSize)) * instrument.getTickSize()
+        );
         // Structure timeframe (one level up) and its pattern
         BarSize structureBarSize = TimeframeUtil.getStructureBarSize(barSize);
-        double structureTFPercent = TimeframeUtil.getTimeframePercentage(structureBarSize);
-        double structureTH = com.biotak.util.OptimizedCalculations.calculateTHPoints(instrument, basePrice, structureTFPercent) * instrument.getTickSize();
         BarSize higherPatternBarSize = TimeframeUtil.getPatternBarSize(structureBarSize);
-        double higherPatternPercent = TimeframeUtil.getTimeframePercentage(higherPatternBarSize);
-        double higherPatternTH = com.biotak.util.OptimizedCalculations.calculateTHPoints(instrument, basePrice, higherPatternPercent) * instrument.getTickSize();
-        infoPanel.setUpwardFractalInfo(FractalCalculator.formatTimeframeString(higherPatternBarSize), FractalCalculator.formatTimeframeString(structureBarSize), higherPatternTH, structureTH);
-        // Set instance fields
-        this.thValue = thValue;
-        this.patternTH = patternTH;
-        this.triggerTH = triggerTH;
-        this.structureTH = structureTH;
-        this.higherPatternTH = higherPatternTH;
+        infoPanel.setUpwardFractalInfo(
+            FractalCalculator.formatTimeframeString(higherPatternBarSize), 
+            FractalCalculator.formatTimeframeString(structureBarSize), 
+            com.biotak.util.OptimizedCalculations.calculateTHPoints(instrument, basePrice, TimeframeUtil.getTimeframePercentage(higherPatternBarSize)) * instrument.getTickSize(),
+            com.biotak.util.OptimizedCalculations.calculateTHPoints(instrument, basePrice, TimeframeUtil.getTimeframePercentage(structureBarSize)) * instrument.getTickSize()
+        );
         addFigure(this.infoPanel);
     }
 
@@ -1224,9 +1211,7 @@ public class BiotakTrigger extends Study {
                 long endTime = rulerEndResize.getTime();
 
                 // Swap if start > end
-                boolean swapped = false;
                 if (startTime > endTime) {
-                    swapped = true;
                     long tmpTime = startTime;
                     startTime = endTime;
                     endTime = tmpTime;
@@ -1241,11 +1226,8 @@ public class BiotakTrigger extends Study {
                 int endIdx = series.findIndex(endTime);
                 double bars = Math.abs(endIdx - startIdx) + 1;
 
-                // Pixel-based angle (useful for future enhancements; not displayed currently)
-                double pixelDX = line.getX2() - line.getX1();
+                // Pixel-based angle for positioning info box
                 double pixelDY = line.getY2() - line.getY1();
-                double angle = Math.toDegrees(Math.atan2(-pixelDY, pixelDX));
-                if (swapped) angle += 180;
 
                 long diffMs = Math.abs(endTime - startTime);
                 long minutes = (diffMs / (1000 * 60)) % 60;
@@ -1461,14 +1443,11 @@ public class BiotakTrigger extends Study {
                      }
                  }
 
-                 String matchCompound;
                  String matchMinutes;
                  if (totalMinutes > 0) {
-                     matchCompound = compoundTimeframe(totalMinutes);
                      matchMinutes = totalMinutes + "m";
-                     // Logger.debug("[Ruler] Match compound=" + matchCompound + ", minutes=" + matchMinutes);
+                     // Logger.debug("[Ruler] Match compound=" + compoundTimeframe(totalMinutes) + ", minutes=" + matchMinutes);
                  } else {
-                     matchCompound = "-";
                      matchMinutes = "-";
                  }
 
@@ -1609,71 +1588,6 @@ public class BiotakTrigger extends Study {
         }
     }
 
-    /**
-     * Handle ruler button click when DrawContext is not available
-     * این متد مشکل اصلی خط‌کش را حل می‌کند
-     */
-    private void handleRulerButtonClickWithoutContext(Settings settings) {
-        final String methodName = "handleRulerButtonClickWithoutContext";
-        boolean showRuler = settings.getBoolean(S_SHOW_RULER, false);
-        
-            AdvancedLogger.info("BiotakTrigger", methodName, "Method called - current showRuler=%s, rulerState=%s", showRuler, rulerState);
-            AdvancedLogger.debug("BiotakTrigger", methodName, "InfoPanel exists: %s", (infoPanel != null));
-            AdvancedLogger.debug("BiotakTrigger", methodName, "RulerStartResize exists: %s", (rulerStartResize != null));
-            AdvancedLogger.debug("BiotakTrigger", methodName, "RulerEndResize exists: %s", (rulerEndResize != null));
-            AdvancedLogger.debug("BiotakTrigger", methodName, "RulerFigure exists: %s", (rulerFigure != null));
-        
-        // CRITICAL FIX: Check both setting and actual state for more robust operation
-        boolean shouldActivateRuler = (!showRuler || rulerState == RulerState.INACTIVE);
-        
-        if (shouldActivateRuler) {
-            // Enable ruler mode and create default ruler immediately
-            RulerState oldState = rulerState;
-            settings.setBoolean(S_SHOW_RULER, true);
-            
-            AdvancedLogger.info("BiotakTrigger", methodName, "State transition: %s -> %s: %s", oldState, RulerState.ACTIVE, "Enabling ruler with default points (no context)");
-            
-            // Create a functional default ruler instead of waiting for context
-            createDefaultRulerImmediate(settings);
-            
-            if (infoPanel != null) {
-                infoPanel.setRulerActive(true);
-                AdvancedLogger.debug("BiotakTrigger", methodName, "Set InfoPanel ruler active to true");
-            } else {
-                AdvancedLogger.error("BiotakTrigger", methodName, "InfoPanel is null, cannot update ruler active state");
-            }
-            
-            AdvancedLogger.info("BiotakTrigger", methodName, "Ruler enabled with default points, immediately functional");
-            
-            // Force redraw to show the ruler
-            try {
-                // Trigger onBarUpdate to refresh the display
-                scheduleRulerRedraw();
-            } catch (Exception e) {
-                AdvancedLogger.error("BiotakTrigger", methodName, "Failed to schedule ruler redraw: %s", e.getMessage());
-            }
-            
-        } else {
-            // Disable ruler mode
-            RulerState oldState = rulerState;
-            rulerState = RulerState.INACTIVE;
-            settings.setBoolean(S_SHOW_RULER, false);
-            
-            AdvancedLogger.info("BiotakTrigger", methodName, "State transition: %s -> %s: %s", oldState, rulerState, "Disabling ruler mode (no context)");
-            
-            if (infoPanel != null) {
-                infoPanel.setRulerActive(false);
-                AdvancedLogger.debug("BiotakTrigger", methodName, "Set InfoPanel ruler active to false");
-            }
-            
-            // Clear ruler components
-            clearRulerComponents();
-            
-            AdvancedLogger.info("BiotakTrigger", methodName, "Ruler disabled and cleared");
-        }
-        
-        AdvancedLogger.info("BiotakTrigger", methodName, "Method completed - final rulerState=%s", rulerState);
-    }
     
     /**
      * ایجاد خط‌کش پیش‌فرض با استفاده از DrawContext - همیشه در وسط صفحه
@@ -1699,8 +1613,6 @@ public class BiotakTrigger extends Study {
             double screenCenterY = chartBounds.getCenterY();
             
             // تبدیل مختصات صفحه به مختصات چارت
-            long centerTime = ctx.translate2Time(screenCenterX);
-            double centerPrice = ctx.translate2Value(screenCenterY);
             
             // محاسبه span مناسب برای خط‌کش (30% عرض صفحه)
             double rulerWidthPercent = 0.3; // 30% عرض صفحه
@@ -1888,49 +1800,10 @@ public class BiotakTrigger extends Study {
         AdvancedLogger.debug("BiotakTrigger", methodName, "Cleared ruler settings");
     }
     
-    /**
-     * برنامه‌ریزی مجدد رسم خط‌کش
-     */
-    private void scheduleRulerRedraw() {
-        final String methodName = "scheduleRulerRedraw";
-        
-        // Use a timer to trigger redraw after a short delay
-        java.util.Timer timer = new java.util.Timer();
-        timer.schedule(new java.util.TimerTask() {
-            @Override
-            public void run() {
-                try {
-                    // Force a calculation update which will trigger drawing
-                    AdvancedLogger.debug("BiotakTrigger", methodName, "Triggering scheduled redraw");
-                    
-                    // This will be called by MotiveWave automatically
-                    // We just need to ensure our ruler is ready when it does
-                    if (rulerState == RulerState.ACTIVE && rulerFigure != null) {
-                        AdvancedLogger.info("BiotakTrigger", methodName, "Ruler is ready for rendering");
-                    }
-                } catch (Exception e) {
-                    AdvancedLogger.error("BiotakTrigger", methodName, "Error in scheduled redraw: " + e.getMessage());
-                }
-            }
-        }, 100); // 100ms delay
-    }
     
     /**
      * Reset all locked values when lock all levels is disabled
      */
-    private void resetLockedValues() {
-        // Clear local cache
-        lockedTHValue = Double.NaN;
-        lockedControlValue = Double.NaN;
-        lockedBaseTH = Double.NaN;
-        lockedCustomPrice = Double.NaN;
-        
-        // Clear global locked values from settings
-        getSettings().setDouble(S_LOCKED_TH_VALUE, Double.NaN);
-        getSettings().setString(S_LOCKED_TH_ORIGIN_TIMEFRAME, null);
-        
-        AdvancedLogger.info("BiotakTrigger", "resetLockedValues", "All local and global locked values have been reset");
-    }
     
     
 }
