@@ -38,8 +38,25 @@ import com.biotak.core.FractalCalculator;
 import com.biotak.ui.LevelDrawer;
 
 /**
- * Biotak Trigger TH3 Indicator for MotiveWave.
- * This indicator calculates and displays key horizontal price levels based on historical volatility and price action.
+ * بایوتک تریگر TH3 - نسخه حرفه‌ای برای MotiveWave
+ * Biotak Trigger TH3 - Professional Edition for MotiveWave
+ * 
+ * این اندیکاتور تخصصی سطوح کلیدی قیمت افقی را بر اساس نوسانات تاریخی
+ * و عمل قیمت محاسبه و نمایش می‌دهد
+ * 
+ * This indicator calculates and displays key horizontal price levels 
+ * based on historical volatility and price action
+ * 
+ * ویژگی‌های کلیدی / Key Features:
+ * - محاسبه سطوح فراکتال چندگانه / Multi-fractal level calculations
+ * - سیستم لاگ‌گذاری پیشرفته / Advanced logging system  
+ * - رابط کاربری تطبیقی / Adaptive user interface
+ * - خط‌کش تعاملی / Interactive ruler
+ * - پیکربندی انعطاف‌پذیر / Flexible configuration
+ * 
+ * @author Biotak Development Team
+ * @version 3.0.0
+ * @since 2024
  */
 @StudyHeader(
     namespace = "Biotak",
@@ -143,9 +160,16 @@ public class BiotakTrigger extends Study {
     private double structureM = Double.NaN;
     private double higherPatternM = Double.NaN;
 
+    /**
+     * سازنده کلاس - مقداردهی اولیه سیستم لاگ‌گذاری و اجزای اصلی
+     * Constructor - Initialize logging system and core components
+     * 
+     * این متد توسط MotiveWave هنگام بارگذاری اندیکاتور فراخوانی می‌شود
+     * This method is called by MotiveWave when loading the indicator
+     */
     public BiotakTrigger() {
         super();
-        // Initialize logging configuration
+        // مقداردهی اولیه پیکربندی لاگ‌گذاری / Initialize logging configuration
         LoggingConfiguration.initialize();
         AdvancedLogger.info("BiotakTrigger", "constructor", "Constructor called. The study is being instantiated by MotiveWave.");
     }
@@ -332,12 +356,23 @@ public class BiotakTrigger extends Study {
         }
     }
 
+    /**
+     * محاسبات اصلی اندیکاتور - اجرا برای هر کندل
+     * Main indicator calculations - executed for each candle
+     * 
+     * این متد توسط MotiveWave برای هر کندل جدید فراخوانی می‌شود
+     * This method is called by MotiveWave for each new candle
+     * 
+     * @param index ایندکس کندل فعلی / Index of current candle
+     * @param ctx زمینه داده شامل سری داده‌ها / Data context containing data series
+     */
     @Override
     public void calculate(int index, DataContext ctx) {
+        // توجه: در SDK 7، DrawContext معمولاً از طریق onDraw() ارسال می‌شود
         // Note: In SDK 7, DrawContext is typically passed through onDraw() method
         // We cannot directly get DrawContext from DataContext
         
-        // Sync logger level once per bar zero
+        // هماهنگ‌سازی سطح لاگ‌گذاری در اولین کندل / Sync logger level once per bar zero
         if (index == 0) {
             AdvancedLogger.LogLevel lvl = com.biotak.util.EnumUtil.safeEnum(AdvancedLogger.LogLevel.class,
                     getSettings().getString(S_LOG_LEVEL, AdvancedLogger.LogLevel.INFO.name()), AdvancedLogger.LogLevel.INFO);
