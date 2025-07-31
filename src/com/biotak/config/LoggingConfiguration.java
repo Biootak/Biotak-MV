@@ -18,7 +18,7 @@ public final class LoggingConfiguration {
     private static boolean initialized = false;
     
     // Default values
-    private static final String DEFAULT_LOG_LEVEL = "DEBUG";
+    private static final String DEFAULT_LOG_LEVEL = "INFO";
     private static final boolean DEFAULT_CONSOLE_ENABLED = true;
     private static final boolean DEFAULT_FILE_ENABLED = true;
     private static final boolean DEFAULT_COLOR_ENABLED = true;
@@ -115,8 +115,8 @@ public final class LoggingConfiguration {
         try {
             return AdvancedLogger.LogLevel.valueOf(levelStr.toUpperCase());
         } catch (IllegalArgumentException e) {
-            System.err.println("Invalid log level: " + levelStr + " - Using DEBUG");
-            return AdvancedLogger.LogLevel.DEBUG;
+            System.err.println("Invalid log level: " + levelStr + " - Using INFO");
+            return AdvancedLogger.LogLevel.INFO;
         }
     }
     

@@ -80,7 +80,7 @@ public final class AdvancedLogger {
     }
     
     // =========================== STATE MANAGEMENT ===========================
-    private static volatile LogLevel currentLogLevel = LogLevel.DEBUG;
+    private static volatile LogLevel currentLogLevel = LogLevel.INFO;
     private static volatile boolean colorOutput = true;
     private static volatile boolean fileOutput = true;
     private static volatile boolean consoleOutput = true;

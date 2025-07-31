@@ -1306,7 +1306,10 @@ public class BiotakTrigger extends Study {
                          int highMin = TimeframeUtil.parseCompoundTimeframe(bestAboveLabel);
                          if (lowMin > 0 && highMin > lowMin) {
                              double closePrice = series.getBidClose(series.size()-1);
-                             while (highMin - lowMin > 1) {
+                             int maxIterations = 50; // محدودیت تعداد تکرار برای جلوگیری از لوپ بی‌نهایت
+                             int iteration = 0;
+                             while (highMin - lowMin > 1 && iteration < maxIterations) {
+                                 iteration++;
                                  int mid = (lowMin + highMin) / 2;
                                 double perc   = TimeframeUtil.getTimeframePercentageFromMinutes(mid);
                                  double thPts  = com.biotak.util.OptimizedCalculations.calculateTHPoints(series.getInstrument(), closePrice, perc) * tick;
@@ -1325,6 +1328,9 @@ public class BiotakTrigger extends Study {
                                      bestBelowLabel = compoundTimeframe(mid);
                                  }
                                  if (Math.abs(mPips - legPip) <= 0.05) break; // 0.05-pip دقت
+                             }
+                             if (iteration >= maxIterations) {
+                                 AdvancedLogger.warn("BiotakTrigger", "RulerFigure.draw", "Binary search for M values reached max iterations (%d), stopping to prevent infinite loop", maxIterations);
                              }
 
                              // انتخاب نزدیک‌ترین مورد پس از دودویی
@@ -1385,7 +1391,10 @@ public class BiotakTrigger extends Study {
                      double baseAtrPrice = BiotakTrigger.this.atrStructurePrice; // 1× ATR price
 
                      if (lowMin > 0 && highMin > lowMin && baseMin > 0 && baseAtrPrice > 0) {
-                         while (highMin - lowMin > 1) {
+                         int maxIterations = 50; // محدودیت تعداد تکرار برای جلوگیری از لوپ بی‌نهایت
+                         int iteration = 0;
+                         while (highMin - lowMin > 1 && iteration < maxIterations) {
+                             iteration++;
                              int mid = (lowMin + highMin) / 2;
                              double atrPriceMid = ATR_FACTOR * baseAtrPrice * Math.sqrt((double)mid / baseMin);
                              double atrPipsMid  = Math.round(atrPriceMid / tick * 10.0) / 10.0;
@@ -1403,6 +1412,9 @@ public class BiotakTrigger extends Study {
                              }
 
                              if (Math.abs(atrPipsMid - legPip) <= 0.05) break; // stop when ≤0.05 pip
+                         }
+                         if (iteration >= maxIterations) {
+                             AdvancedLogger.warn("BiotakTrigger", "RulerFigure.draw", "Binary search for ATR values reached max iterations (%d), stopping to prevent infinite loop", maxIterations);
                          }
 
                          // choose closest
