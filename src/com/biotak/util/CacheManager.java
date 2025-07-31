@@ -13,7 +13,6 @@ public final class CacheManager {
     private static final Map<String, Map<String, Long>> cacheTimestamps = new ConcurrentHashMap<>();
     private static final long DEFAULT_EXPIRY_MS = 60000; // 1 minute
     private static final int MAX_CACHE_SIZE = 1000; // افزایش برای hit ratio بهتر
-    private static final int CLEANUP_THRESHOLD = 800; // شروع cleanup زودتر
     
     // Cleanup scheduler برای پاکسازی خودکار
     private static final java.util.concurrent.ScheduledExecutorService cleanupExecutor = 

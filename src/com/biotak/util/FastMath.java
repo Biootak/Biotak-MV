@@ -101,20 +101,6 @@ public final class FastMath {
         return bd.setScale(decimalPlaces, java.math.RoundingMode.HALF_UP).doubleValue();
     }
     
-    /**
-     * Fast power of 10 calculation
-     */
-    private static double fastPow10(int exponent) {
-        switch (exponent) {
-            case 0: return 1.0;
-            case 1: return 10.0;
-            case 2: return 100.0;
-            case 3: return 1000.0;
-            case 4: return 10000.0;
-            case 5: return 100000.0;
-            default: return Math.pow(10, exponent);
-        }
-    }
     
     /**
      * Fast percentage calculation

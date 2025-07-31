@@ -1,6 +1,5 @@
 package com.biotak.config;
 
-import com.biotak.enums.MStepBasisType;
 import com.biotak.enums.PanelPosition;
 import com.biotak.enums.SSLSBasisType;
 import com.biotak.enums.StepCalculationMode;

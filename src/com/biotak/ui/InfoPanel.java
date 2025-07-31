@@ -1,32 +1,22 @@
 package com.biotak.ui;
 
-import com.motivewave.platform.sdk.common.Coordinate;
 import com.motivewave.platform.sdk.common.DrawContext;
 import com.motivewave.platform.sdk.draw.Figure;
-import com.motivewave.platform.sdk.common.FontInfo;
-import com.motivewave.platform.sdk.common.PathInfo;
-import com.motivewave.platform.sdk.common.Util;
-import com.motivewave.platform.sdk.common.desc.FontDescriptor;
-import com.motivewave.platform.sdk.draw.Line;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
-import java.awt.Cursor;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
-import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Stroke;
-import java.awt.geom.Point2D;
 import java.util.ArrayList;
 import java.util.List;
 
 import com.biotak.enums.PanelPosition;
-import com.biotak.config.BiotakConfig;
 import com.biotak.util.PoolManager;
 import com.biotak.util.StringUtils;
-import com.biotak.ui.ThemeManager;
+
 
 /**
  * Custom figure class to draw the information panel.
@@ -39,7 +29,6 @@ public class InfoPanel extends Figure {
     private Font titleFont;
     private PanelPosition position;
     private int marginX, marginY, transparency;
-    private boolean isSecondsBased; // Is the timeframe in seconds
 
     // Main Values
     private double thValue, shortStep, longStep, atrValue, liveAtrValue;
@@ -70,7 +59,6 @@ public class InfoPanel extends Figure {
         final Color titleColor;
         final Color titleShadow;
         final Color contentColor;
-        final Color highlightLine;
         
         // Button colors
         final Color buttonBg;
@@ -90,7 +78,6 @@ public class InfoPanel extends Figure {
             this.titleColor = titleColor;
             this.titleShadow = titleShadow;
             this.contentColor = contentColor;
-            this.highlightLine = highlightLine;
             this.buttonBg = buttonBg;
             this.buttonBorder = buttonBorder;
             this.buttonText = buttonText;
@@ -98,37 +85,6 @@ public class InfoPanel extends Figure {
         }
     }
     
-    // Dark theme for dark chart backgrounds (like #1E1E1E)
-    private static final ColorTheme DARK_THEME = new ColorTheme(
-        new Color(60, 60, 60, 220),     // panelBgTop - lighter gray
-        new Color(40, 40, 40, 220),     // panelBgBottom - darker gray
-        new Color(80, 80, 80, 180),     // panelBorder - medium gray
-        new Color(0, 0, 0, 60),         // panelShadow - black shadow
-        new Color(220, 220, 220),       // titleColor - light gray text
-        new Color(0, 0, 0, 120),        // titleShadow - dark shadow
-        new Color(200, 200, 200),       // contentColor - light content text
-        new Color(100, 100, 100, 150),  // highlightLine - subtle highlight
-        new Color(70, 70, 70, 200),     // buttonBg - button background
-        new Color(90, 90, 90, 180),     // buttonBorder - button border
-        new Color(240, 240, 240),       // buttonText - white button text
-        new Color(100, 100, 100, 200)   // separatorColor - separator line
-    );
-    
-    // Light theme for gray chart backgrounds (like 160,160,160)
-    private static final ColorTheme LIGHT_THEME = new ColorTheme(
-        new Color(240, 240, 240, 220),  // panelBgTop - very light gray
-        new Color(200, 200, 200, 220),  // panelBgBottom - light gray
-        new Color(120, 120, 120, 180),  // panelBorder - medium gray
-        new Color(0, 0, 0, 40),         // panelShadow - light shadow
-        new Color(40, 40, 40),          // titleColor - dark text
-        new Color(255, 255, 255, 100),  // titleShadow - light shadow
-        new Color(60, 60, 60),          // contentColor - dark content text
-        new Color(180, 180, 180, 120),  // highlightLine - light highlight
-        new Color(220, 220, 220, 200),  // buttonBg - light button background
-        new Color(140, 140, 140, 180),  // buttonBorder - darker border
-        new Color(40, 40, 40),          // buttonText - dark button text
-        new Color(140, 140, 140, 200)   // separatorColor - darker separator
-    );
     
     // Cache for UI elements to avoid repeated creation
     private List<String> cachedCoreLines;
@@ -155,7 +111,6 @@ public class InfoPanel extends Figure {
         this.longStep = longStep;
         this.atrValue = atrValue;
         this.liveAtrValue = liveAtrValue;
-        this.isSecondsBased = isSecondsBased;
         this.isMinimized = isMinimized;
     }
     
@@ -666,23 +621,6 @@ public class InfoPanel extends Figure {
         }
     }
     
-    /**
-     * Extracts timeframe string from a line in the hierarchy panel
-     */
-    private String extractTimeframeFromLine(String line) {
-        try {
-            // Lines are formatted like: "▲ S [M1]: 6.7" or "■ [S16]: 1.0 *"
-            int startBracket = line.indexOf('[');
-            int endBracket = line.indexOf(']');
-            
-            if (startBracket >= 0 && endBracket > startBracket) {
-                return line.substring(startBracket + 1, endBracket);
-            }
-        } catch (Exception e) {
-            // In case of any parsing error, return null
-        }
-        return null;
-    }
 
     private void drawSection(Graphics2D gc, int x, int y, int panelWidth, String title, List<String> lines, FontMetrics fm, Font font, int spacing, boolean isTwoColumn, ColorTheme theme) {
         int currentY = y;

@@ -465,11 +465,9 @@ public final class AdvancedLogger {
      * Performance tracker
      */
     private static class PerformanceTracker {
-        private final String operation;
         private final long startTime;
         
         public PerformanceTracker(String operation) {
-            this.operation = operation;
             this.startTime = System.currentTimeMillis();
         }
         

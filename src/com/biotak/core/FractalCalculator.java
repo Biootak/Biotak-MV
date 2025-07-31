@@ -7,8 +7,6 @@ import com.motivewave.platform.sdk.common.BarSize;
 import com.motivewave.platform.sdk.common.DataSeries;
 import com.motivewave.platform.sdk.common.Instrument;
 
-import java.util.Locale;
-
 public class FractalCalculator {
 
     /**
@@ -19,9 +17,6 @@ public class FractalCalculator {
      * @return An array containing [Structure value, Pattern value, Trigger value]
      */
     public static double[] calculateFractalValues(BarSize barSize, double thValue) {
-        // Get the current timeframe percentage
-        double currentPercentage = TimeframeUtil.getTimeframePercentage(barSize);
-        
         // Structure value is based on the current timeframe
         double structureValue = thValue;
         

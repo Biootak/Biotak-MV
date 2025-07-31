@@ -32,8 +32,6 @@ public class CustomPriceLine extends Figure {
     }
     
     public void updatePrice(double newPrice) {
-        long currentTime = System.currentTimeMillis();
-        double oldPrice = this.price;
         
         // Logger.debug("=== PRICE UPDATE START ===");
         // Logger.debug("CustomPriceLine.updatePrice() called at time: " + currentTime);
@@ -65,7 +63,6 @@ public class CustomPriceLine extends Figure {
     
     @Override
     public void layout(DrawContext ctx) {
-        long currentTime = System.currentTimeMillis();
         
         // Logger.debug("=== LAYOUT UPDATE START ===");
         // Logger.debug("CustomPriceLine.layout() called at time: " + currentTime);

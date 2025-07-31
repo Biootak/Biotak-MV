@@ -132,23 +132,6 @@ public final class TimeframeUtil {
         "M1", "S4"     // 1 Min -> 4 seconds
     );
 
-    // Fallback pattern mappings for minutes to seconds when under 4 minutes
-    private static final Map<Integer, Integer> MINUTES_TO_SECONDS_PATTERN_MAP = Map.of(
-        1, 15,  // 1 minute -> 15 seconds
-        2, 30,  // 2 minutes -> 30 seconds
-        3, 45,  // 3 minutes -> 45 seconds
-        4, 60   // 4 minutes -> 60 seconds
-    );
-
-    // Fallback trigger mappings for minutes to seconds when under 16 minutes
-    private static final Map<Integer, Integer> MINUTES_TO_SECONDS_TRIGGER_MAP = Map.of(
-        1, 4,   // 1 minute -> 4 seconds
-        2, 7,   // 2 minutes -> 7 seconds (approximately 1/16)
-        3, 11,  // 3 minutes -> 11 seconds (approximately 1/16)
-        4, 15,  // 4 minutes -> 15 seconds
-        5, 20,  // 5 minutes -> 20 seconds (approximately 1/16)
-        10, 40  // 10 minutes -> 40 seconds (approximately 1/16)
-    );
 
     private TimeframeUtil() {
         // Private constructor to prevent instantiation
@@ -554,89 +537,9 @@ public final class TimeframeUtil {
         return 0.5;
     }
     
-    /**
-     * Checks if a number is a power of 2 or very close to it
-     */
-    private static boolean isPowerOf2(int number) {
-        double log2 = Math.log(number) / Math.log(2);
-        double roundedLog2 = Math.round(log2);
-        
-        // Check if log2 is very close to an integer
-        return Math.abs(log2 - roundedLog2) < 0.05;
-    }
     
-    /**
-     * Checks if a number is a power of 3 or very close to it
-     */
-    private static boolean isPowerOf3(int number) {
-        double log3 = Math.log(number) / Math.log(3);
-        double roundedLog3 = Math.round(log3);
-        
-        // Check if log3 is very close to an integer
-        return Math.abs(log3 - roundedLog3) < 0.05;
-    }
     
-    /**
-     * Checks if a number is close to any exact timeframe (standard, power of 2, or power of 3)
-     */
-    private static boolean isCloseToExactTimeframe(int minutes) {
-        // Check standard timeframes
-        for (int standardMinutes : STANDARD_TIMEFRAMES_MAP.keySet()) {
-            if (Math.abs(minutes - standardMinutes) <= 0.1 * standardMinutes) {
-                return true;
-            }
-        }
-        
-        // Check power of 2 timeframes
-        for (int powerMinutes : FRACTAL_MINUTES_MAP.keySet()) {
-            if (Math.abs(minutes - powerMinutes) <= 0.1 * powerMinutes) {
-                return true;
-            }
-        }
-        
-        // Check power of 3 timeframes
-        for (int powerMinutes : POWER3_MINUTES_MAP.keySet()) {
-            if (Math.abs(minutes - powerMinutes) <= 0.1 * powerMinutes) {
-                return true;
-            }
-        }
-        
-        return false;
-    }
     
-    /**
-     * Finds the closest timeframe (from standard, power of 2, or power of 3) to the given minutes
-     */
-    private static Map.Entry<Integer, String> findClosestTimeframe(int minutes) {
-        // Try to find the closest standard timeframe
-        Map.Entry<Integer, String> standardLower = STANDARD_TIMEFRAMES_MAP.floorEntry(minutes);
-        Map.Entry<Integer, String> standardHigher = STANDARD_TIMEFRAMES_MAP.ceilingEntry(minutes);
-        
-        // Try to find the closest power of 2 timeframe
-        Map.Entry<Integer, String> power2Lower = FRACTAL_MINUTES_MAP.floorEntry(minutes);
-        Map.Entry<Integer, String> power2Higher = FRACTAL_MINUTES_MAP.ceilingEntry(minutes);
-        
-        // Try to find the closest power of 3 timeframe
-        Map.Entry<Integer, String> power3Lower = POWER3_MINUTES_MAP.floorEntry(minutes);
-        Map.Entry<Integer, String> power3Higher = POWER3_MINUTES_MAP.ceilingEntry(minutes);
-        
-        // Find the closest entry among all options
-        TreeMap<Integer, Map.Entry<Integer, String>> distanceMap = new TreeMap<>();
-        
-        addIfNotNull(distanceMap, standardLower, minutes);
-        addIfNotNull(distanceMap, standardHigher, minutes);
-        addIfNotNull(distanceMap, power2Lower, minutes);
-        addIfNotNull(distanceMap, power2Higher, minutes);
-        addIfNotNull(distanceMap, power3Lower, minutes);
-        addIfNotNull(distanceMap, power3Higher, minutes);
-        
-        // Return the entry with the smallest distance
-        if (!distanceMap.isEmpty()) {
-            return distanceMap.firstEntry().getValue();
-        }
-        
-        return null;
-    }
     
     /**
      * Finds the closest TRUE fractal timeframe (powers of 4: 1, 4, 16, 64, 256...) to the given minutes.
@@ -752,52 +655,6 @@ public final class TimeframeUtil {
         }
         // Use the static factory method instead of a direct constructor
         return BarSize.getBarSize(Enums.BarSizeType.LINEAR, Enums.IntervalType.SECOND, seconds);
-    }
-    
-    /**
-     * Converts a timeframe string to its equivalent in minutes
-     * 
-     * @param timeframeStr The timeframe string representation (e.g., "M5", "H1")
-     * @return The number of minutes represented by this timeframe
-     */
-    private static int getTimeframeMinutes(String timeframeStr) {
-        if (timeframeStr.startsWith("M")) {
-            try {
-                return Integer.parseInt(timeframeStr.substring(1));
-            } catch (NumberFormatException e) {
-                return 1;
-            }
-        } 
-        else if (timeframeStr.startsWith("H")) {
-            try {
-                return Integer.parseInt(timeframeStr.substring(1)) * 60;
-            } catch (NumberFormatException e) {
-                return 60;
-            }
-        } 
-        else if (timeframeStr.startsWith("D")) {
-            try {
-                return Integer.parseInt(timeframeStr.substring(1)) * 1440;
-            } catch (NumberFormatException e) {
-                return 1440;
-            }
-        }
-        else if (timeframeStr.equals("W1")) {
-            return 10080;
-        }
-        else if (timeframeStr.equals("MN")) {
-            return 43200;
-        }
-        
-        // Complex fractal timeframes like "H4+M16" - approximate by using first component
-        if (timeframeStr.contains("+")) {
-            String[] parts = timeframeStr.split("\\+");
-            if (parts.length > 0) {
-                return getTimeframeMinutes(parts[0]);
-            }
-        }
-        
-        return 1; // Default to M1
     }
     
     /**

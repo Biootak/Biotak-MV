@@ -2,22 +2,15 @@ package com.biotak.ui;
 
 import com.biotak.enums.THStartPointType;
 import com.biotak.debug.AdvancedLogger;
-import com.biotak.util.TimeframeUtil;
-import com.biotak.core.FractalCalculator;
 import com.motivewave.platform.sdk.common.Coordinate;
-import com.motivewave.platform.sdk.common.DataContext;
 import com.motivewave.platform.sdk.common.DataSeries;
 import com.motivewave.platform.sdk.common.PathInfo;
 import com.motivewave.platform.sdk.common.Settings;
-import com.motivewave.platform.sdk.common.X11Colors;
 import com.motivewave.platform.sdk.draw.Line;
 import com.motivewave.platform.sdk.draw.Figure;
 
-import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
-
-import static com.biotak.util.Constants.*;
 import static com.biotak.config.SettingsRepository.*;
 
 public class LevelDrawer {
@@ -171,7 +164,6 @@ public class LevelDrawer {
             return new ArrayList<>();
         }
 
-        double pipMultiplier = com.biotak.util.UnitConverter.getPipMultiplier(series.getInstrument()); // retained for potential debug logs
         // Removed pipMultiplier scaling: ssValue/lsValue are already in price units
         double stepSS = ssValue;
         double stepLS = lsValue;

@@ -7,7 +7,6 @@ import com.motivewave.platform.sdk.common.Settings;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Helper utilities for fractal calculations used by the Biotak Trigger indicator.
@@ -19,7 +18,6 @@ public final class FractalUtil {
 
     // Cache names for different types of calculations
     private static final String TH_BUNDLE_CACHE = "th_bundle";
-    private static final String PERCENTAGE_CACHE = "percentage";
     private static final long CACHE_EXPIRY_MS = 60000; // 1 minute
 
     private FractalUtil() {}

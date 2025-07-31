@@ -1,7 +1,6 @@
 package com.biotak.util;
 
 import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Centralized pool manager for commonly used objects to reduce memory allocation
@@ -43,7 +42,6 @@ public final class PoolManager {
     /**
      * Get a String ArrayList from the pool
      */
-    @SuppressWarnings("unchecked")
     public static ArrayList<String> getStringList() {
         ArrayList<String> list = stringListPool.acquire();
         list.clear(); // Clear any existing content

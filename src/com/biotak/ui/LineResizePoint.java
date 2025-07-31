@@ -23,7 +23,6 @@ public class LineResizePoint extends ResizePoint {
     public boolean contains(double x, double y, DrawContext ctx) {
         // Delegate hit-test to the parent line so clicks anywhere on the line start the drag
         // Use a more generous hit area for better responsiveness
-        long currentTime = System.currentTimeMillis();
         boolean parentExists = (parentLine != null);
         boolean result = false;
         if (parentExists && parentLine.line != null) {
