@@ -245,9 +245,7 @@ public class FractalCalculator {
                                     double patternValue, double triggerValue, double shortStep, 
                                     double longStep, double atrValue, double liveAtrValue,
                                     double pipMultiplier, long lastCalcTableLogTime, long LOG_INTERVAL_MS) {
-        // Force log level to INFO for this method
-        AdvancedLogger.LogLevel originalLevel = com.biotak.config.LoggingConfiguration.getCurrentLogLevel();
-        AdvancedLogger.setLogLevel(AdvancedLogger.LogLevel.INFO);
+        // Remove temporary log level changes to prevent excessive logging
         
         try {
             StringBuilder sb = new StringBuilder();
@@ -374,8 +372,7 @@ public class FractalCalculator {
             // Log the entire table
             AdvancedLogger.info("FractalCalculator", "logCalculationTable", sb.toString());
         } finally {
-            // Restore the previous log level
-            AdvancedLogger.setLogLevel(originalLevel);
+            // Log level management removed to prevent spam
         }
     }
 

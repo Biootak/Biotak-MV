@@ -102,6 +102,7 @@ public class BiotakTrigger extends Study {
     private double cachedLow  = Double.POSITIVE_INFINITY;
     private boolean extremesInitialized = false; // ensures we load stored extremes once
     private boolean firstBarDrawn = false; // prevents repeated first-bar drawing/logging
+    private static volatile boolean logLevelInitialized = false; // prevents repeated log level initialization
 
     // Stores SS/LS base TH when lock option is enabled
     private double lockedBaseTH = Double.NaN;
@@ -129,7 +130,7 @@ public class BiotakTrigger extends Study {
 
     // Throttle ruler INFO logs
     private static long lastRulerInfoLog = 0;
-    private static final long RULER_LOG_INTERVAL_MS = 1000;
+    private static final long RULER_LOG_INTERVAL_MS = 60000; // Log ruler status at most once per minute
 
     // (Leg Ruler fields removed)
     private ResizePoint rulerStartResize, rulerEndResize;
@@ -372,11 +373,12 @@ public class BiotakTrigger extends Study {
         // Note: In SDK 7, DrawContext is typically passed through onDraw() method
         // We cannot directly get DrawContext from DataContext
         
-        // هماهنگ‌سازی سطح لاگ‌گذاری در اولین کندل / Sync logger level once per bar zero
-        if (index == 0) {
+        // هماهنگ‌سازی سطح لاگ‌گذاری در اولین کندل / Sync logger level once per session only
+        if (index == 0 && !logLevelInitialized) {
             AdvancedLogger.LogLevel lvl = com.biotak.util.EnumUtil.safeEnum(AdvancedLogger.LogLevel.class,
                     getSettings().getString(S_LOG_LEVEL, AdvancedLogger.LogLevel.INFO.name()), AdvancedLogger.LogLevel.INFO);
             AdvancedLogger.setLogLevel(lvl);
+            logLevelInitialized = true; // Prevent further calls
         }
 
         DataSeries series = ctx.getDataSeries();
@@ -416,21 +418,30 @@ public class BiotakTrigger extends Study {
             }
         }
         
-        // Only log and draw figures for the first and last bars to reduce excessive logging
+    // Only draw figures when really necessary to reduce excessive calls
         boolean isFirstBar = (index == 0);
+        boolean shouldRedraw = false;
         
         if (isFirstBar && !firstBarDrawn) {
-            // Remove excessive logging for better performance
-            drawFigures(index, ctx);
+            shouldRedraw = true;
             firstBarDrawn = true;
         }
         else if (isLastBar) {
+            // Only redraw if significant price movement or time interval passed
             long nowHL = System.currentTimeMillis();
             if (nowHL - lastHighLowLogTime > LOG_INTERVAL_MS) {
-                AdvancedLogger.info("BiotakTrigger", "calculate", "Historical High/Low calculated from %s timeframe (merged). High: %.5f, Low: %.5f", series.getBarSize(), cachedHigh, cachedLow);
+                AdvancedLogger.info("BiotakTrigger", "calculate", "Historical High/Low: %.5f/%.5f [%s]", cachedHigh, cachedLow, series.getBarSize());
                 lastHighLowLogTime = nowHL;
+                shouldRedraw = true;
             }
-            // Remove debug logging for better performance
+            // Also redraw if extremes changed significantly
+            else if (hadValidHigh && Math.abs(barHigh - cachedHigh) > 0 || 
+                     hadValidLow && Math.abs(barLow - cachedLow) > 0) {
+                shouldRedraw = true;
+            }
+        }
+        
+        if (shouldRedraw) {
             drawFigures(index, ctx);
         }
     }
@@ -452,9 +463,8 @@ public class BiotakTrigger extends Study {
             return;
         }
         
-        // Temporarily set log level to INFO for important high/low calculations
-        AdvancedLogger.LogLevel originalLevel = com.biotak.config.LoggingConfiguration.getCurrentLogLevel();
-        AdvancedLogger.setLogLevel(AdvancedLogger.LogLevel.INFO);
+        // Remove temporary log level changes to prevent excessive logging
+        // The log level should be managed globally, not per method call
         try {
             double finalHigh, finalLow;
             boolean manualMode = settings.getBoolean(S_MANUAL_HL_ENABLE, false);
@@ -844,9 +854,14 @@ public class BiotakTrigger extends Study {
                         getSettings().setString(S_LOCKED_TH_ORIGIN_TIMEFRAME, null);
                     }
                     
-                    String modeDescription = useTpForEStep ? "TP (3×E)" : "E (0.75×TH)";
-                    AdvancedLogger.info("BiotakTrigger", "drawFigures", "E_STEP calculation: thValue=%.6f, finalEThStepInPoints=%.6f (%s mode)", 
-                        thValue, finalEThStepInPoints, modeDescription);
+                    // Only log E_STEP calculation once per minute to reduce spam
+                    long nowEStep = System.currentTimeMillis();
+                    if (nowEStep - lastCalcTableLogTime > LOG_INTERVAL_MS) {
+                        String modeDescription = useTpForEStep ? "TP (3×E)" : "E (0.75×TH)";
+                        AdvancedLogger.info("BiotakTrigger", "drawFigures", "E_STEP calc: thValue=%.3f, finalPoints=%.3f (%s)", 
+                            thValue, finalEThStepInPoints, modeDescription);
+                        lastCalcTableLogTime = nowEStep;
+                    }
                     
                     // Use the same drawing method as TH_STEP but with E or TP distance
                     List<Figure> eFigures = LevelDrawer.drawTHLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, finalEThStepInPoints, startTime, endTime);
@@ -856,17 +871,21 @@ public class BiotakTrigger extends Study {
 
             // ------------------- LEG RULER -------------------
             boolean showRuler = settings.getBoolean(S_SHOW_RULER, false);
-            AdvancedLogger.info("BiotakTrigger", "drawFigures", "=== RULER DRAWING SECTION ===");
-            AdvancedLogger.info("BiotakTrigger", "drawFigures", "Show ruler setting: %s", showRuler);
-            AdvancedLogger.info("BiotakTrigger", "drawFigures", "Current ruler state: %s", rulerState);
-            AdvancedLogger.info("BiotakTrigger", "drawFigures", "RulerStartResize exists: %s", (rulerStartResize != null));
-            AdvancedLogger.info("BiotakTrigger", "drawFigures", "RulerEndResize exists: %s", (rulerEndResize != null));
-            AdvancedLogger.info("BiotakTrigger", "drawFigures", "RulerFigure exists: %s", (rulerFigure != null));
+            
+            // Throttle ruler logging to prevent spam
+            long nowRuler = System.currentTimeMillis();
+            if (nowRuler - lastRulerInfoLog > RULER_LOG_INTERVAL_MS) {
+                AdvancedLogger.info("BiotakTrigger", "drawFigures", "Ruler status: show=%s, state=%s, components=[%s,%s,%s]", 
+                    showRuler, rulerState, 
+                    (rulerStartResize != null), (rulerEndResize != null), (rulerFigure != null));
+                lastRulerInfoLog = nowRuler;
+            }
             
             if (showRuler && rulerState == RulerState.ACTIVE && rulerStartResize != null && rulerEndResize != null) {
                 // Initialize ruler figure if needed
                 if (rulerFigure == null) {
                     rulerFigure = new RulerFigure();
+                    AdvancedLogger.debug("BiotakTrigger", "drawFigures", "Created new RulerFigure instance");
                 }
                 
                 // Add the ruler to the chart
@@ -874,10 +893,8 @@ public class BiotakTrigger extends Study {
                 addFigure(rulerStartResize);
                 addFigure(rulerEndResize);
             }
-            AdvancedLogger.info("BiotakTrigger", "drawFigures", "=== RULER DRAWING SECTION END ===");
         } finally {
-            // Restore original log level
-            AdvancedLogger.setLogLevel(originalLevel);
+            // Log level management removed to prevent spam
         }
     }
 
@@ -1164,9 +1181,7 @@ public class BiotakTrigger extends Study {
 
         @Override
         public void draw(java.awt.Graphics2D gc, DrawContext ctx) {
-            // Ensure logging is at INFO so that debug/info lines get captured when ruler draws
-            AdvancedLogger.LogLevel origLevel = com.biotak.config.LoggingConfiguration.getCurrentLogLevel();
-            AdvancedLogger.setLogLevel(AdvancedLogger.LogLevel.INFO);
+            // Remove log level changes to prevent excessive logging
             
             // CRITICAL FIX: Call layout first to ensure line coordinates are set
             if (line == null || rulerStartResize == null || rulerEndResize == null) {
@@ -1188,8 +1203,13 @@ public class BiotakTrigger extends Study {
             // IMPORTANT: Actually draw the line!
             gc.draw(line);
             
-            AdvancedLogger.info("BiotakTrigger", "RulerFigure.draw", "Ruler line drawn from (%.1f,%.1f) to (%.1f,%.1f)", 
-                line.getX1(), line.getY1(), line.getX2(), line.getY2());
+            // Throttle ruler draw logging
+            long nowDraw = System.currentTimeMillis();
+            if (nowDraw - lastRulerInfoLog > RULER_LOG_INTERVAL_MS) {
+                AdvancedLogger.debug("BiotakTrigger", "RulerFigure.draw", "Ruler drawn: (%.0f,%.0f)-(%.0f,%.0f)", 
+                    line.getX1(), line.getY1(), line.getX2(), line.getY2());
+                lastRulerInfoLog = nowDraw;
+            }
 
             // Add label in the middle
             if (line != null) {
