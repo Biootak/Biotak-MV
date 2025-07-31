@@ -79,5 +79,8 @@ public class SettingsRepository {
     public static final String S_LOCKED_BASE_TH_ORIGIN_TIMEFRAME = "lockedBaseTHOriginTimeframe";
     public static final String S_LOCKED_CUSTOM_PRICE_VALUE = "lockedCustomPriceValue";
     public static final String S_LOCKED_CUSTOM_PRICE_ORIGIN_TIMEFRAME = "lockedCustomPriceOriginTimeframe";
+    
+    // E-Step / TP-Step configuration
+    public static final String S_USE_TP_FOR_E_STEP = "useTpForEStep";
 }
 

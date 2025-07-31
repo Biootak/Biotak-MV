@@ -397,6 +397,9 @@ public class LevelDrawer {
             long startTime,
             long endTime) {
 
+        AdvancedLogger.info("LevelDrawer", "drawELevels", "Input parameters: midpointPrice=%.6f, eDistance=%.6f, highestHigh=%.6f, lowestLow=%.6f", 
+            midpointPrice, eDistance, highestHigh, lowestLow);
+        
         if (eDistance <= 0) {
             AdvancedLogger.warn("LevelDrawer", "drawELevels", "Invalid E distance – cannot draw levels.");
             return new java.util.ArrayList<>();
@@ -414,12 +417,10 @@ public class LevelDrawer {
         while (price <= highestHigh && step <= maxAbove) {
             PathInfo path = getPathForLevel(settings, step);
             if (path == null) {
-                boolean triggerOn = settings.getBoolean(S_SHOW_TRIGGER_LEVELS);
-                if (triggerOn) {
-                    path = settings.getPath(S_TRIGGER_PATH);
-                }
+                path = settings.getPath(S_STRUCT_L1_PATH); // Fallback to a default path
             }
             if (path != null) {
+                AdvancedLogger.info("LevelDrawer", "drawELevels", "Drawing E level ABOVE at price: %.6f (Step: %d)", price, step);
                 figs.add(new Line(new Coordinate(startTime, price), new Coordinate(endTime, price), path));
                 if (showLabels) figs.add(new LevelLabel(endTime, price, "E"));
             }
@@ -433,12 +434,10 @@ public class LevelDrawer {
         while (price >= lowestLow && step <= maxBelow) {
             PathInfo path = getPathForLevel(settings, step);
             if (path == null) {
-                boolean triggerOn = settings.getBoolean(S_SHOW_TRIGGER_LEVELS);
-                if (triggerOn) {
-                    path = settings.getPath(S_TRIGGER_PATH);
-                }
+                path = settings.getPath(S_STRUCT_L1_PATH); // Fallback to a default path
             }
             if (path != null) {
+                AdvancedLogger.info("LevelDrawer", "drawELevels", "Drawing E level BELOW at price: %.6f (Step: %d)", price, step);
                 figs.add(new Line(new Coordinate(startTime, price), new Coordinate(endTime, price), path));
                 if (showLabels) figs.add(new LevelLabel(endTime, price, "E"));
             }

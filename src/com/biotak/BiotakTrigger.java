@@ -783,25 +783,38 @@ public class BiotakTrigger extends Study {
                 }
                 case E_STEP -> {
                     boolean lockAllLevels = getSettings().getBoolean(S_LOCK_ALL_LEVELS, false);
-                    double finalEThValue;
+                    boolean useTpForEStep = getSettings().getBoolean(S_USE_TP_FOR_E_STEP, false);
+                    double finalEThStepInPoints;
 
                     if (lockAllLevels) {
                         double globallyLockedTH = getSettings().getDouble(S_LOCKED_TH_VALUE, Double.NaN);
                         if (!Double.isNaN(globallyLockedTH)) {
-                            finalEThValue = globallyLockedTH;
+                            finalEThStepInPoints = globallyLockedTH;
                         } else {
-                            finalEThValue = thValue;
-                            getSettings().setDouble(S_LOCKED_TH_VALUE, finalEThValue);
+                            // Calculate TH step for E mode - same as TH_STEP but with 0.75 factor
+                            double timeframePercentage = TimeframeUtil.getTimeframePercentage(series.getBarSize());
+                            double thStepInPoints = com.biotak.util.OptimizedCalculations.calculateTHPoints(series.getInstrument(), thBasePrice, timeframePercentage);
+                            double eDistance = thStepInPoints * 0.75; // E = TH * 0.75
+                            finalEThStepInPoints = useTpForEStep ? (eDistance * 3.0) : eDistance; // TP = E * 3
+                            getSettings().setDouble(S_LOCKED_TH_VALUE, finalEThStepInPoints);
                             getSettings().setString(S_LOCKED_TH_ORIGIN_TIMEFRAME, series.getBarSize().toString());
                         }
                     } else {
-                        finalEThValue = thValue;
+                        // Calculate TH step for E mode - same as TH_STEP but with 0.75 factor
+                        double timeframePercentage = TimeframeUtil.getTimeframePercentage(series.getBarSize());
+                        double thStepInPoints = com.biotak.util.OptimizedCalculations.calculateTHPoints(series.getInstrument(), thBasePrice, timeframePercentage);
+                        double eDistance = thStepInPoints * 0.75; // E = TH * 0.75
+                        finalEThStepInPoints = useTpForEStep ? (eDistance * 3.0) : eDistance; // TP = E * 3
                         getSettings().setDouble(S_LOCKED_TH_VALUE, Double.NaN);
                         getSettings().setString(S_LOCKED_TH_ORIGIN_TIMEFRAME, null);
                     }
                     
-                    double eDistance = finalEThValue * 0.75;
-                    java.util.List<Figure> eFigures = LevelDrawer.drawELevels(getSettings(), midpointPrice, finalHigh, finalLow, eDistance, startTime, endTime);
+                    String modeDescription = useTpForEStep ? "TP (3×E)" : "E (0.75×TH)";
+                    AdvancedLogger.info("BiotakTrigger", "drawFigures", "E_STEP calculation: thValue=%.6f, finalEThStepInPoints=%.6f (%s mode)", 
+                        thValue, finalEThStepInPoints, modeDescription);
+                    
+                    // Use the same drawing method as TH_STEP but with E or TP distance
+                    List<Figure> eFigures = LevelDrawer.drawTHLevels(getSettings(), series, midpointPrice, finalHigh, finalLow, finalEThStepInPoints, startTime, endTime);
                     for (Figure f : eFigures) addFigure(f);
                 }
             }

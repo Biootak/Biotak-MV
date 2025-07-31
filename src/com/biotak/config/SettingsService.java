@@ -45,6 +45,7 @@ public class SettingsService {
             createStartPointOptions()));
         qBasic.addRow(new DiscreteDescriptor(S_STEP_MODE, "Step Mode", StepCalculationMode.TH_STEP.name(), 
             createStepModeOptions()));
+        qBasic.addRow(new DiscreteDescriptor(S_USE_TP_FOR_E_STEP, "E-Step Mode", "false", createEStepModeOptions()));
         
         var qLevels = quick.addGroup("👁️ Show / Hide Levels");
         qLevels.addRow(new BooleanDescriptor(S_SHOW_TH_LEVELS, "TH Ladder", true));
@@ -89,6 +90,13 @@ public class SettingsService {
         return options;
     }
 
+    private static List<NVP> createEStepModeOptions() {
+        List<NVP> options = new ArrayList<>();
+        options.add(new NVP("E Mode (0.75×TH)", "false"));
+        options.add(new NVP("TP Mode (3×E)", "true"));
+        return options;
+    }
+
     private static void setupLevelsTab(SettingsDescriptor sd, Defaults defaults) {
         var tab = sd.addTab("Levels");
         var grp = tab.addGroup("TH Levels");
@@ -104,24 +112,29 @@ public class SettingsService {
 
     private static void setupCalculationTab(SettingsDescriptor sd) {
         var tab = sd.addTab("Calculation");
-        var grp = tab.addGroup("Step Calculation");
-        grp.addRow(new DiscreteDescriptor(S_STEP_MODE, "Step Mode", StepCalculationMode.TH_STEP.name(), createStepModeOptions()));
-        grp.addRow(new BooleanDescriptor(S_LS_FIRST, "Draw LS First", true));
         
+        var grp = tab.addGroup("🎯 Step Mode");
+        grp.addRow(new DiscreteDescriptor(S_STEP_MODE, "Step Mode", StepCalculationMode.TH_STEP.name(), createStepModeOptions()));
+        
+        grp = tab.addGroup("⚡ SS/LS Mode");
+        grp.addRow(new BooleanDescriptor(S_LS_FIRST, "Draw LS First", true));
         List<NVP> basisOptions = new ArrayList<>();
         for (SSLSBasisType b : SSLSBasisType.values()) {
             basisOptions.add(new NVP(b.toString(), b.name()));
         }
-        grp.addRow(new DiscreteDescriptor(S_SSLS_BASIS, "SS/LS Timeframe", SSLSBasisType.STRUCTURE.name(), basisOptions));
+        grp.addRow(new DiscreteDescriptor(S_SSLS_BASIS, "Basis Timeframe", SSLSBasisType.STRUCTURE.name(), basisOptions));
         
-        grp = tab.addGroup("M-Step Basis");
+        grp = tab.addGroup("🎲 M Mode");
         List<NVP> mbasisOptions = new ArrayList<>();
         for (com.biotak.enums.MStepBasisType b : com.biotak.enums.MStepBasisType.values()) {
             mbasisOptions.add(new NVP(b.toString(), b.name()));
         }
-        grp.addRow(new DiscreteDescriptor(Constants.S_MSTEP_BASIS, "Distance By", com.biotak.enums.MStepBasisType.C_BASED.name(), mbasisOptions));
+        grp.addRow(new DiscreteDescriptor(Constants.S_MSTEP_BASIS, "Distance Method", com.biotak.enums.MStepBasisType.C_BASED.name(), mbasisOptions));
         
-        grp = tab.addGroup("General");
+        grp = tab.addGroup("💎 E Mode");
+        grp.addRow(new DiscreteDescriptor(S_USE_TP_FOR_E_STEP, "E-Step Mode", "false", createEStepModeOptions()));
+        
+        grp = tab.addGroup("⚙️ General");
         grp.addRow(new StringDescriptor(S_OBJ_PREFIX, "Object Prefix", "BiotakTH3"));
         grp.addRow(new BooleanDescriptor(S_LOCK_ALL_LEVELS, "Lock All Levels", false));
     }
@@ -197,9 +210,6 @@ public class SettingsService {
     }
 
     private static void setupQuickSettingsToolbar(SettingsDescriptor sd) {
-        sd.addQuickSettings(S_START_POINT, S_STEP_MODE);
-        sd.addQuickSettings(S_SHOW_TH_LEVELS, S_SHOW_STRUCTURE_LINES, S_SHOW_TRIGGER_LEVELS);
-        sd.addQuickSettings(S_SHOW_HIGH_LINE, S_SHOW_LOW_LINE, S_SHOW_RULER, S_RULER_EXT_LEFT, S_RULER_EXT_RIGHT);
-        sd.addQuickSettings(S_SSLS_BASIS, S_LS_FIRST, S_LOCK_ALL_LEVELS, Constants.S_MSTEP_BASIS);
+        sd.addQuickSettings(S_START_POINT, S_STEP_MODE, S_USE_TP_FOR_E_STEP, S_SHOW_TH_LEVELS, S_SHOW_STRUCTURE_LINES, S_SHOW_TRIGGER_LEVELS, S_SHOW_HIGH_LINE, S_SHOW_LOW_LINE, S_SHOW_RULER, S_RULER_EXT_LEFT, S_RULER_EXT_RIGHT, S_SSLS_BASIS, S_LS_FIRST, S_LOCK_ALL_LEVELS, Constants.S_MSTEP_BASIS);
     }
 }

@@ -9,7 +9,8 @@ public enum StepCalculationMode {
     TH_STEP("TH-Based"),
     SS_LS_STEP("SS/LS-Based"),
     M_STEP("M (C×3)-Based"),
-    E_STEP("E-Based");
+    E_STEP("E-Based"),
+    TP_STEP("TP-Based");
 
     private final String value;
     StepCalculationMode(String value) { this.value = value; }
