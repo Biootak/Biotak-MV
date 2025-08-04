@@ -201,7 +201,7 @@ public class InfoPanel extends Figure {
         gc.setFont(contentFont);
         FontMetrics contentMetrics = gc.getFontMetrics();
         int contentLineHeight = contentMetrics.getHeight();
-        int lineSpacing = 7; // Increased line spacing for better readability
+int lineSpacing = 10; // Increased spacing for improved readability
         
         // Dynamically determine maximum width needed for the two-column core section
         int coreWidth = 0;
