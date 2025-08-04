@@ -82,7 +82,7 @@ JUNIT_JAR="lib/junit-platform-console-standalone-1.10.0.jar"
 SRC_DIR="src"
 BUILD_DIR="build/classes"
 TEST_DIR="build/test-classes"
-EXT_DIR="/c/Users/fatemeh/MotiveWave Extensions"
+EXT_DIR="/c/Users/Fatemehkh/MotiveWave Extensions"
 JAR_OUT="build/biotak.jar"
 
 # Commands (using eval for paths with spaces)

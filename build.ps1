@@ -64,7 +64,7 @@ $JUNIT_JAR = "lib\junit-platform-console-standalone-1.10.0.jar"
 $SRC_DIR = "src"
 $BUILD_DIR = "build\classes"
 $TEST_DIR = "build\test-classes"
-$EXT_DIR = "C:\Users\fatemeh\MotiveWave Extensions"
+$EXT_DIR = "C:\Users\Fatemehkh\MotiveWave Extensions"
 $JAR_OUT = "build\biotak.jar"
 
 # Validate environment first

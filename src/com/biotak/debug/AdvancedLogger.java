@@ -15,7 +15,7 @@ import java.nio.file.Files;
 public final class AdvancedLogger {
     
     // =========================== CONFIGURATION ===========================
-    private static final String LOG_DIR = "C:/Users/fatemeh/IdeaProject/Biotak/logs/";
+    private static final String LOG_DIR = "C:/Users/Fatemehkh/MotiveWave Extensions/logs/";
     private static final String MAIN_LOG_FILE = LOG_DIR + "biotak_main.log";
     private static final String ERROR_LOG_FILE = LOG_DIR + "biotak_errors.log";
     private static final String DEBUG_LOG_FILE = LOG_DIR + "biotak_debug.log";

@@ -1468,6 +1468,35 @@ public class BiotakTrigger extends Study {
                  int atrMinVal = TimeframeUtil.parseCompoundTimeframe(bestATRLabel);
                  String atrStr2 = (atrMinVal > 0 ? atrMinVal + "m" : "-");
                  
+                // Add Time Pattern and Time Trigger based on the best M match (not current timeframe)
+                // First, determine the base timeframe from the best M match
+                BarSize baseTimeframeForM = null;
+                if (!bestLabel.equals("-")) {
+                    int baseMinutes = TimeframeUtil.parseCompoundTimeframe(bestLabel);
+                    if (baseMinutes > 0) {
+                        // Create a BarSize from the M match timeframe
+                        baseTimeframeForM = BarSize.getBarSize(baseMinutes);
+                    }
+                }
+                
+                String timePatternStr1, timeTriggerStr1;
+                if (baseTimeframeForM != null) {
+                    // Calculate pattern and trigger based on the M match timeframe
+                    BarSize patternBarSize = TimeframeUtil.getPatternBarSize(baseTimeframeForM);
+                    BarSize triggerBarSize = TimeframeUtil.getTriggerBarSize(baseTimeframeForM);
+                    
+                    timePatternStr1 = "Time Pattern: " + formatTimeframeForDisplay(patternBarSize);
+                    timeTriggerStr1 = "Time Trigger: " + formatTimeframeForDisplay(triggerBarSize);
+                } else {
+                    // Fallback to current timeframe if no M match found
+                    BarSize currentBarSize = series.getBarSize();
+                    BarSize patternBarSize = TimeframeUtil.getPatternBarSize(currentBarSize);
+                    BarSize triggerBarSize = TimeframeUtil.getTriggerBarSize(currentBarSize);
+                    
+                    timePatternStr1 = "Time Pattern: " + formatTimeframeForDisplay(patternBarSize);
+                    timeTriggerStr1 = "Time Trigger: " + formatTimeframeForDisplay(triggerBarSize);
+                }
+                 
                 // Add nearest fractal timeframe info (only timeframe, no minutes)
                 String nearestLabel = TimeframeUtil.getNearestFractalTimeframe(bestLabel);
                 String nearestStr1 = "Near F: " + nearestLabel;
@@ -1480,6 +1509,9 @@ public class BiotakTrigger extends Study {
                     matchStr1,
                     matchStr2,
                     nearestStr1,
+                    sep,
+                    timePatternStr1,
+                    timeTriggerStr1,
                     sep,
                     barsStr,
                     timeStr,
@@ -1805,5 +1837,43 @@ public class BiotakTrigger extends Study {
      * Reset all locked values when lock all levels is disabled
      */
     
+    /**
+     * Helper method to format timeframe for display in ruler.
+     * Uses existing TimeframeUtil methods for consistent formatting.
+     * 
+     * @param barSize The BarSize to format
+     * @return Formatted string (e.g., "15s", "4m", "1H")
+     */
+    private String formatTimeframeForDisplay(BarSize barSize) {
+        if (barSize == null) {
+            return "-";
+        }
+        
+        // Check if it's a seconds-based timeframe
+        if (TimeframeUtil.isSecondsBasedTimeframe(barSize)) {
+            // For seconds-based timeframes, use the interval directly
+            int seconds = barSize.getInterval();
+            return seconds + "s";
+        }
+        
+        // For minute-based and higher timeframes, use the standard timeframe string
+        String standardFormat = TimeframeUtil.getStandardTimeframeString(barSize);
+        
+        // Clean up the format for display
+        if (standardFormat.startsWith("M")) {
+            // Extract number and add "m" suffix
+            String number = standardFormat.substring(1);
+            return number + "m";
+        } else if (standardFormat.startsWith("H")) {
+            // Keep H format as is
+            return standardFormat;
+        } else if (standardFormat.startsWith("D")) {
+            // Keep D format as is  
+            return standardFormat;
+        }
+        
+        // Fallback to original format
+        return standardFormat;
+    }
     
 }

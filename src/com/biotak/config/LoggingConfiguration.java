@@ -12,7 +12,7 @@ import java.util.Properties;
 public final class LoggingConfiguration {
     
     private static final String DEFAULT_CONFIG_FILE = "biotak.properties";
-    private static final String DEFAULT_LOG_DIR = "C:/Users/fatemeh/IdeaProject/Biotak/logs/";
+    private static final String DEFAULT_LOG_DIR = "C:/Users/Fatemehkh/MotiveWave Extensions/logs/";
     
     private static Properties properties;
     private static boolean initialized = false;
