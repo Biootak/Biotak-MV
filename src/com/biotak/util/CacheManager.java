@@ -27,6 +27,20 @@ public final class CacheManager {
         // پاکسازی خودکار هر 90 ثانیه (بهینه‌تر)
         cleanupExecutor.scheduleAtFixedRate(
             CacheManager::cleanupAll, 90, 90, java.util.concurrent.TimeUnit.SECONDS);
+        
+        // Add shutdown hook to prevent memory leak
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            AdvancedLogger.info("CacheManager", "shutdown", "Shutting down cache cleanup executor");
+            cleanupExecutor.shutdown();
+            try {
+                if (!cleanupExecutor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                    cleanupExecutor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                cleanupExecutor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }));
     }
     
     private CacheManager() {}

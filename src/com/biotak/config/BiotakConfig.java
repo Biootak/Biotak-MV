@@ -16,7 +16,11 @@ import java.nio.file.*;
  */
 public class BiotakConfig {
     
-    private static BiotakConfig instance;
+    // Use holder pattern for thread-safe lazy initialization
+    private static class InstanceHolder {
+        private static final BiotakConfig INSTANCE = new BiotakConfig();
+    }
+    
     private Properties properties;
     private final String configFile = "biotak.properties";
     
@@ -46,11 +50,9 @@ public class BiotakConfig {
         loadConfiguration();
     }
     
-    public static synchronized BiotakConfig getInstance() {
-        if (instance == null) {
-            instance = new BiotakConfig();
-        }
-        return instance;
+    // Fix singleton pattern - no synchronization needed
+    public static BiotakConfig getInstance() {
+        return InstanceHolder.INSTANCE;
     }
     
     private void loadConfiguration() {

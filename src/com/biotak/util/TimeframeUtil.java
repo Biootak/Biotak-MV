@@ -177,16 +177,22 @@ public final class TimeframeUtil {
      * 
      * @param barSize The bar size from the data series.
      * @return The percentage value for the timeframe.
+     * @throws IllegalArgumentException if barSize is null or invalid
      */
     public static double getTimeframePercentage(BarSize barSize) {
-        // Create cache key
-        String cacheKey = barSize.toString();
-        Double cached = ComputationCache.getCachedPercentage(cacheKey);
-        if (cached != null) {
-            return cached;
+        if (barSize == null) {
+            throw new IllegalArgumentException("BarSize cannot be null");
         }
         
-        double result;
+        try {
+            // Create cache key
+            String cacheKey = barSize.toString();
+            Double cached = ComputationCache.getCachedPercentage(cacheKey);
+            if (cached != null) {
+                return cached;
+            }
+            
+            double result;
         
         // Handle seconds-based timeframes first (fractal timeframes)
         if (barSize.getIntervalType() == Enums.IntervalType.SECOND) {
@@ -250,6 +256,9 @@ public final class TimeframeUtil {
         ComputationCache.cachePercentage(cacheKey, result);
         
         return result;
+        } catch (Exception ex) {
+            throw new RuntimeException("Error calculating timeframe percentage for " + barSize.toString(), ex);
+        }
     }
 
     /**

@@ -11,7 +11,7 @@ public class ObjectPool<T> {
     private final ConcurrentLinkedQueue<T> pool = new ConcurrentLinkedQueue<>();
     private final Supplier<T> factory;
     private final int maxSize;
-    private volatile int currentSize = 0; // Track current size efficiently
+    private final java.util.concurrent.atomic.AtomicInteger currentSize = new java.util.concurrent.atomic.AtomicInteger(0); // Fix race condition
     
     public ObjectPool(Supplier<T> factory, int maxSize) {
         this.factory = factory;
@@ -28,7 +28,7 @@ public class ObjectPool<T> {
     public T acquire() {
         T object = pool.poll();
         if (object != null) {
-            currentSize = Math.max(0, currentSize - 1);
+            currentSize.decrementAndGet();
             return object;
         }
         return factory.get();
@@ -38,9 +38,9 @@ public class ObjectPool<T> {
      * Return an object to the pool
      */
     public void release(T object) {
-        if (object != null && currentSize < maxSize) {
+        if (object != null && currentSize.get() < maxSize) {
             if (pool.offer(object)) {
-                currentSize++;
+                currentSize.incrementAndGet();
             }
         }
     }

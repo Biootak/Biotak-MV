@@ -110,10 +110,14 @@ public class BiotakTrigger extends Study {
     // Human-readable labels for each TH value (Current, Pattern, Trigger, Structure, Higher)
     private String[] tfLabels = {"", "", "", "", ""};
 
-    // Holds comprehensive M values for ruler matching built during drawFigures() - optimized
+    // Holds comprehensive M values for ruler matching built during drawFigures() - optimized with size limit
     private final java.util.Map<String, Double> fullMValues = new java.util.concurrent.ConcurrentHashMap<>(16, 0.75f, 1);
-    // Holds 3×ATR values (price) for ruler comparison - optimized
+    // Holds 3×ATR values (price) for ruler comparison - optimized with size limit
     private final java.util.Map<String, Double> fullATRValues = new java.util.concurrent.ConcurrentHashMap<>(16, 0.75f, 1);
+    
+    // Maximum size limits to prevent OutOfMemoryError
+    private static final int MAX_MAP_SIZE = 1000;
+    private static final int CLEANUP_THRESHOLD = 800; // Start cleanup when reaching this size
 
     // Base values for ATR scaling (current timeframe)
     private int atrStructureMin = 0;          // minutes of current structure timeframe
@@ -627,7 +631,20 @@ public class BiotakTrigger extends Study {
 
             // -----------------------------  BUILD COMPREHENSIVE M MAP  -----------------------------
             this.fullMValues.clear();
-            this.fullMValues.putAll(com.biotak.util.FractalUtil.buildMMap(series, thBasePrice, mScale));
+            java.util.Map<String, Double> newMValues = com.biotak.util.FractalUtil.buildMMap(series, thBasePrice, mScale);
+            
+            // Check size before adding to prevent OutOfMemoryError
+            if (newMValues.size() > MAX_MAP_SIZE) {
+                AdvancedLogger.warn("BiotakTrigger", "drawFigures", "M map size exceeds limit (%d), truncating to %d entries", 
+                    newMValues.size(), CLEANUP_THRESHOLD);
+                // Keep only the most recent entries
+                java.util.List<java.util.Map.Entry<String, Double>> entries = new java.util.ArrayList<>(newMValues.entrySet());
+                entries = entries.subList(0, CLEANUP_THRESHOLD);
+                newMValues = entries.stream().collect(java.util.stream.Collectors.toMap(
+                    java.util.Map.Entry::getKey, java.util.Map.Entry::getValue));
+            }
+            
+            this.fullMValues.putAll(newMValues);
  
             // (Debug logging for M map removed in release version)
 
