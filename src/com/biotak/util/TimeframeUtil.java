@@ -87,23 +87,31 @@ public final class TimeframeUtil {
     }
 
     // Store standard ATR periods for common timeframes
+    // ✅ دوره‌های بهینه شده برای هر timeframe - دوره‌های اصلی که بهتر بودند
     private static final Map<String, Integer> STANDARD_ATR_PERIODS = new HashMap<>();
     static {
+        // ⚡ Seconds-based timeframes: دوره‌های کوچک برای واکنش سریع
         STANDARD_ATR_PERIODS.put("S1", 8);     // 1 second
         STANDARD_ATR_PERIODS.put("S4", 10);    // 4 seconds
         STANDARD_ATR_PERIODS.put("S16", 12);   // 16 seconds
         STANDARD_ATR_PERIODS.put("S30", 16);   // 30 seconds
         STANDARD_ATR_PERIODS.put("S45", 18);   // 45 seconds
-        STANDARD_ATR_PERIODS.put("M1", 24);    // 1 minute
+        
+        // 📊 Minute-based timeframes: دوره 24 برای تحلیل مناسب
+        STANDARD_ATR_PERIODS.put("M1", 24);    // 1 minute - بهینه برای volatility
         STANDARD_ATR_PERIODS.put("M3", 24);    // 3 minutes
         STANDARD_ATR_PERIODS.put("M5", 24);    // 5 minutes
         STANDARD_ATR_PERIODS.put("M15", 24);   // 15 minutes
         STANDARD_ATR_PERIODS.put("M30", 24);   // 30 minutes
+        
+        // 🕐 Hour-based timeframes: دوره‌های مناسب
         STANDARD_ATR_PERIODS.put("H1", 24);    // 1 hour
-        STANDARD_ATR_PERIODS.put("H4", 30);    // 4 hours
-        STANDARD_ATR_PERIODS.put("D1", 22);    // 1 day
-        STANDARD_ATR_PERIODS.put("W1", 52);    // 1 week
-        STANDARD_ATR_PERIODS.put("MN", 12);    // 1 month
+        STANDARD_ATR_PERIODS.put("H4", 30);    // 4 hours - کمی بلندتر برای smoothing
+        
+        // 📈 Daily+ timeframes: دوره‌های بهینه برای تحلیل بلندمدت
+        STANDARD_ATR_PERIODS.put("D1", 22);    // 1 day - بهینه برای تحلیل روزانه
+        STANDARD_ATR_PERIODS.put("W1", 52);    // 1 week - یک سال کاری
+        STANDARD_ATR_PERIODS.put("MN", 12);    // 1 month - یک سال
     }
 
     // Store exact mappings between standard timeframes for pattern and trigger levels
@@ -263,7 +271,8 @@ public final class TimeframeUtil {
 
     /**
      * Gets the appropriate ATR period for a given bar size based on the fractal relationship.
-     * ATR periods also follow a pattern where 4x time approximately equals 2x ATR period.
+     * - Fractal timeframes (powers of 2 & 3): use 4x relationship (4x time ≈ 2x ATR period)
+     * - Non-fractal timeframes: use logarithmic interpolation between nearest fractals
      * 
      * @param barSize The bar size from the data series.
      * @return The appropriate ATR period for the timeframe.
@@ -277,25 +286,51 @@ public final class TimeframeUtil {
         }
         
         int result;
+        int totalMinutes = getTotalMinutes(barSize);
         
-        // 1) Exact table for common/standard timeframes
-        String standard = getStandardTimeframeString(barSize);
-        if (STANDARD_ATR_PERIODS.containsKey(standard)) {
-            result = STANDARD_ATR_PERIODS.get(standard);
+        // Check if this is a fractal timeframe (power of 2 or power of 3)
+        boolean isFractalPowerOf2 = totalMinutes > 0 && FRACTAL_MINUTES_MAP.containsKey(totalMinutes);
+        boolean isFractalPowerOf3 = totalMinutes > 0 && POWER3_MINUTES_MAP.containsKey(totalMinutes);
+        
+        if (isFractalPowerOf2 || isFractalPowerOf3) {
+            // ✅ Fractal timeframes: use 4x relationship
+            // Formula: ATR_period = base_period * √(timeframe_minutes / base_minutes)
+            // Base: M1 = 24 period
+            // M4 = 24 * √(4/1) = 24 * 2 = 48
+            // M16 = 24 * √(16/1) = 24 * 4 = 96, but clamp to max 52
+            double ratio = Math.sqrt((double) totalMinutes / 1.0); // relative to M1
+            result = Math.max(12, Math.min(52, (int) Math.round(24 * ratio)));
         }
         else {
-            // 2) Generic rule for all other (especially non-fractal) timeframes
-            //    Goal: when timeframe ×4 ⇒ expected ATR (price) ×2, while حفظ نرمی یکنواخت.
-            //    Period ≈ 24 × √(minutesEquivalent)
-            BigDecimal bdMinutesEq = BigDecimal.valueOf(getTotalSeconds(barSize)).divide(BD_60, MATH_CONTEXT);
-            if (bdMinutesEq.compareTo(BigDecimal.ZERO) <= 0) {
-                bdMinutesEq = BigDecimal.ONE;
-            }
-            BigDecimal sqrtMinutes = sqrt(bdMinutesEq, MATH_CONTEXT);
-            BigDecimal period = BD_24.multiply(sqrtMinutes, MATH_CONTEXT);
+            // ❌ Non-fractal timeframes: logarithmic interpolation between nearest fractals
+            Map.Entry<Integer, String> lowerFractal = FRACTAL_MINUTES_MAP.floorEntry(totalMinutes);
+            Map.Entry<Integer, String> higherFractal = FRACTAL_MINUTES_MAP.ceilingEntry(totalMinutes);
             
-            // Clamp to practical bounds
-            result = Math.max(12, Math.min(52, period.intValue()));
+            if (lowerFractal != null && higherFractal != null && !lowerFractal.getKey().equals(higherFractal.getKey())) {
+                // Interpolate ATR periods between the two nearest fractals
+                int lowerMinutes = lowerFractal.getKey();
+                int higherMinutes = higherFractal.getKey();
+                
+                // Calculate ATR periods for fractal endpoints using 4x relationship
+                double lowerRatio = Math.sqrt((double) lowerMinutes / 1.0);
+                double higherRatio = Math.sqrt((double) higherMinutes / 1.0);
+                int lowerPeriod = Math.max(12, Math.min(52, (int) Math.round(24 * lowerRatio)));
+                int higherPeriod = Math.max(12, Math.min(52, (int) Math.round(24 * higherRatio)));
+                
+                // Logarithmic interpolation for ATR period
+                double logLower = Math.log(lowerMinutes);
+                double logHigher = Math.log(higherMinutes);
+                double logCurrent = Math.log(totalMinutes);
+                double interpolateRatio = (logCurrent - logLower) / (logHigher - logLower);
+                
+                result = (int) Math.round(lowerPeriod + interpolateRatio * (higherPeriod - lowerPeriod));
+                result = Math.max(12, Math.min(52, result));
+            }
+            else {
+                // Fallback: use 4x relationship for timeframes outside fractal range
+                double ratio = Math.sqrt((double) totalMinutes / 1.0);
+                result = Math.max(12, Math.min(52, (int) Math.round(24 * ratio)));
+            }
         }
         
         // Cache the result

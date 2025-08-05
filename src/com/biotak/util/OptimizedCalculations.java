@@ -48,10 +48,22 @@ public final class OptimizedCalculations {
         double sumTR = 0;
         int startIndex = size - period;
         
+        // ❌ مشکل اصلی: برای ATR صحیح، باید همیشه Close کندل قبلی استفاده شود
+        // ✅ راه حل: چک کنیم که آیا کندل قبلی وجود دارد یا نه
+        
         for (int i = startIndex; i < size; i++) {
             double high = series.getHigh(i);
             double low = series.getLow(i);
-            double prevClose = (i > 0) ? series.getClose(i-1) : series.getOpen(i);
+            
+            // ✅ ATR درست: همیشه Close کندل قبلی، حتی برای اولین کندل در دوره
+            double prevClose;
+            if (i == 0) {
+                // اگر کندل اول کل سری باشد، از Open همین کندل استفاده کن
+                prevClose = series.getOpen(i);
+            } else {
+                // همیشه Close کندل قبلی استفاده کن - حتی برای اولین کندل در دوره ATR
+                prevClose = series.getClose(i - 1);
+            }
             
             // Optimized True Range calculation
             double hl = high - low;
