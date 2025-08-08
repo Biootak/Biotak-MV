@@ -1502,16 +1502,16 @@ public class BiotakTrigger extends Study {
                     BarSize patternBarSize = TimeframeUtil.getPatternBarSize(baseTimeframeForM);
                     BarSize triggerBarSize = TimeframeUtil.getTriggerBarSize(baseTimeframeForM);
                     
-                    timePatternStr1 = "Time Pattern: " + formatTimeframeForDisplay(patternBarSize);
-                    timeTriggerStr1 = "Time Trigger: " + formatTimeframeForDisplay(triggerBarSize);
+                    timePatternStr1 = "Time Pattern: " + com.biotak.util.DisplayUtil.formatTimeframeForDisplay(patternBarSize);
+                    timeTriggerStr1 = "Time Trigger: " + com.biotak.util.DisplayUtil.formatTimeframeForDisplay(triggerBarSize);
                 } else {
                     // Fallback to current timeframe if no M match found
                     BarSize currentBarSize = series.getBarSize();
                     BarSize patternBarSize = TimeframeUtil.getPatternBarSize(currentBarSize);
                     BarSize triggerBarSize = TimeframeUtil.getTriggerBarSize(currentBarSize);
                     
-                    timePatternStr1 = "Time Pattern: " + formatTimeframeForDisplay(patternBarSize);
-                    timeTriggerStr1 = "Time Trigger: " + formatTimeframeForDisplay(triggerBarSize);
+                    timePatternStr1 = "Time Pattern: " + com.biotak.util.DisplayUtil.formatTimeframeForDisplay(patternBarSize);
+                    timeTriggerStr1 = "Time Trigger: " + com.biotak.util.DisplayUtil.formatTimeframeForDisplay(triggerBarSize);
                 }
                  
                 // Add nearest fractal timeframe info (only timeframe, no minutes)
@@ -1853,43 +1853,5 @@ public class BiotakTrigger extends Study {
      * Reset all locked values when lock all levels is disabled
      */
     
-    /**
-     * Helper method to format timeframe for display in ruler.
-     * Uses existing TimeframeUtil methods for consistent formatting.
-     * 
-     * @param barSize The BarSize to format
-     * @return Formatted string (e.g., "15s", "4m", "1H")
-     */
-    private String formatTimeframeForDisplay(BarSize barSize) {
-        if (barSize == null) {
-            return "-";
-        }
-        
-        // Check if it's a seconds-based timeframe
-        if (TimeframeUtil.isSecondsBasedTimeframe(barSize)) {
-            // For seconds-based timeframes, use the interval directly
-            int seconds = barSize.getInterval();
-            return seconds + "s";
-        }
-        
-        // For minute-based and higher timeframes, use the standard timeframe string
-        String standardFormat = TimeframeUtil.getStandardTimeframeString(barSize);
-        
-        // Clean up the format for display
-        if (standardFormat.startsWith("M")) {
-            // Extract number and add "m" suffix
-            String number = standardFormat.substring(1);
-            return number + "m";
-        } else if (standardFormat.startsWith("H")) {
-            // Keep H format as is
-            return standardFormat;
-        } else if (standardFormat.startsWith("D")) {
-            // Keep D format as is  
-            return standardFormat;
-        }
-        
-        // Fallback to original format
-        return standardFormat;
-    }
     
 }
