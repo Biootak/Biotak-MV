@@ -1268,98 +1268,17 @@ public class BiotakTrigger extends Study {
                      bestBasePips   = cachedBestBasePips;
                      bestDiff       = cachedBestDiff;
                  } else {
-                     // ---------- محاسبات سنگین فقط این‌جا ----------
-                     // Candidates: comprehensive map built in outer class (fullMValues)
-                     java.util.Map<String, Double> mMapLocal = BiotakTrigger.this.fullMValues;
-                     // حجم لاگ را کم می‌کنیم: فقط زمانی که DEBUG فعال است چاپ شود
-                     // Logger debug removed
-                     double bestAboveDiff = Double.MAX_VALUE;
-                     String bestAboveLabel = null;
-                     double bestAbovePips = 0;
-
-                     double bestBelowDiff = Double.MAX_VALUE;
-                     String bestBelowLabel = null;
-                     double bestBelowPips = 0;
-
-                     if (mMapLocal != null && !mMapLocal.isEmpty()) {
-                         for (var entry : mMapLocal.entrySet()) {
-                             String label = entry.getKey();
-                             double baseMove = entry.getValue();
-                             if (baseMove <= 0) continue;
-                             double basePip = Math.round(com.biotak.util.UnitConverter.priceToPip(baseMove, series.getInstrument()) * 10.0) / 10.0;
-                             if (basePip >= legPip) {
-                                 double diff = basePip - legPip;
-                                 if (diff < bestAboveDiff) {
-                                     bestAboveDiff = diff;
-                                     bestAboveLabel = label;
-                                     bestAbovePips = basePip;
-                                 }
-                             } else { // below leg
-                                 double diff = legPip - basePip;
-                                 if (diff < bestBelowDiff) {
-                                     bestBelowDiff = diff;
-                                     bestBelowLabel = label;
-                                     bestBelowPips = basePip;
-                                 }
-                              }
-                          }
-                     }
-
-                     // Choose preferred candidate: any above leg takes priority; if none, use best below
-                     // (variables declared earlier)
-                     if (bestAboveLabel != null) {
-                         bestLabel = bestAboveLabel;
-                         bestBasePips = bestAbovePips;
-                         bestDiff = bestAboveDiff;
-                     } else {
-                         bestLabel = (bestBelowLabel != null ? bestBelowLabel : "-");
-                         bestBasePips = bestBelowPips;
-                         bestDiff = bestBelowDiff;
-                     }
-
-                     // ------------------------------------------------------------------
-                     //  دقیق‌سازی به روش دودویی بین دو فراکتال مجاور                         
-                     // ------------------------------------------------------------------
-                     if (bestDiff > 0.1 && bestAboveLabel != null && bestBelowLabel != null) {
-                         int lowMin  = TimeframeUtil.parseCompoundTimeframe(bestBelowLabel);
-                         int highMin = TimeframeUtil.parseCompoundTimeframe(bestAboveLabel);
-                         if (lowMin > 0 && highMin > lowMin) {
-                             double closePrice = series.getBidClose(series.size()-1);
-                             int maxIterations = 50; // محدودیت تعداد تکرار برای جلوگیری از لوپ بی‌نهایت
-                             int iteration = 0;
-                             while (highMin - lowMin > 1 && iteration < maxIterations) {
-                                 iteration++;
-                                 int mid = (lowMin + highMin) / 2;
-                                double perc   = TimeframeUtil.getTimeframePercentageFromMinutes(mid);
-                                 double thPts  = com.biotak.util.OptimizedCalculations.calculateTHPoints(series.getInstrument(), closePrice, perc) * tick;
-                                  // Logger.debug(String.format("[Refine] LiveBid=%.5f perc=%.3f thPts=%.2f leg=%.1f", closePrice, perc, thPts, legPip));
-                                 double mVal   = TH_TO_M_FACTOR * thPts;
-                                 double mPips  = Math.round(com.biotak.util.UnitConverter.priceToPip(mVal, series.getInstrument()) * 10.0) / 10.0;
-                                 if (mPips >= legPip) {
-                                     highMin = mid;
-                                     bestAboveDiff  = mPips - legPip;
-                                     bestAbovePips  = mPips;
-                                     bestAboveLabel = compoundTimeframe(mid);
-                                 } else {
-                                     lowMin = mid;
-                                     bestBelowDiff  = legPip - mPips;
-                                     bestBelowPips  = mPips;
-                                     bestBelowLabel = compoundTimeframe(mid);
-                                 }
-                                 if (Math.abs(mPips - legPip) <= 0.05) break; // 0.05-pip دقت
-                             }
-                             if (iteration >= maxIterations) {
-                                 AdvancedLogger.warn("BiotakTrigger", "RulerFigure.draw", "Binary search for M values reached max iterations (%d), stopping to prevent infinite loop", maxIterations);
-                             }
-
-                             // انتخاب نزدیک‌ترین مورد پس از دودویی
-                             if (bestAboveDiff < bestBelowDiff) {
-                                 bestLabel = bestAboveLabel; bestBasePips = bestAbovePips; bestDiff = bestAboveDiff;
-                             } else {
-                                 bestLabel = bestBelowLabel; bestBasePips = bestBelowPips; bestDiff = bestBelowDiff;
-                             }
-                         }
-                     }
+                     var mRes = com.biotak.core.RulerService.matchM(
+                         series.getInstrument(),
+                         legPip,
+                         tick,
+                         series.getBidClose(series.size()-1),
+                         BiotakTrigger.this.fullMValues,
+                         TH_TO_M_FACTOR
+                     );
+                     bestLabel = mRes.bestLabel();
+                     bestBasePips = mRes.bestBasePips();
+                     bestDiff = mRes.bestDiff();
 
                      // ذخیره در کش
                      cachedLegPip      = legPip;
@@ -1374,76 +1293,17 @@ public class BiotakTrigger extends Study {
                  String bestATRAboveLabel = null, bestATRBelowLabel = null;
                  double bestATRAbovePips = 0, bestATRBelowPips = 0;
 
-                 java.util.Map<String, Double> atrMapLocal = BiotakTrigger.this.fullATRValues;
-                 if (atrMapLocal != null && !atrMapLocal.isEmpty()) {
-                     for (var entry : atrMapLocal.entrySet()) {
-                         String lbl = entry.getKey();
-                         double atrPrice = entry.getValue();
-                         if (atrPrice <= 0) continue;
-                        double atrPips = Math.round(com.biotak.util.UnitConverter.priceToPip(atrPrice, series.getInstrument()) * 10.0) / 10.0;
-                         if (atrPips >= legPip) {
-                             double diff = atrPips - legPip;
-                             if (diff < bestATRAboveDiff) { bestATRAboveDiff = diff; bestATRAboveLabel = lbl; bestATRAbovePips = atrPips; }
-                         } else {
-                             double diff = legPip - atrPips;
-                             if (diff < bestATRBelowDiff) { bestATRBelowDiff = diff; bestATRBelowLabel = lbl; bestATRBelowPips = atrPips; }
-                         }
-                     }
-                 }
+                 var atrRes = com.biotak.core.RulerService.matchATR(
+                     legPip,
+                     tick,
+                     BiotakTrigger.this.fullATRValues,
+                     BiotakTrigger.this.atrStructureMin,
+                     BiotakTrigger.this.atrStructurePrice
+                 );
 
-                 String bestATRLabel;
-                 double bestATRBasePips;
-                 double bestATRDiff;
-
-                 if (bestATRAboveLabel != null) {
-                     bestATRLabel = bestATRAboveLabel; bestATRBasePips = bestATRAbovePips; bestATRDiff = bestATRAboveDiff;
-                 } else {
-                     bestATRLabel = (bestATRBelowLabel != null? bestATRBelowLabel : "-");
-                     bestATRBasePips = bestATRBelowPips; bestATRDiff = bestATRBelowDiff;
-                 }
-
-                 // Binary refine using continuous scaling if initial diff >0.05 pip
-                 if (bestATRDiff > 0.05 && bestATRAboveLabel != null && bestATRBelowLabel != null) {
-                     int lowMin  = TimeframeUtil.parseCompoundTimeframe(bestATRBelowLabel);
-                     int highMin = TimeframeUtil.parseCompoundTimeframe(bestATRAboveLabel);
-                     int baseMin = BiotakTrigger.this.atrStructureMin;
-                     double baseAtrPrice = BiotakTrigger.this.atrStructurePrice; // 1× ATR price
-
-                     if (lowMin > 0 && highMin > lowMin && baseMin > 0 && baseAtrPrice > 0) {
-                         int maxIterations = 50; // محدودیت تعداد تکرار برای جلوگیری از لوپ بی‌نهایت
-                         int iteration = 0;
-                         while (highMin - lowMin > 1 && iteration < maxIterations) {
-                             iteration++;
-                             int mid = (lowMin + highMin) / 2;
-                             double atrPriceMid = ATR_FACTOR * baseAtrPrice * Math.sqrt((double)mid / baseMin);
-                             double atrPipsMid  = Math.round(atrPriceMid / tick * 10.0) / 10.0;
-
-                             if (atrPipsMid >= legPip) {
-                                 highMin = mid;
-                                 bestATRAboveDiff  = atrPipsMid - legPip;
-                                 bestATRAbovePips  = atrPipsMid;
-                                 bestATRAboveLabel = compoundTimeframe(mid);
-                             } else {
-                                 lowMin = mid;
-                                 bestATRBelowDiff  = legPip - atrPipsMid;
-                                 bestATRBelowPips  = atrPipsMid;
-                                 bestATRBelowLabel = compoundTimeframe(mid);
-                             }
-
-                             if (Math.abs(atrPipsMid - legPip) <= 0.05) break; // stop when ≤0.05 pip
-                         }
-                         if (iteration >= maxIterations) {
-                             AdvancedLogger.warn("BiotakTrigger", "RulerFigure.draw", "Binary search for ATR values reached max iterations (%d), stopping to prevent infinite loop", maxIterations);
-                         }
-
-                         // choose closest
-                         if (bestATRAboveDiff < bestATRBelowDiff) {
-                             bestATRLabel = bestATRAboveLabel; bestATRBasePips = bestATRAbovePips; bestATRDiff = bestATRAboveDiff;
-                         } else {
-                             bestATRLabel = bestATRBelowLabel; bestATRBasePips = bestATRBelowPips; bestATRDiff = bestATRBelowDiff;
-                         }
-                     }
-                 }
+                 String bestATRLabel = atrRes.bestLabel();
+                 double bestATRBasePips = atrRes.bestBasePips();
+                 double bestATRDiff = atrRes.bestDiff();
 
                  long nowInfo = System.currentTimeMillis();
                  if (nowInfo - lastRulerInfoLog > RULER_LOG_INTERVAL_MS) {
