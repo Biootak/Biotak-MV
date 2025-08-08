@@ -5,7 +5,6 @@ import com.biotak.util.TimeframeUtil;
 import com.biotak.util.OptimizedCalculations;
 import com.motivewave.platform.sdk.common.BarSize;
 import com.motivewave.platform.sdk.common.DataSeries;
-import com.motivewave.platform.sdk.common.Instrument;
 
 public class FractalCalculator {
 
@@ -96,49 +95,6 @@ public class FractalCalculator {
      * @param instrument The trading instrument
      * @return The multiplier to convert from price to pips
      */
-    public static double getPipMultiplier(Instrument instrument) {
-        if (instrument == null) return 10.0; // Default multiplier
-        
-        String symbol = instrument.getSymbol();
-        double tickSize = instrument.getTickSize();
-        
-        // Determine number of decimal places in tick size
-        int decimalPlaces = 0;
-        if (tickSize > 0) {
-            String tickStr = String.valueOf(tickSize);
-            if (tickStr.contains(".")) {
-                decimalPlaces = tickStr.length() - tickStr.indexOf('.') - 1;
-            }
-        }
-        
-        // For forex pairs
-        if (symbol != null && 
-            (symbol.contains("/") || 
-             (symbol.length() >= 6 && !symbol.contains(".")))) {
-            
-            // JPY pairs typically have 2 decimal places
-            if (symbol.contains("JPY") || symbol.contains("jpy")) {
-                return 100.0;
-            }
-            
-            // Most other forex pairs have 4 decimal places, with pip being the 4th decimal
-            if (decimalPlaces >= 4) {
-                return 10.0;
-            }
-        }
-        
-        // For indices, stocks, etc. - use a multiplier based on decimal places
-        switch (decimalPlaces) {
-            case 0: return 1.0;    // No decimal places
-            case 1: return 10.0;   // 1 decimal place
-            case 2: return 100.0;  // 2 decimal places
-            case 3: return 10.0;   // 3 decimal places (unusual)
-            case 4: return 10.0;   // 4 decimal places (standard forex)
-            case 5: return 10.0;   // 5 decimal places (some brokers)
-            default: return 10.0;  // Default
-        }
-    }
-
     /**
      * Gets the pattern timeframe string representation (one fractal level down)
      * for the given timeframe.

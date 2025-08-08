@@ -1249,7 +1249,7 @@ public class BiotakTrigger extends Study {
                 long diffMs = Math.abs(endTime - startTime);
                 long minutes = (diffMs / (1000 * 60)) % 60;
 
-                double pips = Math.abs(priceDiff) / series.getInstrument().getTickSize();
+                double pips = com.biotak.util.UnitConverter.priceToPip(Math.abs(priceDiff), series.getInstrument());
                 String pipsStr = String.format("Pips: %.1f", pips);
                 String barsStr = String.format("Bars: %.0f", bars);
                  // --- Determine best matching MOVE across ALL timeframes ---
@@ -1286,7 +1286,7 @@ public class BiotakTrigger extends Study {
                              String label = entry.getKey();
                              double baseMove = entry.getValue();
                              if (baseMove <= 0) continue;
-                             double basePip = Math.round(baseMove / tick * 10.0) / 10.0;
+                             double basePip = Math.round(com.biotak.util.UnitConverter.priceToPip(baseMove, series.getInstrument()) * 10.0) / 10.0;
                              if (basePip >= legPip) {
                                  double diff = basePip - legPip;
                                  if (diff < bestAboveDiff) {
@@ -1334,7 +1334,7 @@ public class BiotakTrigger extends Study {
                                  double thPts  = com.biotak.util.OptimizedCalculations.calculateTHPoints(series.getInstrument(), closePrice, perc) * tick;
                                   // Logger.debug(String.format("[Refine] LiveBid=%.5f perc=%.3f thPts=%.2f leg=%.1f", closePrice, perc, thPts, legPip));
                                  double mVal   = TH_TO_M_FACTOR * thPts;
-                                 double mPips  = Math.round(mVal / tick * 10.0) / 10.0;
+                                 double mPips  = Math.round(com.biotak.util.UnitConverter.priceToPip(mVal, series.getInstrument()) * 10.0) / 10.0;
                                  if (mPips >= legPip) {
                                      highMin = mid;
                                      bestAboveDiff  = mPips - legPip;
@@ -1380,7 +1380,7 @@ public class BiotakTrigger extends Study {
                          String lbl = entry.getKey();
                          double atrPrice = entry.getValue();
                          if (atrPrice <= 0) continue;
-                         double atrPips = Math.round(atrPrice / tick * 10.0) / 10.0;
+                        double atrPips = Math.round(com.biotak.util.UnitConverter.priceToPip(atrPrice, series.getInstrument()) * 10.0) / 10.0;
                          if (atrPips >= legPip) {
                              double diff = atrPips - legPip;
                              if (diff < bestATRAboveDiff) { bestATRAboveDiff = diff; bestATRAboveLabel = lbl; bestATRAbovePips = atrPips; }
@@ -1721,7 +1721,7 @@ public class BiotakTrigger extends Study {
             
             // Calculate and log initial measurements
             double priceDiff = endPrice - startPrice;
-            double pips = Math.abs(priceDiff) / series.getInstrument().getTickSize();
+            double pips = com.biotak.util.UnitConverter.priceToPip(Math.abs(priceDiff), series.getInstrument());
             long timeDiff = Math.abs(endTime - startTime);
             AdvancedLogger.info("BiotakTrigger", methodName, "Initial ruler measurement: %.1f pips, price diff: %.5f, time span: %d ms", pips, priceDiff, timeDiff);
             
@@ -1812,9 +1812,8 @@ public class BiotakTrigger extends Study {
         
         // Calculate and log initial measurements
         double priceDiff = endPrice - startPrice;
-        double pips = Math.abs(priceDiff) * 10; // Assuming 1 pip = 0.1
-        AdvancedLogger.info("BiotakTrigger", methodName, "Initial ruler measurement: %.1f pips, price diff: %.5f, time span: %.1f hours", 
-            pips, priceDiff, timeSpan / (60.0 * 60.0 * 1000.0));
+        AdvancedLogger.info("BiotakTrigger", methodName, "Initial ruler measurement: price diff: %.5f, time span: %.1f hours", 
+            priceDiff, timeSpan / (60.0 * 60.0 * 1000.0));
         
         // IMPORTANT: Double-check that the state was actually set
         if (rulerState != RulerState.ACTIVE) {

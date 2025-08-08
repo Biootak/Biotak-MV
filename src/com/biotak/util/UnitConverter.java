@@ -49,16 +49,27 @@ public final class UnitConverter {
             }
         }
         
-        // For forex pairs
-        if (symbol != null && 
+        String sym = symbol == null ? "" : symbol.toUpperCase();
+        
+        // 1) Explicit symbol-based overrides (for assets with conventional pip different from tick)
+        //    Metals (spot): many platforms consider 1 pip = 0.1 for XAU/XAG
+        if (sym.startsWith("XAU") || sym.contains("GOLD") || sym.startsWith("XAG") || sym.contains("SILVER")) {
+            result = 10.0; // 0.1 unit per pip
+        }
+        //    Crypto (BTC, ETH, ...): treat 1 pip = 1.0 by default
+        else if (sym.contains("BTC") || sym.contains("ETH") || sym.contains("SOL") || sym.contains("ADA") || sym.contains("DOGE") || sym.contains("XRP")) {
+            result = 1.0; // $1 per pip (can be refined per broker later)
+        }
+        // 2) Forex pairs
+        else if (symbol != null && 
             (symbol.contains("/") || 
              (symbol.length() >= 6 && !symbol.contains(".")))) {
             
-            // JPY pairs typically have 2 decimal places
-            if (symbol.contains("JPY") || symbol.contains("jpy")) {
+            // JPY pairs typically have 2 decimal places (1 pip = 0.01)
+            if (sym.contains("JPY")) {
                 result = 100.0;
             }
-            // Most other forex pairs have 4 decimal places, with pip being the 4th decimal
+            // Most other forex pairs: 1 pip = 0.0001
             else if (decimalPlaces >= 4) {
                 result = 10.0;
             }
@@ -66,8 +77,8 @@ public final class UnitConverter {
                 result = 10.0; // Default for forex
             }
         }
+        // 3) Fallback: infer by decimal places of tick size
         else {
-            // For indices, stocks, etc. - use a multiplier based on decimal places
             switch (decimalPlaces) {
                 case 0: result = 1.0; break;    // No decimal places
                 case 1: result = 10.0; break;   // 1 decimal place
@@ -75,7 +86,7 @@ public final class UnitConverter {
                 case 3: result = 10.0; break;   // 3 decimal places (unusual)
                 case 4: result = 10.0; break;   // 4 decimal places (standard forex)
                 case 5: result = 10.0; break;   // 5 decimal places (some brokers)
-                default: result = 10.0; break; // Default
+                default: result = 10.0; break;  // Default
             }
         }
         
