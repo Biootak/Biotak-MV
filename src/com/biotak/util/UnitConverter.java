@@ -34,7 +34,7 @@ public final class UnitConverter {
         
         // Check cache first
         Double cached = ComputationCache.getCachedPipMultiplier(cacheKey);
-        if (cached != null) {
+        if (cached != null && cached != 0) {
             return cached;
         }
         
@@ -63,7 +63,10 @@ public final class UnitConverter {
         // 2) Forex pairs
         else if (symbol != null && 
             (symbol.contains("/") || 
-             (symbol.length() >= 6 && !symbol.contains(".")))) {
+             (symbol.length() >= 6 && !symbol.contains(".")) ||
+             sym.contains("EUR") || sym.contains("USD") || sym.contains("GBP") || 
+             sym.contains("CHF") || sym.contains("CAD") || sym.contains("AUD") || 
+             sym.contains("NZD") || sym.contains("JPY"))) {
             
             // JPY pairs typically have 2 decimal places (1 pip = 0.01)
             if (sym.contains("JPY")) {
@@ -71,7 +74,7 @@ public final class UnitConverter {
             }
             // Most other forex pairs: 1 pip = 0.0001
             else if (decimalPlaces >= 4) {
-                result = 10.0;
+                result = 10000.0;
             }
             else {
                 result = 10.0; // Default for forex
@@ -83,9 +86,9 @@ public final class UnitConverter {
                 case 0: result = 1.0; break;    // No decimal places
                 case 1: result = 10.0; break;   // 1 decimal place
                 case 2: result = 100.0; break;  // 2 decimal places
-                case 3: result = 10.0; break;   // 3 decimal places (unusual)
-                case 4: result = 10.0; break;   // 4 decimal places (standard forex)
-                case 5: result = 10.0; break;   // 5 decimal places (some brokers)
+                case 3: result = 1000.0; break; // 3 decimal places (unusual)
+                case 4: result = 10000.0; break; // 4 decimal places (standard forex)
+                case 5: result = 100000.0; break; // 5 decimal places (some brokers)
                 default: result = 10.0; break;  // Default
             }
         }
@@ -109,6 +112,7 @@ public final class UnitConverter {
      */
     public static double priceToPip(double priceDiff, Instrument instrument) {
         if (instrument == null) return 0;
+        if (priceDiff == 0) return 0;
         double pipMultiplier = getPipMultiplier(instrument);
         return priceDiff * pipMultiplier;
     }
@@ -147,4 +151,4 @@ public final class UnitConverter {
         if (instrument == null) return 0;
         return points * instrument.getTickSize();
     }
-} 
+}
