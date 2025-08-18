@@ -1350,14 +1350,14 @@ public class BiotakTrigger extends Study {
                      bestATRBasePips = cachedBestATRBasePips;
                      bestATRDiff    = cachedBestATRDiff;
                  } else {
-                    // Always calculate ATR comparison
-                    var atrRes = com.biotak.core.RulerService.matchATRWithInstrument(
-                        legPip, tick,
-                        BiotakTrigger.this.fullATRValues,
-                        BiotakTrigger.this.atrStructureMin,
-                        BiotakTrigger.this.atrStructurePrice,
-                        series.getInstrument()
-                    );
+                     // Calculate ATR comparison first (always needed for display)
+                     var atrRes = com.biotak.core.RulerService.matchATRWithInstrument(
+                         legPip, tick,
+                         BiotakTrigger.this.fullATRValues,
+                         BiotakTrigger.this.atrStructureMin,
+                         BiotakTrigger.this.atrStructurePrice,
+                         series.getInstrument()
+                     );
                      bestATRLabel = atrRes.bestLabel();
                      bestATRBasePips = atrRes.bestBasePips();
                      bestATRDiff = atrRes.bestDiff();
@@ -1424,40 +1424,24 @@ public class BiotakTrigger extends Study {
                              bestBasePips = lsRes.bestBasePips();
                              bestDiff = lsRes.bestDiff();
                          }
-                        case ATR -> {
-                            var atrResMain = com.biotak.core.RulerService.matchATRWithInstrument(
-                                legPip, tick,
-                                BiotakTrigger.this.fullATRValues,
-                                BiotakTrigger.this.atrStructureMin,
-                                BiotakTrigger.this.atrStructurePrice,
-                                series.getInstrument()
-                            );
-                            bestLabel = atrResMain.bestLabel();
-                            bestBasePips = atrResMain.bestBasePips();
-                            bestDiff = atrResMain.bestDiff();
-                        }
-                        case BOTH -> {
-                            // Legacy mode - show both M and ATR results
-                            var mRes = com.biotak.core.RulerService.matchM(
-                                series.getInstrument(), legPip, tick,
-                                series.getBidClose(series.size()-1),
-                                BiotakTrigger.this.fullMValues, TH_TO_M_FACTOR
-                            );
-                            bestLabel = mRes.bestLabel();
-                            bestBasePips = mRes.bestBasePips();
-                            bestDiff = mRes.bestDiff();
-                            
-                            var atrResBoth = com.biotak.core.RulerService.matchATRWithInstrument(
-                                legPip, tick,
-                                BiotakTrigger.this.fullATRValues,
-                                BiotakTrigger.this.atrStructureMin,
-                                BiotakTrigger.this.atrStructurePrice,
-                                series.getInstrument()
-                            );
-                            bestATRLabel = atrResBoth.bestLabel();
-                            bestATRBasePips = atrResBoth.bestBasePips();
-                            bestATRDiff = atrResBoth.bestDiff();
-                        }
+                         case ATR -> {
+                             // Use the already calculated ATR results as primary comparison
+                             bestLabel = bestATRLabel;
+                             bestBasePips = bestATRBasePips;
+                             bestDiff = bestATRDiff;
+                         }
+                         case BOTH -> {
+                             // Legacy mode - show both M and ATR results
+                             var mRes = com.biotak.core.RulerService.matchM(
+                                 series.getInstrument(), legPip, tick,
+                                 series.getBidClose(series.size()-1),
+                                 BiotakTrigger.this.fullMValues, TH_TO_M_FACTOR
+                             );
+                             bestLabel = mRes.bestLabel();
+                             bestBasePips = mRes.bestBasePips();
+                             bestDiff = mRes.bestDiff();
+                             // ATR values are already calculated above
+                         }
                      }
                      
                      // Cache the results (including ATR)
@@ -1585,7 +1569,7 @@ public class BiotakTrigger extends Study {
                 linesList.add(barsStr);
                 linesList.add(timeStr);
                 
-                // Always add ATR lines (separate from primary comparison)
+                // Always display ATR lines (separate from primary comparison)
                 if (atrStr1 != null && atrStr2 != null) {
                     linesList.add(sep);
                     linesList.add(atrStr1);
