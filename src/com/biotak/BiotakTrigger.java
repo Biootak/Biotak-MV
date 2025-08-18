@@ -721,10 +721,35 @@ public class BiotakTrigger extends Study {
                 });
             }
 
-            this.fullATRValues.clear();
-            this.fullATRValues.putAll(com.biotak.util.FractalUtil.buildATR3Map(structureMin, atrValue));
-            this.atrStructureMin   = structureMin;
-            this.atrStructurePrice = atrValue;
+            // Build comprehensive ATR map from all major timeframes once
+            // This ensures consistent results regardless of current timeframe
+            // Clear cache if timeframe has changed to ensure proper recalculation
+            boolean shouldRebuildATR = this.fullATRValues.isEmpty() || this.atrStructureMin != structureMin;
+            if (shouldRebuildATR) {
+                com.biotak.debug.AdvancedLogger.info("BiotakTrigger", "drawFigures", 
+                    "Building comprehensive ATR map from all timeframes for consistent matching");
+                    
+                this.fullATRValues.clear();
+                
+                // Build ATR map using same method as M for timeframe independence
+                // Use price and instrument only (like M method) to ensure consistent results
+                java.util.Map<String, Double> comprehensiveATRValues = com.biotak.util.FractalUtil.buildComprehensiveATRMap(thBasePrice, series.getInstrument());
+                
+                this.fullATRValues.putAll(comprehensiveATRValues);
+                this.atrStructureMin   = structureMin;
+                this.atrStructurePrice = atrValue;
+                
+                // Log comprehensive ATR map creation
+                com.biotak.debug.AdvancedLogger.info("BiotakTrigger", "drawFigures", 
+                    "Comprehensive ATR Map built with %d entries covering all major timeframes", comprehensiveATRValues.size());
+                    
+                // Log a sample of the comprehensive coverage
+                String sampleEntries = comprehensiveATRValues.entrySet().stream().limit(5)
+                    .map(e -> e.getKey() + "=" + String.format("%.2f", com.biotak.util.UnitConverter.priceToPip(e.getValue(), series.getInstrument())) + "p")
+                    .collect(java.util.stream.Collectors.joining(", "));
+                com.biotak.debug.AdvancedLogger.info("BiotakTrigger", "drawFigures", 
+                    "Sample ATR coverage: %s", sampleEntries);
+            }
             
             // --------------------- BUILD ALL STEP VALUE MAPS ---------------------
             // Build maps for E, TP, TH, SS, LS step values
@@ -1350,6 +1375,8 @@ public class BiotakTrigger extends Study {
                      bestATRBasePips = cachedBestATRBasePips;
                      bestATRDiff    = cachedBestATRDiff;
                  } else {
+                         // Calculate fresh ATR comparison using comprehensive map (no persistent cache needed)
+                         {
                      // Calculate ATR comparison first (always needed for display)
                      var atrRes = com.biotak.core.RulerService.matchATRWithInstrument(
                          legPip, tick,
@@ -1452,14 +1479,18 @@ public class BiotakTrigger extends Study {
                      cachedBestATRLabel   = bestATRLabel;
                      cachedBestATRBasePips= bestATRBasePips;
                      cachedBestATRDiff    = bestATRDiff;
+                     
+                     // Note: Since we now use a comprehensive ATR map built from all timeframes,
+                     // we don't need persistent caching - results are stable across timeframe changes
+                 }
                  }
 
                  // Log comparison results
                  long nowInfo = System.currentTimeMillis();
                  if (nowInfo - lastRulerInfoLog > RULER_LOG_INTERVAL_MS) {
                      if (comparisonType == com.biotak.enums.RulerComparisonType.BOTH) {
-                         AdvancedLogger.info("BiotakTrigger", "RulerFigure.draw", "[Ruler] Leg=%.1f pips, M→%s (%.1f pips, d=%.1f) | ATR×3→%s (%.1f pips, d=%.1f)",
-                             legPip, bestLabel, bestBasePips, bestDiff, bestATRLabel, bestATRBasePips, bestATRDiff);
+                         AdvancedLogger.info("BiotakTrigger", "RulerFigure.draw", "[Ruler] Leg=%.1f pips, M→%s (%.1f pips, d=%.1f) | ATR→%s (base=%.1f pips, ×3=%.1f pips, d=%.1f)",
+                             legPip, bestLabel, bestBasePips, bestDiff, bestATRLabel, bestATRBasePips, bestATRBasePips * 3.0, bestATRDiff);
                      } else {
                          AdvancedLogger.info("BiotakTrigger", "RulerFigure.draw", "[Ruler] Leg=%.1f pips, %s→%s (%.1f pips, d=%.1f)",
                              legPip, comparisonType.name(), bestLabel, bestBasePips, bestDiff);
@@ -1486,8 +1517,8 @@ public class BiotakTrigger extends Study {
                  // Build display strings based on comparison type
                  String matchStr1, matchStr2;
                  
-                 // Always show ATR information
-                 String atrStr1 = String.format("ATR×3 : %s", bestATRLabel);
+                 // Show ATR timeframe match (leg ≈ 3×ATR of this timeframe)
+                 String atrStr1 = String.format("ATR : %s", bestATRLabel);
                  int atrMinVal = TimeframeUtil.parseCompoundTimeframe(bestATRLabel);
                  String atrStr2 = (atrMinVal > 0 ? atrMinVal + "m" : "-");
                  

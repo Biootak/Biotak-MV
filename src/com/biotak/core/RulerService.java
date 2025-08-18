@@ -140,28 +140,65 @@ public final class RulerService {
       double atrStructurePrice,
       Instrument instrument
   ) {
+    // Debug logging for ATR matching
+    com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
+        "Starting ATR matching: legPip=%.2f, structureMin=%d, structurePrice=%.5f, mapSize=%d", 
+        legPip, atrStructureMin, atrStructurePrice, atrMapLocal != null ? atrMapLocal.size() : 0);
+    
     double bestATRAboveDiff = Double.MAX_VALUE, bestATRBelowDiff = Double.MAX_VALUE;
     String bestATRAboveLabel = null, bestATRBelowLabel = null;
     double bestATRAbovePips = 0, bestATRBelowPips = 0;
 
     if (atrMapLocal != null && !atrMapLocal.isEmpty()) {
+        com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
+            "ATR Map contains 3×ATR values. Looking for ATR that when ×3 equals %.2f pips", legPip);
+        int count = 0;
         for (var entry : atrMapLocal.entrySet()) {
             String lbl = entry.getKey();
-            double atrPrice = entry.getValue();
-            if (atrPrice <= 0) continue;
-            double atrPips;
+            double atr3xPrice = entry.getValue(); // This is already 3×ATR price
+            if (atr3xPrice <= 0) continue;
+            
+            // Convert 3×ATR price to pips
+            double atr3xPips;
             if (instrument != null) {
-                atrPips = Math.round(UnitConverter.priceToPip(atrPrice, instrument) * 100.0) / 100.0;
+                atr3xPips = Math.round(UnitConverter.priceToPip(atr3xPrice, instrument) * 100.0) / 100.0;
             } else {
                 // Fallback to old calculation if instrument is null
-                atrPips = Math.round((atrPrice / tick) * 100.0) / 100.0;
+                atr3xPips = Math.round((atr3xPrice / tick) * 100.0) / 100.0;
             }
-            if (atrPips >= legPip) {
-                double diff = atrPips - legPip;
-                if (diff < bestATRAboveDiff) { bestATRAboveDiff = diff; bestATRAboveLabel = lbl; bestATRAbovePips = atrPips; }
+            
+            // The base ATR (before 3x multiplication) in pips
+            double baseATRPips = atr3xPips / 3.0;
+            
+            // Log first few entries for debugging
+            if (count < 5) {
+                com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
+                    "  %s: 3×ATR=%.2f pips, base ATR=%.2f pips, leg=%.2f pips, diff when ×3=%.2f", 
+                    lbl, atr3xPips, baseATRPips, legPip, Math.abs(atr3xPips - legPip));
+                count++;
+            }
+            
+            // Compare 3×ATR against leg size (since we want ATR×3 to match leg)
+            if (atr3xPips >= legPip) {
+                double diff = atr3xPips - legPip;
+                if (diff < bestATRAboveDiff) { 
+                    bestATRAboveDiff = diff; 
+                    bestATRAboveLabel = lbl; 
+                    bestATRAbovePips = baseATRPips; // Store base ATR, not 3×ATR
+                    com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
+                        "New best above: %s (base ATR=%.2f pips, 3×ATR=%.2f pips, diff=%.2f)", 
+                        lbl, baseATRPips, atr3xPips, diff);
+                }
             } else {
-                double diff = legPipsDiff(legPip, atrPips);
-                if (diff < bestATRBelowDiff) { bestATRBelowDiff = diff; bestATRBelowLabel = lbl; bestATRBelowPips = atrPips; }
+                double diff = legPipsDiff(legPip, atr3xPips);
+                if (diff < bestATRBelowDiff) { 
+                    bestATRBelowDiff = diff; 
+                    bestATRBelowLabel = lbl; 
+                    bestATRBelowPips = baseATRPips; // Store base ATR, not 3×ATR
+                    com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
+                        "New best below: %s (base ATR=%.2f pips, 3×ATR=%.2f pips, diff=%.2f)", 
+                        lbl, baseATRPips, atr3xPips, diff);
+                }
             }
         }
     }
@@ -170,11 +207,33 @@ public final class RulerService {
     double bestATRBasePips;
     double bestATRDiff;
 
-    if (bestATRAboveLabel != null) {
-      bestATRLabel = bestATRAboveLabel; bestATRBasePips = bestATRAbovePips; bestATRDiff = bestATRAboveDiff;
+    // Choose the best match based on smallest absolute difference
+    boolean useAbove = false;
+    if (bestATRAboveLabel != null && bestATRBelowLabel != null) {
+        // Both candidates exist - choose the one with smaller diff
+        useAbove = bestATRAboveDiff <= bestATRBelowDiff;
+        com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
+            "Both above and below candidates exist. Choosing %s (above diff=%.2f, below diff=%.2f)", 
+            useAbove ? "above" : "below", bestATRAboveDiff, bestATRBelowDiff);
+    } else if (bestATRAboveLabel != null) {
+        useAbove = true;
+        com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
+            "Only above candidate exists: %s (diff=%.2f)", bestATRAboveLabel, bestATRAboveDiff);
     } else {
-      bestATRLabel = (bestATRBelowLabel != null ? bestATRBelowLabel : "-");
-      bestATRBasePips = bestATRBelowPips; bestATRDiff = bestATRBelowDiff;
+        useAbove = false;
+        com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
+            "Only below candidate exists: %s (diff=%.2f)", 
+            bestATRBelowLabel != null ? bestATRBelowLabel : "null", bestATRBelowDiff);
+    }
+
+    if (useAbove) {
+        bestATRLabel = bestATRAboveLabel; 
+        bestATRBasePips = bestATRAbovePips; 
+        bestATRDiff = bestATRAboveDiff;
+    } else {
+        bestATRLabel = (bestATRBelowLabel != null ? bestATRBelowLabel : "-");
+        bestATRBasePips = bestATRBelowPips; 
+        bestATRDiff = bestATRBelowDiff;
     }
 
     // Refine with binary search using continuous scaling
@@ -197,25 +256,36 @@ public final class RulerService {
         while (highMin - lowMin > 1 && iteration < maxIterations) {
           iteration++;
           int mid = (lowMin + highMin) / 2;
-          double atrPriceMid = com.biotak.util.Constants.ATR_FACTOR * baseAtrPrice * Math.sqrt((double) mid / baseMin);
-          double atrPipsMid;
+          
+          // Calculate base ATR (1×ATR) for this timeframe
+          double baseATRPriceMid = baseAtrPrice * Math.sqrt((double) mid / baseMin);
+          
+          // Calculate 3×ATR price (what we actually compare against leg)
+          double atr3xPriceMid = 3.0 * baseATRPriceMid;
+          
+          // Convert 3×ATR to pips
+          double atr3xPipsMid;
           if (instrument != null) {
-            atrPipsMid = Math.round(UnitConverter.priceToPip(atrPriceMid, instrument) * 100.0) / 100.0;
+            atr3xPipsMid = Math.round(UnitConverter.priceToPip(atr3xPriceMid, instrument) * 100.0) / 100.0;
           } else {
-            atrPipsMid = Math.round((atrPriceMid / tick) * 100.0) / 100.0; // fallback
+            atr3xPipsMid = Math.round((atr3xPriceMid / tick) * 100.0) / 100.0; // fallback
           }
           
-          double diffMid = Math.abs(atrPipsMid - legPip);
+          // Base ATR (1×) in pips for return value
+          double baseATRPipsMid = atr3xPipsMid / 3.0;
+          
+          double diffMid = Math.abs(atr3xPipsMid - legPip);
 
-          if (atrPipsMid >= legPip) {
+          // Compare 3×ATR against leg (since we want ATR×3 to match leg)
+          if (atr3xPipsMid >= legPip) {
             highMin = mid;
-            bestAboveDiffRef = atrPipsMid - legPip;
-            bestAbovePipsRef = atrPipsMid;
+            bestAboveDiffRef = atr3xPipsMid - legPip;
+            bestAbovePipsRef = baseATRPipsMid; // Store base ATR, not 3×ATR
             bestAboveLabelRef = compoundTimeframe(mid);
           } else {
             lowMin = mid;
-            bestBelowDiffRef = legPipsDiff(legPip, atrPipsMid);
-            bestBelowPipsRef = atrPipsMid;
+            bestBelowDiffRef = legPipsDiff(legPip, atr3xPipsMid);
+            bestBelowPipsRef = baseATRPipsMid; // Store base ATR, not 3×ATR
             bestBelowLabelRef = compoundTimeframe(mid);
           }
 
@@ -232,6 +302,13 @@ public final class RulerService {
       }
     }
 
+    // Final result logging
+    com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
+        "ATR matching complete: bestLabel=%s, bestPips=%.2f, bestDiff=%.2f (above: %s/%.2f/%.2f, below: %s/%.2f/%.2f)", 
+        bestATRLabel, bestATRBasePips, bestATRDiff,
+        bestATRAboveLabel != null ? bestATRAboveLabel : "null", bestATRAbovePips, bestATRAboveDiff,
+        bestATRBelowLabel != null ? bestATRBelowLabel : "null", bestATRBelowPips, bestATRBelowDiff);
+    
     return new ATRResult(bestATRLabel, bestATRBasePips, bestATRDiff);
   }
 

@@ -182,6 +182,61 @@ public final class FractalUtil {
 
         return out;
     }
+    
+    /**
+     * Builds a comprehensive ATR map covering all major timeframes for consistent matching
+     * regardless of current timeframe. Maps timeframe labels to 1×ATR values (not 3×ATR).
+     * 
+     * Formula: leg = ATR × 3, so ATR = leg ÷ 3
+     * We find the timeframe whose ATR is closest to (leg ÷ 3)
+     *
+     * @param basePrice Current price for calculations (like M method)
+     * @param instrument Trading instrument for proper scaling
+     * @return Map of timeframe labels to 1×ATR values in price units
+     */
+    public static Map<String, Double> buildComprehensiveATRMap(double basePrice, Instrument instrument) {
+        Map<String, Double> out = new HashMap<>();
+        double tick = instrument.getTickSize();
+        
+        // Use same method as M: calculate ATR (1×, not 3×) for each timeframe based on price and instrument
+        // This ensures timeframe-independent results like M method
+        java.util.function.BiConsumer<Integer,String> adder = (minutes, label) -> {
+            if (label == null || label.isEmpty()) return;
+            if (out.containsKey(label)) return;
+            
+            // Calculate TH for this timeframe (same as M method)
+            double perc = TimeframeUtil.getTimeframePercentageFromMinutes(minutes);
+            double thPts = com.biotak.util.OptimizedCalculations.calculateTHPoints(instrument, basePrice, perc) * tick;
+            
+            // For ATR matching: we store 1×ATR value (not 3×ATR)
+            // TH approximates ATR for this timeframe (empirical relationship)
+            double atrValue = thPts; // TH approximates 1×ATR for this timeframe
+            
+            if (atrValue > 0) {
+                out.put(label, atrValue);
+            }
+        };
+        
+        // Add all fractal timeframes for comprehensive coverage
+        TimeframeUtil.getFractalMinutesMap().forEach(adder);
+        TimeframeUtil.getPower3MinutesMap().forEach(adder);
+        
+        // Add additional common timeframes to ensure comprehensive coverage
+        Map<Integer, String> additionalTimeframes = Map.of(
+            1, "1m",      // 1 minute
+            5, "5m",      // 5 minutes  
+            15, "15m",    // 15 minutes
+            30, "30m",    // 30 minutes
+            60, "1H",     // 1 hour
+            240, "4H",    // 4 hours
+            1440, "1D",   // 1 day
+            10080, "1W"   // 1 week
+        );
+        
+        additionalTimeframes.forEach(adder);
+        
+        return out;
+    }
 
     /**
      * Builds a comprehensive step values map for any step type (E, TP, TH, SS, LS)
