@@ -76,7 +76,7 @@ public final class RulerService {
       int lowMin = TimeframeUtil.parseCompoundTimeframe(bestBelowLabel);
       int highMin = TimeframeUtil.parseCompoundTimeframe(bestAboveLabel);
       if (lowMin > 0 && highMin > lowMin) {
-        int maxIterations = 50;
+        int maxIterations = 100;
         int iteration = 0;
         double bestAboveDiffRef = bestAboveDiff;
         double bestBelowDiffRef = bestBelowDiff;
@@ -103,7 +103,7 @@ public final class RulerService {
             bestBelowPipsRef = mPips;
             bestBelowLabelRef = compoundTimeframe(mid);
           }
-          if (Math.abs(mPips - legPip) <= 0.05) break;
+          if (Math.abs(mPips - legPip) <= 0.01) break;
         }
 
         // Choose closest after refine
@@ -129,29 +129,46 @@ public final class RulerService {
       int atrStructureMin,
       double atrStructurePrice
   ) {
+    return matchATRWithInstrument(legPip, tick, atrMapLocal, atrStructureMin, atrStructurePrice, null);
+  }
+  
+  public static ATRResult matchATRWithInstrument(
+      double legPip,
+      double tick,
+      Map<String, Double> atrMapLocal,
+      int atrStructureMin,
+      double atrStructurePrice,
+      Instrument instrument
+  ) {
     double bestATRAboveDiff = Double.MAX_VALUE, bestATRBelowDiff = Double.MAX_VALUE;
     String bestATRAboveLabel = null, bestATRBelowLabel = null;
     double bestATRAbovePips = 0, bestATRBelowPips = 0;
 
-        if (atrMapLocal != null && !atrMapLocal.isEmpty()) {
-            com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATR", "ATR Map size: %d, legPip: %.1f", atrMapLocal.size(), legPip);
-            for (var entry : atrMapLocal.entrySet()) {
-                String lbl = entry.getKey();
-                double atrPrice = entry.getValue();
-                if (atrPrice <= 0) continue;
-                double atrPips = Math.round((atrPrice / tick) * 10.0) / 10.0; // preserve original mid-step behavior
-                com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATR", "ATR entry: %s -> price=%.6f, pips=%.1f (tick=%.6f)", lbl, atrPrice, atrPips, tick);
-                if (atrPips >= legPip) {
-                    double diff = atrPips - legPip;
-                    if (diff < bestATRAboveDiff) { bestATRAboveDiff = diff; bestATRAboveLabel = lbl; bestATRAbovePips = atrPips; }
-                } else {
-                    double diff = legPipsDiff(legPip, atrPips);
-                    if (diff < bestATRBelowDiff) { bestATRBelowDiff = diff; bestATRBelowLabel = lbl; bestATRBelowPips = atrPips; }
-                }
+    if (atrMapLocal != null && !atrMapLocal.isEmpty()) {
+        com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATR", "ATR Map size: %d, legPip: %.1f", atrMapLocal.size(), legPip);
+        for (var entry : atrMapLocal.entrySet()) {
+            String lbl = entry.getKey();
+            double atrPrice = entry.getValue();
+            if (atrPrice <= 0) continue;
+            double atrPips;
+            if (instrument != null) {
+                atrPips = Math.round(UnitConverter.priceToPip(atrPrice, instrument) * 100.0) / 100.0;
+            } else {
+                // Fallback to old calculation if instrument is null
+                atrPips = Math.round((atrPrice / tick) * 100.0) / 100.0;
             }
-            com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATR", "Best ATR match: above=%s (%.1f pips, diff=%.1f), below=%s (%.1f pips, diff=%.1f)", 
-                bestATRAboveLabel, bestATRAbovePips, bestATRAboveDiff, bestATRBelowLabel, bestATRBelowPips, bestATRBelowDiff);
+            com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATR", "ATR entry: %s -> price=%.6f, pips=%.2f (tick=%.6f)", lbl, atrPrice, atrPips, tick);
+            if (atrPips >= legPip) {
+                double diff = atrPips - legPip;
+                if (diff < bestATRAboveDiff) { bestATRAboveDiff = diff; bestATRAboveLabel = lbl; bestATRAbovePips = atrPips; }
+            } else {
+                double diff = legPipsDiff(legPip, atrPips);
+                if (diff < bestATRBelowDiff) { bestATRBelowDiff = diff; bestATRBelowLabel = lbl; bestATRBelowPips = atrPips; }
+            }
         }
+        com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATR", "Best ATR match: above=%s (%.2f pips, diff=%.2f), below=%s (%.2f pips, diff=%.2f)", 
+            bestATRAboveLabel, bestATRAbovePips, bestATRAboveDiff, bestATRBelowLabel, bestATRBelowPips, bestATRBelowDiff);
+    }
 
     String bestATRLabel;
     double bestATRBasePips;
@@ -165,14 +182,17 @@ public final class RulerService {
     }
 
     // Refine with binary search using continuous scaling
-    if (bestATRDiff > 0.05 && bestATRAboveLabel != null && bestATRBelowLabel != null) {
+    if (bestATRDiff > 0.01 && bestATRAboveLabel != null && bestATRBelowLabel != null) {
       int lowMin = TimeframeUtil.parseCompoundTimeframe(bestATRBelowLabel);
       int highMin = TimeframeUtil.parseCompoundTimeframe(bestATRAboveLabel);
       int baseMin = atrStructureMin;
       double baseAtrPrice = atrStructurePrice; // 1× ATR price
+      
+      com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATR", "Binary search conditions: bestATRDiff=%.2f, lowMin=%d, highMin=%d, baseMin=%d, baseAtrPrice=%.6f", bestATRDiff, lowMin, highMin, baseMin, baseAtrPrice);
 
       if (lowMin > 0 && highMin > lowMin && baseMin > 0 && baseAtrPrice > 0) {
-        int maxIterations = 50;
+        com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATR", "Starting ATR binary search refinement: %s (%.2f) vs %s (%.2f)", bestATRBelowLabel, bestATRBelowPips, bestATRAboveLabel, bestATRAbovePips);
+        int maxIterations = 100;
         int iteration = 0;
         double bestAboveDiffRef = bestATRAboveDiff;
         double bestBelowDiffRef = bestATRBelowDiff;
@@ -185,7 +205,15 @@ public final class RulerService {
           iteration++;
           int mid = (lowMin + highMin) / 2;
           double atrPriceMid = com.biotak.util.Constants.ATR_FACTOR * baseAtrPrice * Math.sqrt((double) mid / baseMin);
-          double atrPipsMid = Math.round((atrPriceMid / tick) * 10.0) / 10.0; // preserve mid-step behavior
+          double atrPipsMid;
+          if (instrument != null) {
+            atrPipsMid = Math.round(UnitConverter.priceToPip(atrPriceMid, instrument) * 100.0) / 100.0;
+          } else {
+            atrPipsMid = Math.round((atrPriceMid / tick) * 100.0) / 100.0; // fallback
+          }
+          
+          double diffMid = Math.abs(atrPipsMid - legPip);
+          com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATR", "Binary search iter %d: mid=%d, atrPipsMid=%.2f, legPip=%.2f, diff=%.2f, range=[%d,%d]", iteration, mid, atrPipsMid, legPip, diffMid, lowMin, highMin);
 
           if (atrPipsMid >= legPip) {
             highMin = mid;
@@ -199,17 +227,25 @@ public final class RulerService {
             bestBelowLabelRef = compoundTimeframe(mid);
           }
 
-          if (Math.abs(atrPipsMid - legPip) <= 0.05) break; // stop when ≤0.05 pip
+          if (diffMid <= 0.01) {
+            com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATR", "Binary search converged at iter %d with diff=%.4f", iteration, diffMid);
+            break; // stop when ≤0.01 pip
+          }
         }
+        
+        com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATR", "Binary search completed: %d iterations, final range=[%d,%d], bestAbove=%.4f, bestBelow=%.4f", iteration, lowMin, highMin, bestAboveDiffRef, bestBelowDiffRef);
 
         if (bestAboveDiffRef < bestBelowDiffRef) {
           bestATRLabel = bestAboveLabelRef; bestATRBasePips = bestAbovePipsRef; bestATRDiff = bestAboveDiffRef;
+          com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATR", "FINAL RESULT (Above): %s with %.4f pips, diff=%.4f", bestATRLabel, bestATRBasePips, bestATRDiff);
         } else {
           bestATRLabel = bestBelowLabelRef; bestATRBasePips = bestBelowPipsRef; bestATRDiff = bestBelowDiffRef;
+          com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATR", "FINAL RESULT (Below): %s with %.4f pips, diff=%.4f", bestATRLabel, bestATRBasePips, bestATRDiff);
         }
       }
     }
 
+    com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATR", "=== ATR MATCHING FINAL RESULT ===\nLabel: %s\nPips: %.4f\nDiff: %.4f\nLegPip: %.2f\n=============================", bestATRLabel, bestATRBasePips, bestATRDiff, legPip);
     return new ATRResult(bestATRLabel, bestATRBasePips, bestATRDiff);
   }
 
@@ -275,7 +311,7 @@ public final class RulerService {
       int lowMin = TimeframeUtil.parseCompoundTimeframe(bestBelowLabel);
       int highMin = TimeframeUtil.parseCompoundTimeframe(bestAboveLabel);
       if (lowMin > 0 && highMin > lowMin) {
-        int maxIterations = 50;
+        int maxIterations = 100;
         int iteration = 0;
         double bestAboveDiffRef = bestAboveDiff;
         double bestBelowDiffRef = bestBelowDiff;
@@ -305,7 +341,7 @@ public final class RulerService {
             bestBelowPipsRef = stepPips;
             bestBelowLabelRef = compoundTimeframe(mid);
           }
-          if (Math.abs(stepPips - legPip) <= 0.05) break;
+          if (Math.abs(stepPips - legPip) <= 0.01) break;
         }
 
         // Choose closest after refine
