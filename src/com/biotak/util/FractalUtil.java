@@ -183,6 +183,46 @@ public final class FractalUtil {
         return out;
     }
 
+    /**
+     * Builds a comprehensive step values map for any step type (E, TP, TH, SS, LS)
+     * used for ruler matching.
+     *
+     * @param series DataSeries for instrument information
+     * @param basePrice Current price for TH calculations
+     * @param stepType Type of step ("E", "TP", "TH", "SS", "LS")
+     * @return Map of timeframe labels to step values in price units
+     */
+    public static Map<String, Double> buildStepValuesMap(DataSeries series, double basePrice, String stepType) {
+        Map<String, Double> out = new HashMap<>();
+        Instrument inst = series.getInstrument();
+        double tick = inst.getTickSize();
+        
+        // Define the multiplier based on step type
+        double multiplier = switch (stepType.toUpperCase()) {
+            case "E" -> 0.75;      // E = 0.75 * TH
+            case "TP" -> 2.25;     // TP = 3 * E = 3 * 0.75 * TH = 2.25 * TH
+            case "TH" -> 1.0;      // TH = 1.0 * TH
+            case "SS" -> 1.5;      // SS = 1.5 * TH
+            case "LS" -> 2.0;      // LS = 2.0 * TH
+            default -> 1.0;       // Default to TH
+        };
+
+        // Iterate over both fractal maps
+        java.util.function.BiConsumer<Integer,String> adder = (min,label)->{
+            if (label==null||label.isEmpty()) return;
+            if (out.containsKey(label)) return;
+            double perc = TimeframeUtil.getTimeframePercentageFromMinutes(min);
+            double thPts = com.biotak.util.OptimizedCalculations.calculateTHPoints(inst, basePrice, perc) * tick;
+            double stepVal = multiplier * thPts;
+            if (stepVal > 0) out.put(label, stepVal);
+        };
+
+        TimeframeUtil.getFractalMinutesMap().forEach(adder);
+        TimeframeUtil.getPower3MinutesMap().forEach(adder);
+
+        return out;
+    }
+
     private static String formatMinutes(int minutes) {
         if (minutes <= 0) return String.valueOf(minutes);
         if (minutes % 60 == 0) {

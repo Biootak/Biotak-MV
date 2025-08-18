@@ -1,6 +1,7 @@
 package com.biotak.config;
 
 import com.biotak.enums.PanelPosition;
+import com.biotak.enums.RulerComparisonType;
 import com.biotak.enums.SSLSBasisType;
 import com.biotak.enums.StepCalculationMode;
 import com.biotak.enums.THStartPointType;
@@ -95,6 +96,14 @@ public class SettingsService {
         options.add(new NVP("TP Mode (3×E)", "true"));
         return options;
     }
+    
+    private static List<NVP> createRulerComparisonOptions() {
+        List<NVP> options = new ArrayList<>();
+        for (RulerComparisonType type : RulerComparisonType.values()) {
+            options.add(new NVP(type.getDisplayName(), type.name()));
+        }
+        return options;
+    }
 
     private static void setupLevelsTab(SettingsDescriptor sd, Defaults defaults) {
         var tab = sd.addTab("Levels");
@@ -183,6 +192,7 @@ public class SettingsService {
         var grp = tab.addGroup("Ruler Settings");
         grp.addRow(new BooleanDescriptor(S_SHOW_RULER, "Show Ruler", false));
         grp.addRow(new BooleanDescriptor(S_ALWAYS_SHOW_RULER_INFO, "Always Show Ruler Info", false));
+        grp.addRow(new DiscreteDescriptor(Constants.S_RULER_COMPARISON_TYPE, "Comparison Type", RulerComparisonType.M.name(), createRulerComparisonOptions()));
         grp.addRow(new PathDescriptor(S_RULER_PATH, "Ruler Line Path", X11Colors.GREEN, 1.0f, null, true, false, false));
         grp.addRow(new BooleanDescriptor(S_RULER_EXT_LEFT, "Extend Left", false));
         grp.addRow(new BooleanDescriptor(S_RULER_EXT_RIGHT, "Extend Right", false));
@@ -209,6 +219,6 @@ public class SettingsService {
     }
 
     private static void setupQuickSettingsToolbar(SettingsDescriptor sd) {
-        sd.addQuickSettings(S_START_POINT, S_STEP_MODE, S_USE_TP_FOR_E_STEP, S_SHOW_TH_LEVELS, S_SHOW_STRUCTURE_LINES, S_SHOW_TRIGGER_LEVELS, S_SHOW_HIGH_LINE, S_SHOW_LOW_LINE, S_SHOW_RULER, S_RULER_EXT_LEFT, S_RULER_EXT_RIGHT, S_SSLS_BASIS, S_LS_FIRST, S_LOCK_ALL_LEVELS, Constants.S_MSTEP_BASIS);
+        sd.addQuickSettings(S_START_POINT, S_STEP_MODE, S_USE_TP_FOR_E_STEP, S_SHOW_TH_LEVELS, S_SHOW_STRUCTURE_LINES, S_SHOW_TRIGGER_LEVELS, S_SHOW_HIGH_LINE, S_SHOW_LOW_LINE, S_SHOW_RULER, Constants.S_RULER_COMPARISON_TYPE, S_RULER_EXT_LEFT, S_RULER_EXT_RIGHT, S_SSLS_BASIS, S_LS_FIRST, S_LOCK_ALL_LEVELS, Constants.S_MSTEP_BASIS);
     }
 }

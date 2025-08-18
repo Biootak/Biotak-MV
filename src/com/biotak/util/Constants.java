@@ -41,6 +41,7 @@ public final class Constants {
     }
 
     public static final String S_MSTEP_BASIS = "mstepBasis";
+    public static final String S_RULER_COMPARISON_TYPE = "rulerComparisonType"; // Ruler step comparison mode
     public static final double TH_TO_M_FACTOR = 5.25; // Multiplier to convert TH to M distance
     public static final double SS_MULTIPLIER = 1.5;   // Short-Step is 1.5 × TH
     public static final double LS_MULTIPLIER = 2.0;   // Long-Step is 2   × TH

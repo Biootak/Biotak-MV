@@ -15,6 +15,7 @@ public final class RulerService {
 
   public static record MResult(String bestLabel, double bestBasePips, double bestDiff) {}
   public static record ATRResult(String bestLabel, double bestBasePips, double bestDiff) {}
+  public static record StepResult(String bestLabel, double bestBasePips, double bestDiff) {}
 
   public static MResult matchM(
       Instrument instrument,
@@ -132,21 +133,25 @@ public final class RulerService {
     String bestATRAboveLabel = null, bestATRBelowLabel = null;
     double bestATRAbovePips = 0, bestATRBelowPips = 0;
 
-    if (atrMapLocal != null && !atrMapLocal.isEmpty()) {
-      for (var entry : atrMapLocal.entrySet()) {
-        String lbl = entry.getKey();
-        double atrPrice = entry.getValue();
-        if (atrPrice <= 0) continue;
-        double atrPips = Math.round((atrPrice / tick) * 10.0) / 10.0; // preserve original mid-step behavior
-        if (atrPips >= legPip) {
-          double diff = atrPips - legPip;
-          if (diff < bestATRAboveDiff) { bestATRAboveDiff = diff; bestATRAboveLabel = lbl; bestATRAbovePips = atrPips; }
-        } else {
-          double diff = legPipsDiff(legPip, atrPips);
-          if (diff < bestATRBelowDiff) { bestATRBelowDiff = diff; bestATRBelowLabel = lbl; bestATRBelowPips = atrPips; }
+        if (atrMapLocal != null && !atrMapLocal.isEmpty()) {
+            com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATR", "ATR Map size: %d, legPip: %.1f", atrMapLocal.size(), legPip);
+            for (var entry : atrMapLocal.entrySet()) {
+                String lbl = entry.getKey();
+                double atrPrice = entry.getValue();
+                if (atrPrice <= 0) continue;
+                double atrPips = Math.round((atrPrice / tick) * 10.0) / 10.0; // preserve original mid-step behavior
+                com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATR", "ATR entry: %s -> price=%.6f, pips=%.1f (tick=%.6f)", lbl, atrPrice, atrPips, tick);
+                if (atrPips >= legPip) {
+                    double diff = atrPips - legPip;
+                    if (diff < bestATRAboveDiff) { bestATRAboveDiff = diff; bestATRAboveLabel = lbl; bestATRAbovePips = atrPips; }
+                } else {
+                    double diff = legPipsDiff(legPip, atrPips);
+                    if (diff < bestATRBelowDiff) { bestATRBelowDiff = diff; bestATRBelowLabel = lbl; bestATRBelowPips = atrPips; }
+                }
+            }
+            com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATR", "Best ATR match: above=%s (%.1f pips, diff=%.1f), below=%s (%.1f pips, diff=%.1f)", 
+                bestATRAboveLabel, bestATRAbovePips, bestATRAboveDiff, bestATRBelowLabel, bestATRBelowPips, bestATRBelowDiff);
         }
-      }
-    }
 
     String bestATRLabel;
     double bestATRBasePips;
@@ -206,6 +211,131 @@ public final class RulerService {
     }
 
     return new ATRResult(bestATRLabel, bestATRBasePips, bestATRDiff);
+  }
+
+  /**
+   * Generic method to match against any step value type (E, TP, TH, SS, LS)
+   */
+  public static StepResult matchStepValues(
+      Instrument instrument,
+      double legPip,
+      double tick,
+      double liveBidPrice,
+      Map<String, Double> stepValuesMap,
+      String stepTypeName
+  ) {
+    double bestAboveDiff = Double.MAX_VALUE;
+    String bestAboveLabel = null;
+    double bestAbovePips = 0;
+
+    double bestBelowDiff = Double.MAX_VALUE;
+    String bestBelowLabel = null;
+    double bestBelowPips = 0;
+
+    if (stepValuesMap != null && !stepValuesMap.isEmpty()) {
+      for (var entry : stepValuesMap.entrySet()) {
+        String label = entry.getKey();
+        double baseMove = entry.getValue();
+        if (baseMove <= 0) continue;
+        double basePip = Math.round(UnitConverter.priceToPip(baseMove, instrument) * 10.0) / 10.0;
+        if (basePip >= legPip) {
+          double diff = basePip - legPip;
+          if (diff < bestAboveDiff) {
+            bestAboveDiff = diff;
+            bestAboveLabel = label;
+            bestAbovePips = basePip;
+          }
+        } else {
+          double diff = legPip - basePip;
+          if (diff < bestBelowDiff) {
+            bestBelowDiff = diff;
+            bestBelowLabel = label;
+            bestBelowPips = basePip;
+          }
+        }
+      }
+    }
+
+    String bestLabel;
+    double bestBasePips;
+    double bestDiff;
+
+    if (bestAboveLabel != null) {
+      bestLabel = bestAboveLabel;
+      bestBasePips = bestAbovePips;
+      bestDiff = bestAboveDiff;
+    } else {
+      bestLabel = (bestBelowLabel != null ? bestBelowLabel : "-");
+      bestBasePips = bestBelowPips;
+      bestDiff = bestBelowDiff;
+    }
+
+    // Binary refine if necessary (similar to M matching logic)
+    if (bestDiff > 0.1 && bestAboveLabel != null && bestBelowLabel != null) {
+      int lowMin = TimeframeUtil.parseCompoundTimeframe(bestBelowLabel);
+      int highMin = TimeframeUtil.parseCompoundTimeframe(bestAboveLabel);
+      if (lowMin > 0 && highMin > lowMin) {
+        int maxIterations = 50;
+        int iteration = 0;
+        double bestAboveDiffRef = bestAboveDiff;
+        double bestBelowDiffRef = bestBelowDiff;
+        String bestAboveLabelRef = bestAboveLabel;
+        String bestBelowLabelRef = bestBelowLabel;
+        double bestAbovePipsRef = bestAbovePips;
+        double bestBelowPipsRef = bestBelowPips;
+
+        while (highMin - lowMin > 1 && iteration < maxIterations) {
+          iteration++;
+          int mid = (lowMin + highMin) / 2;
+          double perc = TimeframeUtil.getTimeframePercentageFromMinutes(mid);
+          double thPts = OptimizedCalculations.calculateTHPoints(instrument, liveBidPrice, perc) * tick;
+          
+          // Calculate step value based on type
+          double stepVal = calculateStepValueForTimeframe(thPts, stepTypeName);
+          double stepPips = Math.round(UnitConverter.priceToPip(stepVal, instrument) * 10.0) / 10.0;
+          
+          if (stepPips >= legPip) {
+            highMin = mid;
+            bestAboveDiffRef = stepPips - legPip;
+            bestAbovePipsRef = stepPips;
+            bestAboveLabelRef = compoundTimeframe(mid);
+          } else {
+            lowMin = mid;
+            bestBelowDiffRef = legPipsDiff(legPip, stepPips);
+            bestBelowPipsRef = stepPips;
+            bestBelowLabelRef = compoundTimeframe(mid);
+          }
+          if (Math.abs(stepPips - legPip) <= 0.05) break;
+        }
+
+        // Choose closest after refine
+        if (bestAboveDiffRef < bestBelowDiffRef) {
+          bestLabel = bestAboveLabelRef;
+          bestBasePips = bestAbovePipsRef;
+          bestDiff = bestAboveDiffRef;
+        } else {
+          bestLabel = bestBelowLabelRef;
+          bestBasePips = bestBelowPipsRef;
+          bestDiff = bestBelowDiffRef;
+        }
+      }
+    }
+
+    return new StepResult(bestLabel, bestBasePips, bestDiff);
+  }
+
+  /**
+   * Calculate step value based on TH and step type
+   */
+  private static double calculateStepValueForTimeframe(double thValue, String stepType) {
+    return switch (stepType.toUpperCase()) {
+      case "E" -> thValue * 0.75; // E = 0.75 * TH
+      case "TP" -> thValue * 0.75 * 3.0; // TP = 3 * E = 3 * 0.75 * TH
+      case "TH" -> thValue; // TH = TH
+      case "SS" -> thValue * 1.5; // SS = 1.5 * TH  
+      case "LS" -> thValue * 2.0; // LS = 2.0 * TH
+      default -> thValue; // Default to TH
+    };
   }
 
   private static double legPipsDiff(double leg, double value) { return leg - value; }

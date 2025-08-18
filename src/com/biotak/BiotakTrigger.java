@@ -115,6 +115,13 @@ public class BiotakTrigger extends Study {
     // Holds 3×ATR values (price) for ruler comparison - optimized with size limit
     private final java.util.Map<String, Double> fullATRValues = new java.util.concurrent.ConcurrentHashMap<>(16, 0.75f, 1);
     
+    // New step value maps for different step types
+    private final java.util.Map<String, Double> fullEValues = new java.util.concurrent.ConcurrentHashMap<>(16, 0.75f, 1);
+    private final java.util.Map<String, Double> fullTPValues = new java.util.concurrent.ConcurrentHashMap<>(16, 0.75f, 1);
+    private final java.util.Map<String, Double> fullTHValues = new java.util.concurrent.ConcurrentHashMap<>(16, 0.75f, 1);
+    private final java.util.Map<String, Double> fullSSValues = new java.util.concurrent.ConcurrentHashMap<>(16, 0.75f, 1);
+    private final java.util.Map<String, Double> fullLSValues = new java.util.concurrent.ConcurrentHashMap<>(16, 0.75f, 1);
+    
     // Maximum size limits to prevent OutOfMemoryError
     private static final int MAX_MAP_SIZE = 1000;
     private static final int CLEANUP_THRESHOLD = 800; // Start cleanup when reaching this size
@@ -680,6 +687,23 @@ public class BiotakTrigger extends Study {
             this.fullATRValues.putAll(com.biotak.util.FractalUtil.buildATR3Map(structureMin, atrValue));
             this.atrStructureMin   = structureMin;
             this.atrStructurePrice = atrValue;
+            
+            // --------------------- BUILD ALL STEP VALUE MAPS ---------------------
+            // Build maps for E, TP, TH, SS, LS step values
+            this.fullEValues.clear();
+            this.fullEValues.putAll(com.biotak.util.FractalUtil.buildStepValuesMap(series, thBasePrice, "E"));
+            
+            this.fullTPValues.clear();
+            this.fullTPValues.putAll(com.biotak.util.FractalUtil.buildStepValuesMap(series, thBasePrice, "TP"));
+            
+            this.fullTHValues.clear();
+            this.fullTHValues.putAll(com.biotak.util.FractalUtil.buildStepValuesMap(series, thBasePrice, "TH"));
+            
+            this.fullSSValues.clear();
+            this.fullSSValues.putAll(com.biotak.util.FractalUtil.buildStepValuesMap(series, thBasePrice, "SS"));
+            
+            this.fullLSValues.clear();
+            this.fullLSValues.putAll(com.biotak.util.FractalUtil.buildStepValuesMap(series, thBasePrice, "LS"));
 
             long now = System.currentTimeMillis();
             if (now - lastCalcTableLogTime > LOG_INTERVAL_MS) {
@@ -1146,6 +1170,10 @@ public class BiotakTrigger extends Study {
         private String cachedBestLabel = null;
         private double cachedBestBasePips = 0;
         private double cachedBestDiff = 0;
+        // Cache for ATR values (always calculated)
+        private String cachedBestATRLabel = null;
+        private double cachedBestATRBasePips = 0;
+        private double cachedBestATRDiff = 0;
 
         @Override
         public boolean contains(double x, double y, DrawContext ctx) {
@@ -1252,63 +1280,165 @@ public class BiotakTrigger extends Study {
                 double pips = com.biotak.util.UnitConverter.priceToPip(Math.abs(priceDiff), series.getInstrument());
                 String pipsStr = String.format("Pips: %.1f", pips);
                 String barsStr = String.format("Bars: %.0f", bars);
-                 // --- Determine best matching MOVE across ALL timeframes ---
+                 // --- Determine best matching MOVE based on selected comparison type ---
                  double tick = series.getInstrument().getTickSize();
                  // Round leg length to 0.1-pip precision for matching
                  double legPip = Math.round(pips * 10.0) / 10.0;
 
-                 // متغیرهای نتیجه برای M مقایسه
+                 // Get the selected ruler comparison type
+                 com.biotak.enums.RulerComparisonType comparisonType = com.biotak.util.EnumUtil.safeEnum(
+                     com.biotak.enums.RulerComparisonType.class,
+                     getSettings().getString(Constants.S_RULER_COMPARISON_TYPE, com.biotak.enums.RulerComparisonType.M.name()),
+                     com.biotak.enums.RulerComparisonType.M
+                 );
+
+                 // Variables for primary comparison result
                  String bestLabel = "-";
                  double bestBasePips = 0;
                  double bestDiff = Double.MAX_VALUE;
+                 
+                 // Variables for ATR comparison (always calculated)
+                 String bestATRLabel = "-";
+                 double bestATRBasePips = 0;
+                 double bestATRDiff = Double.MAX_VALUE;
 
-                 // اگر لگ تغییر نکرده است از نتایج قبلی استفاده کن
+                 // Cache check - only use if leg hasn't changed significantly
                  if (!Double.isNaN(cachedLegPip) && Math.abs(cachedLegPip - legPip) < 0.05) {
                      bestLabel      = cachedBestLabel;
                      bestBasePips   = cachedBestBasePips;
                      bestDiff       = cachedBestDiff;
+                     // Use cached ATR values as well
+                     bestATRLabel   = cachedBestATRLabel;
+                     bestATRBasePips = cachedBestATRBasePips;
+                     bestATRDiff    = cachedBestATRDiff;
                  } else {
-                     var mRes = com.biotak.core.RulerService.matchM(
-                         series.getInstrument(),
-                         legPip,
-                         tick,
-                         series.getBidClose(series.size()-1),
-                         BiotakTrigger.this.fullMValues,
-                         TH_TO_M_FACTOR
+                     // Always calculate ATR comparison
+                     var atrRes = com.biotak.core.RulerService.matchATR(
+                         legPip, tick,
+                         BiotakTrigger.this.fullATRValues,
+                         BiotakTrigger.this.atrStructureMin,
+                         BiotakTrigger.this.atrStructurePrice
                      );
-                     bestLabel = mRes.bestLabel();
-                     bestBasePips = mRes.bestBasePips();
-                     bestDiff = mRes.bestDiff();
-
-                     // ذخیره در کش
-                     cachedLegPip      = legPip;
-                     cachedBestLabel   = bestLabel;
-                     cachedBestBasePips= bestBasePips;
-                     cachedBestDiff    = bestDiff;
+                     bestATRLabel = atrRes.bestLabel();
+                     bestATRBasePips = atrRes.bestBasePips();
+                     bestATRDiff = atrRes.bestDiff();
+                     
+                     // Perform comparison based on selected type
+                     switch (comparisonType) {
+                         case M -> {
+                             var mRes = com.biotak.core.RulerService.matchM(
+                                 series.getInstrument(), legPip, tick,
+                                 series.getBidClose(series.size()-1),
+                                 BiotakTrigger.this.fullMValues, TH_TO_M_FACTOR
+                             );
+                             bestLabel = mRes.bestLabel();
+                             bestBasePips = mRes.bestBasePips();
+                             bestDiff = mRes.bestDiff();
+                         }
+                         case E -> {
+                             var eRes = com.biotak.core.RulerService.matchStepValues(
+                                 series.getInstrument(), legPip, tick,
+                                 series.getBidClose(series.size()-1),
+                                 BiotakTrigger.this.fullEValues, "E"
+                             );
+                             bestLabel = eRes.bestLabel();
+                             bestBasePips = eRes.bestBasePips();
+                             bestDiff = eRes.bestDiff();
+                         }
+                         case TP -> {
+                             var tpRes = com.biotak.core.RulerService.matchStepValues(
+                                 series.getInstrument(), legPip, tick,
+                                 series.getBidClose(series.size()-1),
+                                 BiotakTrigger.this.fullTPValues, "TP"
+                             );
+                             bestLabel = tpRes.bestLabel();
+                             bestBasePips = tpRes.bestBasePips();
+                             bestDiff = tpRes.bestDiff();
+                         }
+                         case TH -> {
+                             var thRes = com.biotak.core.RulerService.matchStepValues(
+                                 series.getInstrument(), legPip, tick,
+                                 series.getBidClose(series.size()-1),
+                                 BiotakTrigger.this.fullTHValues, "TH"
+                             );
+                             bestLabel = thRes.bestLabel();
+                             bestBasePips = thRes.bestBasePips();
+                             bestDiff = thRes.bestDiff();
+                         }
+                         case SS -> {
+                             var ssRes = com.biotak.core.RulerService.matchStepValues(
+                                 series.getInstrument(), legPip, tick,
+                                 series.getBidClose(series.size()-1),
+                                 BiotakTrigger.this.fullSSValues, "SS"
+                             );
+                             bestLabel = ssRes.bestLabel();
+                             bestBasePips = ssRes.bestBasePips();
+                             bestDiff = ssRes.bestDiff();
+                         }
+                         case LS -> {
+                             var lsRes = com.biotak.core.RulerService.matchStepValues(
+                                 series.getInstrument(), legPip, tick,
+                                 series.getBidClose(series.size()-1),
+                                 BiotakTrigger.this.fullLSValues, "LS"
+                             );
+                             bestLabel = lsRes.bestLabel();
+                             bestBasePips = lsRes.bestBasePips();
+                             bestDiff = lsRes.bestDiff();
+                         }
+                        case ATR -> {
+                            var atrResMain = com.biotak.core.RulerService.matchATR(
+                                legPip, tick,
+                                BiotakTrigger.this.fullATRValues,
+                                BiotakTrigger.this.atrStructureMin,
+                                BiotakTrigger.this.atrStructurePrice
+                            );
+                            bestLabel = atrResMain.bestLabel();
+                            bestBasePips = atrResMain.bestBasePips();
+                            bestDiff = atrResMain.bestDiff();
+                        }
+                        case BOTH -> {
+                            // Legacy mode - show both M and ATR results
+                            var mRes = com.biotak.core.RulerService.matchM(
+                                series.getInstrument(), legPip, tick,
+                                series.getBidClose(series.size()-1),
+                                BiotakTrigger.this.fullMValues, TH_TO_M_FACTOR
+                            );
+                            bestLabel = mRes.bestLabel();
+                            bestBasePips = mRes.bestBasePips();
+                            bestDiff = mRes.bestDiff();
+                            
+                            var atrResBoth = com.biotak.core.RulerService.matchATR(
+                                legPip, tick,
+                                BiotakTrigger.this.fullATRValues,
+                                BiotakTrigger.this.atrStructureMin,
+                                BiotakTrigger.this.atrStructurePrice
+                            );
+                            bestATRLabel = atrResBoth.bestLabel();
+                            bestATRBasePips = atrResBoth.bestBasePips();
+                            bestATRDiff = atrResBoth.bestDiff();
+                        }
+                     }
+                     
+                     // Cache the results (including ATR)
+                     cachedLegPip         = legPip;
+                     cachedBestLabel      = bestLabel;
+                     cachedBestBasePips   = bestBasePips;
+                     cachedBestDiff       = bestDiff;
+                     cachedBestATRLabel   = bestATRLabel;
+                     cachedBestATRBasePips= bestATRBasePips;
+                     cachedBestATRDiff    = bestATRDiff;
                  }
 
-                 // ======================  ATR (3×) COMPARISON  ======================
-                 // --------- ATR×3 مقایسه با دقت بالا ---------
-                 double bestATRAboveDiff = Double.MAX_VALUE, bestATRBelowDiff = Double.MAX_VALUE;
-                 String bestATRAboveLabel = null, bestATRBelowLabel = null;
-                 double bestATRAbovePips = 0, bestATRBelowPips = 0;
-
-                 var atrRes = com.biotak.core.RulerService.matchATR(
-                     legPip,
-                     tick,
-                     BiotakTrigger.this.fullATRValues,
-                     BiotakTrigger.this.atrStructureMin,
-                     BiotakTrigger.this.atrStructurePrice
-                 );
-
-                 String bestATRLabel = atrRes.bestLabel();
-                 double bestATRBasePips = atrRes.bestBasePips();
-                 double bestATRDiff = atrRes.bestDiff();
-
+                 // Log comparison results
                  long nowInfo = System.currentTimeMillis();
                  if (nowInfo - lastRulerInfoLog > RULER_LOG_INTERVAL_MS) {
-                     AdvancedLogger.info("BiotakTrigger", "RulerFigure.draw", "[Ruler] Leg=%.1f pips, M→%s (%.1f pips, d=%.1f) | ATR×3→%s (%.1f pips, d=%.1f)",
-                         legPip, bestLabel, bestBasePips, bestDiff, bestATRLabel, bestATRBasePips, bestATRDiff);
+                     if (comparisonType == com.biotak.enums.RulerComparisonType.BOTH) {
+                         AdvancedLogger.info("BiotakTrigger", "RulerFigure.draw", "[Ruler] Leg=%.1f pips, M→%s (%.1f pips, d=%.1f) | ATR×3→%s (%.1f pips, d=%.1f)",
+                             legPip, bestLabel, bestBasePips, bestDiff, bestATRLabel, bestATRBasePips, bestATRDiff);
+                     } else {
+                         AdvancedLogger.info("BiotakTrigger", "RulerFigure.draw", "[Ruler] Leg=%.1f pips, %s→%s (%.1f pips, d=%.1f)",
+                             legPip, comparisonType.name(), bestLabel, bestBasePips, bestDiff);
+                     }
                      lastRulerInfoLog = nowInfo;
                  }
 
@@ -1328,8 +1458,24 @@ public class BiotakTrigger extends Study {
                      matchMinutes = "-";
                  }
 
-                 String matchStr1 = "M : " + bestLabel;
-                 String matchStr2 = (totalMinutes > 0 ? matchMinutes : "-");
+                 // Build display strings based on comparison type
+                 String matchStr1, matchStr2;
+                 
+                 // Always show ATR information
+                 String atrStr1 = String.format("ATR×3 : %s", bestATRLabel);
+                 int atrMinVal = TimeframeUtil.parseCompoundTimeframe(bestATRLabel);
+                 String atrStr2 = (atrMinVal > 0 ? atrMinVal + "m" : "-");
+                 
+                 if (comparisonType == com.biotak.enums.RulerComparisonType.BOTH) {
+                     // Legacy mode - show both M and ATR
+                     matchStr1 = "M : " + bestLabel;
+                     matchStr2 = (totalMinutes > 0 ? matchMinutes : "-");
+                 } else {
+                     // Single comparison mode - show selected type
+                     matchStr1 = comparisonType.name() + " : " + bestLabel;
+                     matchStr2 = (totalMinutes > 0 ? matchMinutes : "-");
+                 }
+                 
                 long hours = (diffMs / (1000 * 60 * 60)) % 24;
                 long days = (diffMs / (1000 * 60 * 60 * 24)) % 30; // Approximate months
                 long months = (diffMs / (1000L * 60 * 60 * 24 * 30)) % 12;
@@ -1341,9 +1487,6 @@ public class BiotakTrigger extends Study {
                 if (hours > 0) timeSB.append(hours).append("h ");
                 if (minutes > 0 || timeSB.length() == 6) timeSB.append(minutes).append("min");
                 String timeStr = timeSB.toString();
-                 String atrStr1 = String.format("ATR×3 : %s", bestATRLabel);
-                 int atrMinVal = TimeframeUtil.parseCompoundTimeframe(bestATRLabel);
-                 String atrStr2 = (atrMinVal > 0 ? atrMinVal + "m" : "-");
                  
                 // Add Time Pattern and Time Trigger based on the best M match (not current timeframe)
                 // First, determine the base timeframe from the best M match
@@ -1380,22 +1523,35 @@ public class BiotakTrigger extends Study {
 
                 // Arrange lines in requested grouped order with separators
                 String sep = "-------------";
-                String[] lines = {
-                    pipsStr,
-                    sep,
-                    matchStr1,
-                    matchStr2,
-                    nearestStr1,
-                    sep,
-                    timePatternStr1,
-                    timeTriggerStr1,
-                    sep,
-                    barsStr,
-                    timeStr,
-                    sep,
-                    atrStr1,
-                    atrStr2
-                };
+                java.util.List<String> linesList = new java.util.ArrayList<>();
+                
+                // Always include basic measurements
+                linesList.add(pipsStr);
+                linesList.add(sep);
+                
+                // Primary comparison result
+                linesList.add(matchStr1);
+                linesList.add(matchStr2);
+                linesList.add(nearestStr1);
+                linesList.add(sep);
+                
+                // Time pattern and trigger info
+                linesList.add(timePatternStr1);
+                linesList.add(timeTriggerStr1);
+                linesList.add(sep);
+                
+                // Time and bar information
+                linesList.add(barsStr);
+                linesList.add(timeStr);
+                
+                // Always add ATR lines (separate from primary comparison)
+                if (atrStr1 != null && atrStr2 != null) {
+                    linesList.add(sep);
+                    linesList.add(atrStr1);
+                    linesList.add(atrStr2);
+                }
+                
+                String[] lines = linesList.toArray(new String[0]);
 
                 // Only show ruler info if ruler is selected or "Always Show Ruler Info" is enabled
                 boolean showInfo = ctx.isSelected() || getSettings().getBoolean(S_ALWAYS_SHOW_RULER_INFO, false);
