@@ -303,7 +303,45 @@ public class BiotakTrigger extends Study {
             }
         }
         
+        // Check if click is on ruler figure or custom price line - suppress to prevent settings dialog
+        if (ctx != null) {
+            // Check if click is on ruler figure
+            if (rulerFigure != null && rulerFigure.contains(loc.x, loc.y, ctx)) {
+                return false; // Suppress click to prevent settings dialog
+            }
+            
+            // Check if click is on custom price line
+            if (customPriceLine != null && customPriceLine.contains(loc.x, loc.y, ctx)) {
+                return false; // Suppress click to prevent settings dialog
+            }
+        }
+        
         return true; // allow default behavior for clicks outside panel
+    }
+    
+    /**
+     * Override onDoubleClick to suppress settings dialog for ruler and custom price line
+     */
+    @Override
+    public boolean onDoubleClick(Point loc, int flags) {
+        DrawContext ctx = this.lastDrawContext;
+        
+        if (ctx != null) {
+            // Check if double-click is on ruler figure - suppress settings dialog
+            if (rulerFigure != null && rulerFigure.contains(loc.x, loc.y, ctx)) {
+                AdvancedLogger.debug("BiotakTrigger", "onDoubleClick", "Double-click on ruler figure suppressed");
+                return false; // Suppress double-click to prevent settings dialog
+            }
+            
+            // Check if double-click is on custom price line - suppress settings dialog
+            if (customPriceLine != null && customPriceLine.contains(loc.x, loc.y, ctx)) {
+                AdvancedLogger.debug("BiotakTrigger", "onDoubleClick", "Double-click on custom price line suppressed");
+                return false; // Suppress double-click to prevent settings dialog
+            }
+        }
+        
+        // For any other location, allow default behavior (which may open settings dialog)
+        return super.onDoubleClick(loc, flags);
     }
     
     /**
