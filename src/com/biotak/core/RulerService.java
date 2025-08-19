@@ -565,6 +565,7 @@ public final class RulerService {
       case "E" -> thValue * 0.75; // E = 0.75 * TH
       case "TP" -> thValue * 0.75 * 3.0; // TP = 3 * E = 3 * 0.75 * TH
       case "TH" -> thValue; // TH = TH
+      case "TH3" -> thValue * 3.0; // TH3 = TH * 3
       case "SS" -> thValue * 1.5; // SS = 1.5 * TH  
       case "LS" -> thValue * 2.0; // LS = 2.0 * TH
       default -> thValue; // Default to TH

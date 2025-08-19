@@ -17,6 +17,9 @@ public enum RulerComparisonType {
     /** Match against TH (Threshold) values */
     TH("TH Values", "Matches against TH (Threshold) step values"),
     
+    /** Match against TH×3 (Threshold × 3) values */
+    TH3("TH×3 Values", "Matches against TH×3 (Threshold × 3) step values"),
+    
     /** Match against SS (Short Step) values */
     SS("SS Values", "Matches against SS (Short Step) values"),
     

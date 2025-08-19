@@ -1449,6 +1449,16 @@ public class BiotakTrigger extends Study {
                              bestBasePips = thRes.bestBasePips();
                              bestDiff = thRes.bestDiff();
                          }
+                         case TH3 -> {
+                             var th3Res = com.biotak.core.RulerService.matchStepValues(
+                                 series.getInstrument(), legPip, tick,
+                                 series.getBidClose(series.size()-1),
+                                 BiotakTrigger.this.fullTHValues, "TH3"
+                             );
+                             bestLabel = th3Res.bestLabel();
+                             bestBasePips = th3Res.bestBasePips();
+                             bestDiff = th3Res.bestDiff();
+                         }
                          case SS -> {
                              var ssRes = com.biotak.core.RulerService.matchStepValues(
                                  series.getInstrument(), legPip, tick,
