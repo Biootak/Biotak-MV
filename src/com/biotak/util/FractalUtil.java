@@ -278,6 +278,89 @@ public final class FractalUtil {
         return out;
     }
 
+    /**
+     * Calculates the exact timeframe (in minutes) that produces the given ATR value
+     * using the inverse of the fractal ATR relationship.
+     * 
+     * Formula: ATR scales as √(timeframe/baseTimeframe)
+     * So: targetTimeframe = baseTimeframe × (targetATR/baseATR)²
+     * 
+     * @param targetATRValue The desired 1×ATR value in price units
+     * @param basePrice Current price for calculations
+     * @param instrument Trading instrument for proper scaling
+     * @return Exact timeframe in minutes that produces the target ATR
+     */
+    public static double calculateExactTimeframeForATR(double targetATRValue, double basePrice, Instrument instrument) {
+        double tick = instrument.getTickSize();
+        
+        // Use 1-minute as base reference timeframe
+        double baseTimeframeMinutes = 1.0;
+        double basePercentage = TimeframeUtil.getTimeframePercentageFromMinutes(1);
+        double baseTHPoints = com.biotak.util.OptimizedCalculations.calculateTHPoints(instrument, basePrice, basePercentage) * tick;
+        double baseATR = baseTHPoints; // TH approximates 1×ATR for this timeframe
+        
+        // Calculate exact timeframe using inverse square-root relationship
+        // targetATR = baseATR × √(targetTimeframe/baseTimeframe)
+        // So: targetTimeframe = baseTimeframe × (targetATR/baseATR)²
+        double ratio = targetATRValue / baseATR;
+        double exactTimeframeMinutes = baseTimeframeMinutes * ratio * ratio;
+        
+        return Math.max(1.0, exactTimeframeMinutes); // Ensure minimum 1 minute
+    }
+    
+    /**
+     * Formats exact timeframe minutes into a readable timeframe label.
+     * Shows precise decimal minutes for accurate display.
+     * 
+     * @param exactMinutes Exact timeframe in minutes (can be fractional)
+     * @return Formatted timeframe label (e.g., "1H23.5m", "87.2m", "2H15.8m")
+     */
+    public static String formatExactTimeframe(double exactMinutes) {
+        if (exactMinutes <= 0) return "1m";
+        
+        return formatPreciseMinutes(exactMinutes);
+    }
+    
+    /**
+     * Formats precise decimal minutes into a readable timeframe label.
+     * Shows decimal precision for better accuracy.
+     * 
+     * @param exactMinutes Exact timeframe in minutes (can be fractional)
+     * @return Formatted label with precision (e.g., "16.1m", "1H23.5m", "87.2m")
+     */
+    private static String formatPreciseMinutes(double exactMinutes) {
+        if (exactMinutes <= 0) return "1m";
+        
+        // For timeframes less than 60 minutes, show decimal minutes
+        if (exactMinutes < 60) {
+            // Round to 1 decimal place for readability
+            double rounded = Math.round(exactMinutes * 10.0) / 10.0;
+            // If it rounds to a whole number, don't show .0
+            if (rounded == Math.floor(rounded)) {
+                return String.format("%.0fm", rounded);
+            } else {
+                return String.format("%.1fm", rounded);
+            }
+        }
+        
+        // For timeframes >= 60 minutes, show hours and decimal minutes
+        int hours = (int) (exactMinutes / 60);
+        double remainingMinutes = exactMinutes - (hours * 60);
+        
+        if (remainingMinutes < 0.1) {
+            // Very close to exact hour
+            return hours + "H";
+        } else {
+            // Round remaining minutes to 1 decimal place
+            double roundedMinutes = Math.round(remainingMinutes * 10.0) / 10.0;
+            if (roundedMinutes == Math.floor(roundedMinutes)) {
+                return String.format("%dH%.0fm", hours, roundedMinutes);
+            } else {
+                return String.format("%dH%.1fm", hours, roundedMinutes);
+            }
+        }
+    }
+    
     private static String formatMinutes(int minutes) {
         if (minutes <= 0) return String.valueOf(minutes);
         if (minutes % 60 == 0) {
@@ -291,4 +374,4 @@ public final class FractalUtil {
         }
         return minutes + "m";
     }
-} 
+}

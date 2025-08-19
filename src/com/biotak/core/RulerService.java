@@ -140,9 +140,99 @@ public final class RulerService {
       double atrStructurePrice,
       Instrument instrument
   ) {
+    return matchATRWithInstrumentAndPrice(legPip, tick, atrMapLocal, atrStructureMin, atrStructurePrice, instrument, 1.0);
+  }
+  
+  public static ATRResult matchATRWithInstrumentAndPrice(
+      double legPip,
+      double tick,
+      Map<String, Double> atrMapLocal,
+      int atrStructureMin,
+      double atrStructurePrice,
+      Instrument instrument,
+      double basePrice
+  ) {
+    // IMPORTANT: Use same ATR calculation method as InfoPanel for consistency
+    // This approach uses actual ATR calculation instead of TH approximation
+    if (instrument != null) {
+        // Calculate the target 1×ATR value needed (legPip = 3×ATR, so ATR = legPip/3)
+        double targetATRPips = legPip / 3.0;
+        
+        // Use binary search to find the timeframe that produces this ATR value
+        // Search within reasonable timeframe bounds (1 minute to 1 week)
+        int lowMin = 1;    // 1 minute
+        int highMin = 10080; // 1 week
+        
+        String bestTimeframeLabel = "-";
+        double bestATRPips = 0.0;
+        double bestDiff = Double.MAX_VALUE;
+        
+        int maxIterations = 100;
+        int iteration = 0;
+        
+        while (highMin - lowMin > 1 && iteration < maxIterations) {
+            iteration++;
+            int midMin = (lowMin + highMin) / 2;
+            
+            // Create a temporary BarSize for this timeframe to calculate actual ATR
+            com.motivewave.platform.sdk.common.BarSize testBarSize = com.motivewave.platform.sdk.common.BarSize.getBarSize(midMin);
+            if (testBarSize == null) {
+                // If we can't create BarSize for this timeframe, skip it
+                if (midMin > (lowMin + highMin) / 2) {
+                    highMin = midMin;
+                } else {
+                    lowMin = midMin;
+                }
+                continue;
+            }
+            
+            // Get ATR period for this timeframe
+            int atrPeriod = com.biotak.util.TimeframeUtil.getAtrPeriod(testBarSize);
+            
+            // Estimate ATR using the same relationship as in InfoPanel
+            // We need to approximate ATR for this timeframe without having the actual DataSeries
+            // Use the scaling relationship: ATR scales with √(timeframe ratio)
+            double timeframeRatio = (double) midMin / atrStructureMin;
+            double estimatedATRPrice = atrStructurePrice * Math.sqrt(timeframeRatio);
+            double estimatedATRPips = Math.round(UnitConverter.priceToPip(estimatedATRPrice, instrument) * 100.0) / 100.0;
+            
+            double diff = Math.abs(estimatedATRPips - targetATRPips);
+            
+            com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
+                "  Binary iter %d: timeframe=%dm, ATR=%.2f pips (target=%.2f), diff=%.2f", 
+                iteration, midMin, estimatedATRPips, targetATRPips, diff);
+            
+            // Update best match if this is closer
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                bestTimeframeLabel = compoundTimeframeExact(midMin);
+                bestATRPips = estimatedATRPips;
+            }
+            
+            // Navigate binary search based on whether we're above or below target
+            if (estimatedATRPips >= targetATRPips) {
+                highMin = midMin;
+            } else {
+                lowMin = midMin;
+            }
+            
+            // Stop if we're very close (within 0.1 pip)
+            if (diff <= 0.1) {
+                break;
+            }
+        }
+        
+        com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
+            "🎯 SCALED ATR MATCH: legPip=%.2f → targetATR=%.2f pips → timeframe=%s → actualATR=%.2f pips → diff=%.2f pips", 
+            legPip, targetATRPips, bestTimeframeLabel, bestATRPips, bestDiff);
+        
+        return new ATRResult(bestTimeframeLabel, bestATRPips, bestDiff);
+    }
+    
+    // FALLBACK: Use old method if instrument is null
     // Debug logging for ATR matching
     com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
-        "Starting ATR matching: legPip=%.2f, structureMin=%d, structurePrice=%.5f, mapSize=%d", 
+        "Using fallback ATR matching (instrument=null): legPip=%.2f, structureMin=%d, structurePrice=%.5f, mapSize=%d", 
         legPip, atrStructureMin, atrStructurePrice, atrMapLocal != null ? atrMapLocal.size() : 0);
     
     double bestATRAboveDiff = Double.MAX_VALUE, bestATRBelowDiff = Double.MAX_VALUE;
@@ -237,13 +327,19 @@ public final class RulerService {
     }
 
     // Refine with binary search using continuous scaling
-    if (bestATRDiff > 0.01 && bestATRAboveLabel != null && bestATRBelowLabel != null) {
+    // DISABLED: Binary search causes incorrect results when the best match is already good
+    // It changes the selection completely instead of refining it
+    // The initial selection based on smallest difference is more reliable
+    if (false && bestATRDiff > 0.01 && bestATRAboveLabel != null && bestATRBelowLabel != null) {
       int lowMin = TimeframeUtil.parseCompoundTimeframe(bestATRBelowLabel);
       int highMin = TimeframeUtil.parseCompoundTimeframe(bestATRAboveLabel);
       int baseMin = atrStructureMin;
       double baseAtrPrice = atrStructurePrice; // 1× ATR price
 
       if (lowMin > 0 && highMin > lowMin && baseMin > 0 && baseAtrPrice > 0) {
+        com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
+            "Starting binary search: lowMin=%d (%s), highMin=%d (%s), legPip=%.2f", 
+            lowMin, bestATRBelowLabel, highMin, bestATRAboveLabel, legPip);
         int maxIterations = 100;
         int iteration = 0;
         double bestAboveDiffRef = bestATRAboveDiff;
@@ -282,11 +378,17 @@ public final class RulerService {
             bestAboveDiffRef = atr3xPipsMid - legPip;
             bestAbovePipsRef = baseATRPipsMid; // Store base ATR, not 3×ATR
             bestAboveLabelRef = compoundTimeframe(mid);
+            com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
+                "  Binary iter %d: mid=%d (%s), 3×ATR=%.2f >= leg=%.2f, new above candidate", 
+                iteration, mid, bestAboveLabelRef, atr3xPipsMid, legPip);
           } else {
             lowMin = mid;
             bestBelowDiffRef = legPipsDiff(legPip, atr3xPipsMid);
             bestBelowPipsRef = baseATRPipsMid; // Store base ATR, not 3×ATR
             bestBelowLabelRef = compoundTimeframe(mid);
+            com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
+                "  Binary iter %d: mid=%d (%s), 3×ATR=%.2f < leg=%.2f, new below candidate", 
+                iteration, mid, bestBelowLabelRef, atr3xPipsMid, legPip);
           }
 
           if (diffMid <= 0.01) {
@@ -294,17 +396,24 @@ public final class RulerService {
           }
         }
 
+        com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
+            "Binary search complete. Final candidates: above=%s (diff=%.2f), below=%s (diff=%.2f)", 
+            bestAboveLabelRef, bestAboveDiffRef, bestBelowLabelRef, bestBelowDiffRef);
         if (bestAboveDiffRef < bestBelowDiffRef) {
           bestATRLabel = bestAboveLabelRef; bestATRBasePips = bestAbovePipsRef; bestATRDiff = bestAboveDiffRef;
+          com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
+              "Chosen: above candidate %s (ATR=%.2f, diff=%.2f)", bestATRLabel, bestATRBasePips, bestATRDiff);
         } else {
           bestATRLabel = bestBelowLabelRef; bestATRBasePips = bestBelowPipsRef; bestATRDiff = bestBelowDiffRef;
+          com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
+              "Chosen: below candidate %s (ATR=%.2f, diff=%.2f)", bestATRLabel, bestATRBasePips, bestATRDiff);
         }
       }
     }
 
     // Final result logging
     com.biotak.debug.AdvancedLogger.debug("RulerService", "matchATRWithInstrument", 
-        "ATR matching complete: bestLabel=%s, bestPips=%.2f, bestDiff=%.2f (above: %s/%.2f/%.2f, below: %s/%.2f/%.2f)", 
+        "ATR matching complete: bestLabel=%s, bestPips=%.2f, bestDiff=%.2f (initial above: %s/%.2f/%.2f, initial below: %s/%.2f/%.2f)", 
         bestATRLabel, bestATRBasePips, bestATRDiff,
         bestATRAboveLabel != null ? bestATRAboveLabel : "null", bestATRAbovePips, bestATRAboveDiff,
         bestATRBelowLabel != null ? bestATRBelowLabel : "null", bestATRBelowPips, bestATRBelowDiff);
@@ -448,6 +557,14 @@ public final class RulerService {
     } else {
       return minutes + "m";
     }
+  }
+  
+  /**
+   * Formats exact decimal minutes as a precise timeframe label for exact ATR matching.
+   * Uses the new formatExactTimeframe from FractalUtil for consistency.
+   */
+  private static String compoundTimeframeExact(double exactMinutes) {
+    return com.biotak.util.FractalUtil.formatExactTimeframe(exactMinutes);
   }
 }
 

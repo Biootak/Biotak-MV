@@ -1377,14 +1377,19 @@ public class BiotakTrigger extends Study {
                  } else {
                          // Calculate fresh ATR comparison using comprehensive map (no persistent cache needed)
                          {
-                     // Calculate ATR comparison first (always needed for display)
-                     var atrRes = com.biotak.core.RulerService.matchATRWithInstrument(
-                         legPip, tick,
-                         BiotakTrigger.this.fullATRValues,
-                         BiotakTrigger.this.atrStructureMin,
-                         BiotakTrigger.this.atrStructurePrice,
-                         series.getInstrument()
-                     );
+                    // Calculate ATR comparison first (always needed for display)
+                    com.biotak.debug.AdvancedLogger.debug("BiotakTrigger", "RulerFigure.draw", 
+                        "🎯 Starting ATR calculation: legPip=%.2f, instrument=%s", 
+                        legPip, series.getInstrument().getSymbol());
+                    
+                    var atrRes = com.biotak.core.RulerService.matchATRWithInstrumentAndPrice(
+                        legPip, tick,
+                        BiotakTrigger.this.fullATRValues,
+                        BiotakTrigger.this.atrStructureMin,
+                        BiotakTrigger.this.atrStructurePrice,
+                        series.getInstrument(),
+                        series.getBidClose(series.size()-1)
+                    );
                      bestATRLabel = atrRes.bestLabel();
                      bestATRBasePips = atrRes.bestBasePips();
                      bestATRDiff = atrRes.bestDiff();
