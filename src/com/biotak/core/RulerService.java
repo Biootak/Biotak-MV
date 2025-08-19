@@ -71,52 +71,66 @@ public final class RulerService {
       bestDiff = bestBelowDiff;
     }
 
-    // Binary refine if necessary (mirror original logic)
-    if (bestDiff > 0.1 && bestAboveLabel != null && bestBelowLabel != null) {
-      int lowMin = TimeframeUtil.parseCompoundTimeframe(bestBelowLabel);
-      int highMin = TimeframeUtil.parseCompoundTimeframe(bestAboveLabel);
-      if (lowMin > 0 && highMin > lowMin) {
+    // PRECISE BINARY SEARCH: Use direct calculation for exact timeframe matching
+    // This provides much better accuracy than discrete timeframe matching
+    if (instrument != null) {
+        // Search within reasonable timeframe bounds (1 minute to 1 week)
+        int lowMin = 1;    // 1 minute
+        int highMin = 10080; // 1 week
+        
+        String preciseTimeframeLabel = "-";
+        double preciseMPips = 0.0;
+        double preciseDiff = Double.MAX_VALUE;
+        
         int maxIterations = 100;
         int iteration = 0;
-        double bestAboveDiffRef = bestAboveDiff;
-        double bestBelowDiffRef = bestBelowDiff;
-        String bestAboveLabelRef = bestAboveLabel;
-        String bestBelowLabelRef = bestBelowLabel;
-        double bestAbovePipsRef = bestAbovePips;
-        double bestBelowPipsRef = bestBelowPips;
-
+        
         while (highMin - lowMin > 1 && iteration < maxIterations) {
-          iteration++;
-          int mid = (lowMin + highMin) / 2;
-          double perc = TimeframeUtil.getTimeframePercentageFromMinutes(mid);
-          double thPts = OptimizedCalculations.calculateTHPoints(instrument, liveBidPrice, perc) * tick;
-          double mVal = thToMFactor * thPts;
-          double mPips = Math.round(UnitConverter.priceToPip(mVal, instrument) * 10.0) / 10.0;
-          if (mPips >= legPip) {
-            highMin = mid;
-            bestAboveDiffRef = mPips - legPip;
-            bestAbovePipsRef = mPips;
-            bestAboveLabelRef = compoundTimeframe(mid);
-          } else {
-            lowMin = mid;
-            bestBelowDiffRef = legPipsDiff(legPip, mPips);
-            bestBelowPipsRef = mPips;
-            bestBelowLabelRef = compoundTimeframe(mid);
-          }
-          if (Math.abs(mPips - legPip) <= 0.01) break;
+            iteration++;
+            int midMin = (lowMin + highMin) / 2;
+            
+            // Calculate M value for this exact timeframe
+            double perc = TimeframeUtil.getTimeframePercentageFromMinutes(midMin);
+            double thPts = OptimizedCalculations.calculateTHPoints(instrument, liveBidPrice, perc) * tick;
+            double mVal = thToMFactor * thPts;
+            double mPips = Math.round(UnitConverter.priceToPip(mVal, instrument) * 100.0) / 100.0;
+            
+            double diff = Math.abs(mPips - legPip);
+            
+            com.biotak.debug.AdvancedLogger.debug("RulerService", "matchM", 
+                "  Binary iter %d: timeframe=%dm, M=%.2f pips (target=%.2f), diff=%.2f", 
+                iteration, midMin, mPips, legPip, diff);
+            
+            // Update best match if this is closer
+            if (diff < preciseDiff) {
+                preciseDiff = diff;
+                preciseTimeframeLabel = compoundTimeframeExact(midMin);
+                preciseMPips = mPips;
+            }
+            
+            // Navigate binary search
+            if (mPips >= legPip) {
+                highMin = midMin;
+            } else {
+                lowMin = midMin;
+            }
+            
+            // Stop if we're very close (within 0.1 pip)
+            if (diff <= 0.1) {
+                break;
+            }
         }
-
-        // Choose closest after refine
-        if (bestAboveDiffRef < bestBelowDiffRef) {
-          bestLabel = bestAboveLabelRef;
-          bestBasePips = bestAbovePipsRef;
-          bestDiff = bestAboveDiffRef;
-        } else {
-          bestLabel = bestBelowLabelRef;
-          bestBasePips = bestBelowPipsRef;
-          bestDiff = bestBelowDiffRef;
+        
+        // Use precise result if it's better than discrete matching
+        if (preciseDiff < bestDiff) {
+            bestLabel = preciseTimeframeLabel;
+            bestBasePips = preciseMPips;
+            bestDiff = preciseDiff;
+            
+            com.biotak.debug.AdvancedLogger.debug("RulerService", "matchM", 
+                "🎯 PRECISE M MATCH: legPip=%.2f → M=%.2f pips → timeframe=%s → diff=%.2f pips", 
+                legPip, bestBasePips, bestLabel, bestDiff);
         }
-      }
     }
 
     return new MResult(bestLabel, bestBasePips, bestDiff);
@@ -478,55 +492,66 @@ public final class RulerService {
       bestDiff = bestBelowDiff;
     }
 
-    // Binary refine if necessary (similar to M matching logic)
-    if (bestDiff > 0.1 && bestAboveLabel != null && bestBelowLabel != null) {
-      int lowMin = TimeframeUtil.parseCompoundTimeframe(bestBelowLabel);
-      int highMin = TimeframeUtil.parseCompoundTimeframe(bestAboveLabel);
-      if (lowMin > 0 && highMin > lowMin) {
+    // PRECISE BINARY SEARCH: Use direct calculation for exact timeframe matching
+    // This provides much better accuracy than discrete timeframe matching
+    if (instrument != null) {
+        // Search within reasonable timeframe bounds (1 minute to 1 week)
+        int lowMin = 1;    // 1 minute
+        int highMin = 10080; // 1 week
+        
+        String preciseTimeframeLabel = "-";
+        double preciseStepPips = 0.0;
+        double preciseDiff = Double.MAX_VALUE;
+        
         int maxIterations = 100;
         int iteration = 0;
-        double bestAboveDiffRef = bestAboveDiff;
-        double bestBelowDiffRef = bestBelowDiff;
-        String bestAboveLabelRef = bestAboveLabel;
-        String bestBelowLabelRef = bestBelowLabel;
-        double bestAbovePipsRef = bestAbovePips;
-        double bestBelowPipsRef = bestBelowPips;
-
+        
         while (highMin - lowMin > 1 && iteration < maxIterations) {
-          iteration++;
-          int mid = (lowMin + highMin) / 2;
-          double perc = TimeframeUtil.getTimeframePercentageFromMinutes(mid);
-          double thPts = OptimizedCalculations.calculateTHPoints(instrument, liveBidPrice, perc) * tick;
-          
-          // Calculate step value based on type
-          double stepVal = calculateStepValueForTimeframe(thPts, stepTypeName);
-          double stepPips = Math.round(UnitConverter.priceToPip(stepVal, instrument) * 10.0) / 10.0;
-          
-          if (stepPips >= legPip) {
-            highMin = mid;
-            bestAboveDiffRef = stepPips - legPip;
-            bestAbovePipsRef = stepPips;
-            bestAboveLabelRef = compoundTimeframe(mid);
-          } else {
-            lowMin = mid;
-            bestBelowDiffRef = legPipsDiff(legPip, stepPips);
-            bestBelowPipsRef = stepPips;
-            bestBelowLabelRef = compoundTimeframe(mid);
-          }
-          if (Math.abs(stepPips - legPip) <= 0.01) break;
+            iteration++;
+            int midMin = (lowMin + highMin) / 2;
+            
+            // Calculate step value for this exact timeframe
+            double perc = TimeframeUtil.getTimeframePercentageFromMinutes(midMin);
+            double thPts = OptimizedCalculations.calculateTHPoints(instrument, liveBidPrice, perc) * tick;
+            double stepVal = calculateStepValueForTimeframe(thPts, stepTypeName);
+            double stepPips = Math.round(UnitConverter.priceToPip(stepVal, instrument) * 100.0) / 100.0;
+            
+            double diff = Math.abs(stepPips - legPip);
+            
+            com.biotak.debug.AdvancedLogger.debug("RulerService", "matchStepValues", 
+                "  Binary iter %d: timeframe=%dm, %s=%.2f pips (target=%.2f), diff=%.2f", 
+                iteration, midMin, stepTypeName, stepPips, legPip, diff);
+            
+            // Update best match if this is closer
+            if (diff < preciseDiff) {
+                preciseDiff = diff;
+                preciseTimeframeLabel = compoundTimeframeExact(midMin);
+                preciseStepPips = stepPips;
+            }
+            
+            // Navigate binary search
+            if (stepPips >= legPip) {
+                highMin = midMin;
+            } else {
+                lowMin = midMin;
+            }
+            
+            // Stop if we're very close (within 0.1 pip)
+            if (diff <= 0.1) {
+                break;
+            }
         }
-
-        // Choose closest after refine
-        if (bestAboveDiffRef < bestBelowDiffRef) {
-          bestLabel = bestAboveLabelRef;
-          bestBasePips = bestAbovePipsRef;
-          bestDiff = bestAboveDiffRef;
-        } else {
-          bestLabel = bestBelowLabelRef;
-          bestBasePips = bestBelowPipsRef;
-          bestDiff = bestBelowDiffRef;
+        
+        // Use precise result if it's better than discrete matching
+        if (preciseDiff < bestDiff) {
+            bestLabel = preciseTimeframeLabel;
+            bestBasePips = preciseStepPips;
+            bestDiff = preciseDiff;
+            
+            com.biotak.debug.AdvancedLogger.debug("RulerService", "matchStepValues", 
+                "🎯 PRECISE %s MATCH: legPip=%.2f → %s=%.2f pips → timeframe=%s → diff=%.2f pips", 
+                stepTypeName, legPip, stepTypeName, bestBasePips, bestLabel, bestDiff);
         }
-      }
     }
 
     return new StepResult(bestLabel, bestBasePips, bestDiff);
