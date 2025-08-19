@@ -401,9 +401,22 @@ public class BiotakTrigger extends Study {
         
         // هماهنگ‌سازی سطح لاگ‌گذاری در اولین کندل / Sync logger level once per session only
         if (index == 0 && !logLevelInitialized) {
+            String settingsLogLevel = getSettings().getString(S_LOG_LEVEL, AdvancedLogger.LogLevel.INFO.name());
             AdvancedLogger.LogLevel lvl = com.biotak.util.EnumUtil.safeEnum(AdvancedLogger.LogLevel.class,
-                    getSettings().getString(S_LOG_LEVEL, AdvancedLogger.LogLevel.INFO.name()), AdvancedLogger.LogLevel.INFO);
-            AdvancedLogger.setLogLevel(lvl);
+                    settingsLogLevel, AdvancedLogger.LogLevel.INFO);
+            
+            // Log what we're doing for debugging
+            AdvancedLogger.info("BiotakTrigger", "calculate", "Settings log level: %s, Parsed level: %s", settingsLogLevel, lvl.getName());
+            
+            // Only set if different from current configuration level
+            AdvancedLogger.LogLevel configLevel = LoggingConfiguration.getCurrentLogLevel();
+            if (lvl != configLevel) {
+                AdvancedLogger.info("BiotakTrigger", "calculate", "Overriding config level %s with settings level %s", configLevel.getName(), lvl.getName());
+                AdvancedLogger.setLogLevel(lvl);
+            } else {
+                AdvancedLogger.info("BiotakTrigger", "calculate", "Using config log level: %s", configLevel.getName());
+            }
+            
             logLevelInitialized = true; // Prevent further calls
         }
 
