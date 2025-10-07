@@ -107,6 +107,14 @@ public class BiotakTrigger extends Study {
     // Stores locked values for all level types when lock all option is enabled
     private double lockedCustomPrice = Double.NaN;
     
+    // Track if custom price is being dragged (to show/hide label)
+    private boolean isCustomPriceDragging = false;
+    
+    // Timer mechanism to detect drag end
+    private long lastDragTime = 0;
+    private static final long DRAG_END_TIMEOUT_MS = 300; // Hide label after 300ms of no movement
+    private java.util.Timer dragEndTimer = null;
+    
     // Human-readable labels for each TH value (Current, Pattern, Trigger, Structure, Higher)
     private String[] tfLabels = {"", "", "", "", ""};
 
@@ -621,14 +629,26 @@ public class BiotakTrigger extends Study {
                     customPricePoint = null;
                 }
 
-                // --- numeric label ---
-                if (customPriceLabel == null) customPriceLabel = new PriceLabel();
-                String priceText = series.getInstrument().format(finalCustomPrice);
-                customPriceLabel.setData(anchorTime, finalCustomPrice, priceText);
-                addFigure(customPriceLabel);
+                // --- numeric label (shown only during drag) ---
+                if (isCustomPriceDragging) {
+                    if (customPriceLabel == null) customPriceLabel = new PriceLabel();
+                    String priceText = series.getInstrument().format(finalCustomPrice);
+                    customPriceLabel.setData(anchorTime, finalCustomPrice, priceText);
+                    addFigure(customPriceLabel);
+                } else {
+                    // Clear label object to ensure it's not re-added
+                    customPriceLabel = null;
+                }
+                // When not dragging, label is hidden to keep chart clean
 
                 // Draw/update custom price horizontal line
                 PathInfo customPricePath = getSettings().getPath(S_CUSTOM_PRICE_PATH);
+                // Force dashed pattern to be larger and more visible
+                if (customPricePath != null) {
+                    customPricePath = new PathInfo(customPricePath.getColor(), 
+                                                    customPricePath.getWidth(), 
+                                                    new float[]{5f, 3f});
+                }
                 customPriceLine = new CustomPriceLine(startTime, endTime, finalCustomPrice, customPricePath);
                 addFigure(customPriceLine);
                 
@@ -1019,16 +1039,23 @@ public class BiotakTrigger extends Study {
         this.lastDrawContext = ctx;
         
         if (rp == rulerStartResize) {
+            AdvancedLogger.info("BiotakTrigger", "onEndResize", "🔵 RULER START END");
             getSettings().setString(S_RULER_START, rp.getValue() + "|" + rp.getTime());
         } else if (rp == rulerEndResize) {
+            AdvancedLogger.info("BiotakTrigger", "onEndResize", "🔵 RULER END END");
             getSettings().setString(S_RULER_END, rp.getValue() + "|" + rp.getTime());
         } else if (rp == customPricePoint) {
+            AdvancedLogger.info("BiotakTrigger", "onEndResize", "🟡 CUSTOM PRICE POINT END - setting flag=FALSE");
             // Check if levels are locked before allowing price change
             boolean lockAllLevels = getSettings().getBoolean(S_LOCK_ALL_LEVELS, false);
             if (lockAllLevels) {
                 // Don't allow custom price changes when locked
                 return;
             }
+            
+            // Mark dragging as finished - label will be hidden on next redraw
+            isCustomPriceDragging = false;
+            AdvancedLogger.debug("BiotakTrigger", "onEndResize", "Drag ENDED - flag set to FALSE (customPricePoint)");
             
             // Persist the new custom price and sync the line
             double newPrice = rp.getValue();
@@ -1039,14 +1066,20 @@ public class BiotakTrigger extends Study {
                 customPriceLine.updatePrice(newPrice);
             }
             
+            AdvancedLogger.info("BiotakTrigger", "onEndResize", "🟡 Calling drawFigures() with flag=FALSE...");
             drawFigures(ctx.getDataContext().getDataSeries().size() - 1, ctx.getDataContext());
+            AdvancedLogger.info("BiotakTrigger", "onEndResize", "🟡 CUSTOM PRICE POINT - DONE");
         } else if (customPriceLine != null && rp == customPriceLine.getLineResizePoint()) {
+            AdvancedLogger.info("BiotakTrigger", "onEndResize", "🟠 LINE RESIZE POINT END - setting flag=FALSE");
             // Check if levels are locked before allowing line drag
             boolean lockAllLevels = getSettings().getBoolean(S_LOCK_ALL_LEVELS, false);
             if (lockAllLevels) {
                 // Don't allow custom price line changes when locked
                 return;
             }
+            
+            // Mark dragging as finished - label will be hidden on next redraw
+            isCustomPriceDragging = false;
             
             // User finished dragging the invisible line ResizePoint (line itself)
             double newPrice = rp.getValue();
@@ -1076,8 +1109,8 @@ public class BiotakTrigger extends Study {
             
             // Trigger full redraw with all levels recalculation
             drawFigures(ctx.getDataContext().getDataSeries().size() - 1, ctx.getDataContext());
-            // Logger.debug("onEndResize: drawFigures() called for full recalculation");
-            // Logger.debug("=== LINE DRAG END EVENT END ===");
+        } else {
+            AdvancedLogger.warn("BiotakTrigger", "onEndResize", "⚠️ UNKNOWN RESIZE POINT END: %s", rp.getClass().getSimpleName());
         }
     }
 
@@ -1092,6 +1125,8 @@ public class BiotakTrigger extends Study {
         
         if (rp == rulerStartResize || rp == rulerEndResize) {
             rulerFigure.layout(ctx);
+            // Don't trigger label display for ruler drag
+            return;
         }
         else if (rp == customPricePoint) {
             // Check if levels are locked before allowing drag
@@ -1101,12 +1136,20 @@ public class BiotakTrigger extends Study {
                 return;
             }
             
+            // Mark that we're currently dragging - label will be shown
+            isCustomPriceDragging = true;
+            
+            // Update last drag time and schedule drag end detection
+            lastDragTime = System.currentTimeMillis();
+            scheduleDragEndDetection(ctx);
+            
             // As the user drags the golden point, update the custom price and sync the line
             // Logger.debug("onResize: customPricePoint drag detected, newPrice = " + rp.getValue());
             double newPrice = rp.getValue();
             // Duplicate call filter to minimize lag
             double lastPointPrice = getSettings().getDouble("LAST_POINT_PRICE", Double.NaN);
             if (!Double.isNaN(lastPointPrice) && Math.abs(lastPointPrice - newPrice) < 0.1) {
+                // Don't reset flag if movement is too small (prevents flicker)
                 return;
             }
             getSettings().setDouble("LAST_POINT_PRICE", newPrice);
@@ -1117,7 +1160,9 @@ public class BiotakTrigger extends Study {
                 customPriceLine.updatePrice(newPrice);
             }
             
-            // Light update during drag - full recalculation happens in onEndResize
+            // Redraw to show label during drag (only when actually moving)
+            drawFigures(ctx.getDataContext().getDataSeries().size() - 1, ctx.getDataContext());
+            return; // Exit after handling customPricePoint
         }
         else if (rp instanceof LineResizePoint) {
             // Check if levels are locked before allowing line drag
@@ -1126,6 +1171,13 @@ public class BiotakTrigger extends Study {
                 // Don't allow custom price line changes when locked
                 return;
             }
+            
+            // Mark that we're currently dragging - label will be shown
+            isCustomPriceDragging = true;
+            
+            // Update last drag time and schedule drag end detection
+            lastDragTime = System.currentTimeMillis();
+            scheduleDragEndDetection(ctx);
             
             // User is dragging the invisible line ResizePoint (dragging the line itself)
             double newPrice = rp.getValue();
@@ -1156,7 +1208,46 @@ public class BiotakTrigger extends Study {
             if (lastDrawContext != null) {
                 customPriceLine.layout(lastDrawContext);
             }
+            
+            // Redraw to show label during drag
+            drawFigures(ctx.getDataContext().getDataSeries().size() - 1, ctx.getDataContext());
+            return; // Exit after handling LineResizePoint
         }
+        
+        // If we reach here, it's an unknown resize point
+        AdvancedLogger.warn("BiotakTrigger", "onResize", "⚠️ UNKNOWN RESIZE POINT: %s", rp.getClass().getSimpleName());
+    }
+    
+    /**
+     * Schedule a timer to detect drag end when no more onResize events are fired
+     */
+    private void scheduleDragEndDetection(DrawContext ctx) {
+        // Cancel any existing timer
+        if (dragEndTimer != null) {
+            dragEndTimer.cancel();
+        }
+        
+        // Create new timer to check for drag end
+        dragEndTimer = new java.util.Timer("DragEndDetector", true);
+        dragEndTimer.schedule(new java.util.TimerTask() {
+            @Override
+            public void run() {
+                long now = System.currentTimeMillis();
+                long timeSinceLastDrag = now - lastDragTime;
+                
+                // If no drag event for DRAG_END_TIMEOUT_MS, consider drag ended
+                if (timeSinceLastDrag >= DRAG_END_TIMEOUT_MS && isCustomPriceDragging) {
+                    isCustomPriceDragging = false;
+                    customPriceLabel = null; // Clear label object
+                    
+                    // Trigger a redraw to hide the label
+                    if (ctx != null && ctx.getDataContext() != null) {
+                        int lastIdx = ctx.getDataContext().getDataSeries().size() - 1;
+                        drawFigures(lastIdx, ctx.getDataContext());
+                    }
+                }
+            }
+        }, DRAG_END_TIMEOUT_MS + 50); // Check slightly after timeout
     }
 
 

@@ -151,7 +151,7 @@ public class SettingsService {
         var tab = sd.addTab("Appearance");
         var grp = tab.addGroup("General Style");
         grp.addRow(new FontDescriptor(S_FONT, "Label Font", defaults.getFont()));
-        grp.addRow(new PathDescriptor(S_CUSTOM_PRICE_PATH, "Custom Price Line", X11Colors.GOLD, 2.0f, new float[]{2f,2f}, true, false, false));
+        grp.addRow(new PathDescriptor(S_CUSTOM_PRICE_PATH, "Custom Price Line", X11Colors.GOLD, 2.0f, new float[]{5f, 3f}, true, false, false));
         
         grp = tab.addGroup("Historical Lines");
         grp.addRow(new BooleanDescriptor(S_SHOW_HIGH_LINE, "Show High Line", true));
