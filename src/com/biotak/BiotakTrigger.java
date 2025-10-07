@@ -151,6 +151,9 @@ public class BiotakTrigger extends Study {
     private RulerFigure rulerFigure; // Custom inner class
     
     private RulerState rulerState = RulerState.INACTIVE;
+    
+    // Hit test manager for proper UI element priority handling
+    private final com.biotak.ui.HitTestManager hitTestManager = new com.biotak.ui.HitTestManager();
 
     // Add fields at class level
     // (Leg Ruler fields removed)
@@ -500,6 +503,7 @@ public class BiotakTrigger extends Study {
     private void drawFigures(int index, DataContext ctx) {
         // Remove debug logging for better performance
         clearFigures(); // Clear all previously drawn figures for a clean redraw.
+        hitTestManager.clearElements(); // Clear hit test manager
 
         DataSeries series = ctx.getDataSeries();
         Settings settings = getSettings();
@@ -647,7 +651,8 @@ public class BiotakTrigger extends Study {
                 if (customPricePath != null) {
                     customPricePath = new PathInfo(customPricePath.getColor(), 
                                                     customPricePath.getWidth(), 
-                                                    new float[]{5f, 3f});
+                                                    new float[]{5f, 3f}, 
+                                                    true, true, true, 1, null);
                 }
                 customPriceLine = new CustomPriceLine(startTime, endTime, finalCustomPrice, customPricePath);
                 addFigure(customPriceLine);
@@ -656,6 +661,11 @@ public class BiotakTrigger extends Study {
                 if (!lockAllLevels) {
                     ResizePoint lineResizePoint = customPriceLine.getLineResizePoint();
                     if (lineResizePoint != null) {
+                        // Set HitTestManager reference if it's a LineResizePoint
+                        if (lineResizePoint instanceof LineResizePoint) {
+                            ((LineResizePoint) lineResizePoint).setHitTestManager(hitTestManager);
+                            hitTestManager.registerElement((LineResizePoint) lineResizePoint);
+                        }
                         addFigure(lineResizePoint);
                     }
                 }
@@ -1022,6 +1032,9 @@ public class BiotakTrigger extends Study {
                     AdvancedLogger.debug("BiotakTrigger", "drawFigures", "Created new RulerFigure instance");
                 }
                 
+                // Register RulerFigure with HitTestManager
+                hitTestManager.registerElement(rulerFigure);
+                
                 // Add the ruler to the chart
                 addFigure(rulerFigure);
                 addFigure(rulerStartResize);
@@ -1329,7 +1342,7 @@ public class BiotakTrigger extends Study {
 
 
     // This class is responsible for the rendering of the ruler line
-    private class RulerFigure extends Figure {
+    private class RulerFigure extends Figure implements com.biotak.ui.HitTestManager.HitTestable {
         private java.awt.geom.Line2D line;
 
         // --- cache to reduce CPU ---
@@ -1344,7 +1357,24 @@ public class BiotakTrigger extends Study {
 
         @Override
         public boolean contains(double x, double y, DrawContext ctx) {
+            // Use HitTestManager to determine if this element should respond
+            return containsPoint(x, y, ctx) && hitTestManager.shouldElementRespond(this, x, y, ctx);
+        }
+        
+        // HitTestable interface implementation
+        @Override
+        public boolean containsPoint(double x, double y, DrawContext ctx) {
             return line != null && Util.distanceFromLine(x, y, line) < 6;
+        }
+        
+        @Override
+        public com.biotak.ui.HitTestManager.HitTestPriority getHitTestPriority() {
+            return com.biotak.ui.HitTestManager.HitTestPriority.HIGHEST; // Ruler has highest priority
+        }
+        
+        @Override
+        public String getElementName() {
+            return "RulerFigure";
         }
 
         @Override

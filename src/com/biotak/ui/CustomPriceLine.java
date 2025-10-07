@@ -58,7 +58,9 @@ public class CustomPriceLine extends Figure {
     
     @Override
     public boolean contains(double x, double y, DrawContext ctx) {
-        return line != null && Util.distanceFromLine(x, y, line) < 6;
+        // Disable selection to prevent interference with Ruler or other figures
+        // The line is still draggable via its LineResizePoint
+        return false;
     }
     
     @Override
