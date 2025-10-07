@@ -110,7 +110,7 @@ public class SettingsService {
         var grp = tab.addGroup("TH Levels");
         grp.addRow(new BooleanDescriptor(S_SHOW_TH_LEVELS, "Show TH Levels", true));
         grp.addRow(new BooleanDescriptor(S_SHOW_TRIGGER_LEVELS, "Show Trigger Levels", false));
-        grp.addRow(new PathDescriptor(S_TRIGGER_PATH, "Trigger Line", X11Colors.DIM_GRAY, 1.0f, new float[] {3f, 3f} , true, false, false));
+        grp.addRow(new PathDescriptor(S_TRIGGER_PATH, "Trigger Line", new java.awt.Color(128, 128, 128, 80), 0.8f, new float[] {2f, 4f} , true, false, false));
         grp.addRow(new IntegerDescriptor(S_MAX_LEVELS_ABOVE, "Max Levels Above", 100, 1, 10000, 1));
         grp.addRow(new IntegerDescriptor(S_MAX_LEVELS_BELOW, "Max Levels Below", 100, 1, 10000, 1));
         
@@ -162,15 +162,15 @@ public class SettingsService {
         grp = tab.addGroup("Structure Lines");
         grp.addRow(new BooleanDescriptor(S_SHOW_STRUCTURE_LINES, "Show Structure Lines", true));
         grp.addRow(new BooleanDescriptor(S_SHOW_STRUCT_L1, "Show Level 1", true));
-        grp.addRow(new PathDescriptor(S_STRUCT_L1_PATH, "Level 1 Path", defaults.getBlue(), 2.0f, null, true, false, false));
+        grp.addRow(new PathDescriptor(S_STRUCT_L1_PATH, "Level 1 Path", new java.awt.Color(0, 0, 255, 70), 1.2f, new float[]{2f, 4f}, true, false, false));
         grp.addRow(new BooleanDescriptor(S_SHOW_STRUCT_L2, "Show Level 2", true));
-        grp.addRow(new PathDescriptor(S_STRUCT_L2_PATH, "Level 2 Path", X11Colors.DARK_GREEN, 2.0f, null, true, false, false));
+        grp.addRow(new PathDescriptor(S_STRUCT_L2_PATH, "Level 2 Path", new java.awt.Color(0, 100, 0, 70), 1.2f, new float[]{2f, 4f}, true, false, false));
         grp.addRow(new BooleanDescriptor(S_SHOW_STRUCT_L3, "Show Level 3", true));
-        grp.addRow(new PathDescriptor(S_STRUCT_L3_PATH, "Level 3 Path", X11Colors.DARK_VIOLET, 2.0f, null, true, false, false));
+        grp.addRow(new PathDescriptor(S_STRUCT_L3_PATH, "Level 3 Path", new java.awt.Color(148, 0, 211, 70), 1.2f, new float[]{2f, 4f}, true, false, false));
         grp.addRow(new BooleanDescriptor(S_SHOW_STRUCT_L4, "Show Level 4", true));
-        grp.addRow(new PathDescriptor(S_STRUCT_L4_PATH, "Level 4 Path", X11Colors.DARK_ORANGE, 2.0f, null, true, false, false));
+        grp.addRow(new PathDescriptor(S_STRUCT_L4_PATH, "Level 4 Path", new java.awt.Color(255, 140, 0, 70), 1.2f, new float[]{2f, 4f}, true, false, false));
         grp.addRow(new BooleanDescriptor(S_SHOW_STRUCT_L5, "Show Level 5", true));
-        grp.addRow(new PathDescriptor(S_STRUCT_L5_PATH, "Level 5 Path", X11Colors.MAROON, 2.0f, null, true, false, false));
+        grp.addRow(new PathDescriptor(S_STRUCT_L5_PATH, "Level 5 Path", new java.awt.Color(128, 0, 0, 70), 1.2f, new float[]{2f, 4f}, true, false, false));
 
         grp = tab.addGroup("Info Panel");
         grp.addRow(new BooleanDescriptor(S_SHOW_INFO_PANEL, "Show Info Panel", true));
