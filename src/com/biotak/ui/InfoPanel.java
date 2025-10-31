@@ -20,8 +20,9 @@ import com.biotak.util.StringUtils;
 
 /**
  * Custom figure class to draw the information panel.
+ * Implements HitTestable to integrate with priority-based hit testing system.
  */
-public class InfoPanel extends Figure {
+public class InfoPanel extends Figure implements HitTestManager.HitTestable {
     // General Info
     private String timeframe;
     private com.motivewave.platform.sdk.common.Instrument instrument;
@@ -665,6 +666,24 @@ int lineSpacing = 10; // Increased spacing for improved readability
     
     @Override
     public boolean contains(double x, double y, DrawContext ctx) { 
+        // InfoPanel has highest priority - always respond if point is inside bounds
+        return containsPoint(x, y, ctx);
+    }
+    
+    // HitTestable interface implementation
+    @Override
+    public boolean containsPoint(double x, double y, DrawContext ctx) {
         return panelBounds != null && panelBounds.contains(x, y);
+    }
+    
+    @Override
+    public HitTestManager.HitTestPriority getHitTestPriority() {
+        // InfoPanel has HIGHEST priority to ensure buttons always work
+        return HitTestManager.HitTestPriority.HIGHEST;
+    }
+    
+    @Override
+    public String getElementName() {
+        return "InfoPanel";
     }
 }

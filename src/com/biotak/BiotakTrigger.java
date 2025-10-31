@@ -1346,6 +1346,11 @@ public class BiotakTrigger extends Study {
             // For now, recreate the panel to ensure theme changes are applied
             this.infoPanel = new InfoPanel(timeframe, thValue, instrument, contentFont, titleFont, panelPos, marginX, marginY, transparency, shortStep, longStep, atrValue, liveAtrValue, isSecondsBased, isMinimized);
         }
+        
+        // FIXED: Register InfoPanel with HitTestManager for highest priority hit detection
+        // This ensures panel buttons work even if other elements overlap
+        hitTestManager.registerElement(this.infoPanel);
+        
         // Set initial ruler state
         boolean showRuler = getSettings().getBoolean(S_SHOW_RULER, false);
         infoPanel.setRulerActive(showRuler);
