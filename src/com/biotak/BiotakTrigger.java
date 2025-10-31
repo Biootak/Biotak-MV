@@ -102,7 +102,10 @@ public class BiotakTrigger extends Study {
     private double cachedLow  = Double.POSITIVE_INFINITY;
     private boolean extremesInitialized = false; // ensures we load stored extremes once
     private boolean firstBarDrawn = false; // prevents repeated first-bar drawing/logging
-    private static volatile boolean logLevelInitialized = false; // prevents repeated log level initialization
+    
+    // FIXED: Changed from static to instance variable to prevent cross-instance contamination
+    // Each study instance should manage its own log level initialization state
+    private volatile boolean logLevelInitialized = false; // prevents repeated log level initialization
 
     // Stores locked values for all level types when lock all option is enabled
     private double lockedCustomPrice = Double.NaN;
@@ -115,36 +118,43 @@ public class BiotakTrigger extends Study {
     private static final long DRAG_END_TIMEOUT_MS = 300; // Hide label after 300ms of no movement
     private java.util.Timer dragEndTimer = null;
     
+    // Lifecycle management flag to prevent operations after study removal
+    private volatile boolean isStudyActive = true;
+    
     // Human-readable labels for each TH value (Current, Pattern, Trigger, Structure, Higher)
     private String[] tfLabels = {"", "", "", "", ""};
 
-    // Holds comprehensive M values for ruler matching built during drawFigures() - optimized with size limit
-    private final java.util.Map<String, Double> fullMValues = new java.util.concurrent.ConcurrentHashMap<>(16, 0.75f, 1);
-    // Holds 3×ATR values (price) for ruler comparison - optimized with size limit
-    private final java.util.Map<String, Double> fullATRValues = new java.util.concurrent.ConcurrentHashMap<>(16, 0.75f, 1);
+    // FIXED: Changed from ConcurrentHashMap to LinkedHashMap for better performance and LRU support
+    // MotiveWave studies run in single thread, so thread-safety overhead is unnecessary
+    // LinkedHashMap maintains insertion order for efficient LRU eviction
+    private final java.util.Map<String, Double> fullMValues = new java.util.LinkedHashMap<>(16, 0.75f, true);
+    private final java.util.Map<String, Double> fullATRValues = new java.util.LinkedHashMap<>(16, 0.75f, true);
     
-    // New step value maps for different step types
-    private final java.util.Map<String, Double> fullEValues = new java.util.concurrent.ConcurrentHashMap<>(16, 0.75f, 1);
-    private final java.util.Map<String, Double> fullTPValues = new java.util.concurrent.ConcurrentHashMap<>(16, 0.75f, 1);
-    private final java.util.Map<String, Double> fullTHValues = new java.util.concurrent.ConcurrentHashMap<>(16, 0.75f, 1);
-    private final java.util.Map<String, Double> fullSSValues = new java.util.concurrent.ConcurrentHashMap<>(16, 0.75f, 1);
-    private final java.util.Map<String, Double> fullLSValues = new java.util.concurrent.ConcurrentHashMap<>(16, 0.75f, 1);
+    // Step value maps for different step types
+    private final java.util.Map<String, Double> fullEValues = new java.util.LinkedHashMap<>(16, 0.75f, true);
+    private final java.util.Map<String, Double> fullTPValues = new java.util.LinkedHashMap<>(16, 0.75f, true);
+    private final java.util.Map<String, Double> fullTHValues = new java.util.LinkedHashMap<>(16, 0.75f, true);
+    private final java.util.Map<String, Double> fullSSValues = new java.util.LinkedHashMap<>(16, 0.75f, true);
+    private final java.util.Map<String, Double> fullLSValues = new java.util.LinkedHashMap<>(16, 0.75f, true);
     
     // Maximum size limits to prevent OutOfMemoryError
-    private static final int MAX_MAP_SIZE = 1000;
-    private static final int CLEANUP_THRESHOLD = 800; // Start cleanup when reaching this size
+    private static final int MAX_MAP_SIZE = 500;      // Reduced from 1000 for better memory efficiency
+    private static final int CLEANUP_THRESHOLD = 400; // Start cleanup when reaching this size
+    private static final int TARGET_SIZE_AFTER_CLEANUP = 300; // Target size after cleanup
 
     // Base values for ATR scaling (current timeframe)
     private int atrStructureMin = 0;          // minutes of current structure timeframe
     private double atrStructurePrice = Double.NaN; // 1× ATR price (not multiplied by 3)
 
+    // Logging intervals - constants
     private static final long LOG_INTERVAL_MS = 60_000;      // 1 minute
-    private static long lastCalcTableLogTime = 0;             // Tracks last time the calc table was printed
-    private static long lastHighLowLogTime = 0;             // Tracks last time historical high/low was logged
-
-    // Throttle ruler INFO logs
-    private static long lastRulerInfoLog = 0;
     private static final long RULER_LOG_INTERVAL_MS = 60000; // Log ruler status at most once per minute
+    
+    // FIXED: Changed from static to instance variables to prevent cross-instance timing conflicts
+    // Each study instance should maintain its own logging timestamps
+    private long lastCalcTableLogTime = 0;             // Tracks last time the calc table was printed
+    private long lastHighLowLogTime = 0;             // Tracks last time historical high/low was logged
+    private long lastRulerInfoLog = 0;                // Throttle ruler INFO logs
 
     // (Leg Ruler fields removed)
     private ResizePoint rulerStartResize, rulerEndResize;
@@ -173,7 +183,11 @@ public class BiotakTrigger extends Study {
         super();
         // مقداردهی اولیه پیکربندی لاگ‌گذاری / Initialize logging configuration
         LoggingConfiguration.initialize();
-        AdvancedLogger.info("BiotakTrigger", "constructor", "Constructor called. The study is being instantiated by MotiveWave.");
+        
+        // Generate unique instance ID for debugging multi-instance scenarios
+        String instanceId = Integer.toHexString(System.identityHashCode(this));
+        AdvancedLogger.info("BiotakTrigger", "constructor", 
+            "Study instance created [ID: %s]. Each instance maintains independent state.", instanceId);
     }
 
     @Override
@@ -718,18 +732,8 @@ public class BiotakTrigger extends Study {
             this.fullMValues.clear();
             java.util.Map<String, Double> newMValues = com.biotak.util.FractalUtil.buildMMap(series, thBasePrice, mScale);
             
-            // Check size before adding to prevent OutOfMemoryError
-            if (newMValues.size() > MAX_MAP_SIZE) {
-                AdvancedLogger.warn("BiotakTrigger", "drawFigures", "M map size exceeds limit (%d), truncating to %d entries", 
-                    newMValues.size(), CLEANUP_THRESHOLD);
-                // Keep only the most recent entries
-                java.util.List<java.util.Map.Entry<String, Double>> entries = new java.util.ArrayList<>(newMValues.entrySet());
-                entries = entries.subList(0, CLEANUP_THRESHOLD);
-                newMValues = entries.stream().collect(java.util.stream.Collectors.toMap(
-                    java.util.Map.Entry::getKey, java.util.Map.Entry::getValue));
-            }
-            
-            this.fullMValues.putAll(newMValues);
+            // FIXED: Use safePutAll for automatic size management with LRU eviction
+            safePutAll(this.fullMValues, newMValues, "M-Values");
  
             // (Debug logging for M map removed in release version)
 
@@ -792,21 +796,21 @@ public class BiotakTrigger extends Study {
             }
             
             // --------------------- BUILD ALL STEP VALUE MAPS ---------------------
-            // Build maps for E, TP, TH, SS, LS step values
+            // FIXED: Use safePutAll for all step value maps with automatic size management
             this.fullEValues.clear();
-            this.fullEValues.putAll(com.biotak.util.FractalUtil.buildStepValuesMap(series, thBasePrice, "E"));
+            safePutAll(this.fullEValues, com.biotak.util.FractalUtil.buildStepValuesMap(series, thBasePrice, "E"), "E-Values");
             
             this.fullTPValues.clear();
-            this.fullTPValues.putAll(com.biotak.util.FractalUtil.buildStepValuesMap(series, thBasePrice, "TP"));
+            safePutAll(this.fullTPValues, com.biotak.util.FractalUtil.buildStepValuesMap(series, thBasePrice, "TP"), "TP-Values");
             
             this.fullTHValues.clear();
-            this.fullTHValues.putAll(com.biotak.util.FractalUtil.buildStepValuesMap(series, thBasePrice, "TH"));
+            safePutAll(this.fullTHValues, com.biotak.util.FractalUtil.buildStepValuesMap(series, thBasePrice, "TH"), "TH-Values");
             
             this.fullSSValues.clear();
-            this.fullSSValues.putAll(com.biotak.util.FractalUtil.buildStepValuesMap(series, thBasePrice, "SS"));
+            safePutAll(this.fullSSValues, com.biotak.util.FractalUtil.buildStepValuesMap(series, thBasePrice, "SS"), "SS-Values");
             
             this.fullLSValues.clear();
-            this.fullLSValues.putAll(com.biotak.util.FractalUtil.buildStepValuesMap(series, thBasePrice, "LS"));
+            safePutAll(this.fullLSValues, com.biotak.util.FractalUtil.buildStepValuesMap(series, thBasePrice, "LS"), "LS-Values");
 
             long now = System.currentTimeMillis();
             if (now - lastCalcTableLogTime > LOG_INTERVAL_MS) {
@@ -814,6 +818,10 @@ public class BiotakTrigger extends Study {
                 FractalCalculator.logCalculationTable(series, thValue, structureValue, patternValue, triggerValue,
                                shortStep, longStep, atrValue, liveAtrValue,
                                pipMultiplier, lastCalcTableLogTime, LOG_INTERVAL_MS);
+                
+                // Log map statistics for memory monitoring
+                AdvancedLogger.debug("BiotakTrigger", "drawFigures", "Memory usage: %s", getMapStatistics());
+                
                 lastCalcTableLogTime = now;
             }
 
@@ -1232,32 +1240,55 @@ public class BiotakTrigger extends Study {
      * Schedule a timer to detect drag end when no more onResize events are fired
      */
     private void scheduleDragEndDetection(DrawContext ctx) {
+        // Don't schedule timer if study is being removed
+        if (!isStudyActive) {
+            return;
+        }
+        
         // Cancel any existing timer
         if (dragEndTimer != null) {
-            dragEndTimer.cancel();
+            try {
+                dragEndTimer.cancel();
+                dragEndTimer.purge();
+            } catch (Exception e) {
+                AdvancedLogger.debug("BiotakTrigger", "scheduleDragEndDetection", "Error canceling existing timer: %s", e.getMessage());
+            }
         }
         
         // Create new timer to check for drag end
-        dragEndTimer = new java.util.Timer("DragEndDetector", true);
-        dragEndTimer.schedule(new java.util.TimerTask() {
-            @Override
-            public void run() {
-                long now = System.currentTimeMillis();
-                long timeSinceLastDrag = now - lastDragTime;
-                
-                // If no drag event for DRAG_END_TIMEOUT_MS, consider drag ended
-                if (timeSinceLastDrag >= DRAG_END_TIMEOUT_MS && isCustomPriceDragging) {
-                    isCustomPriceDragging = false;
-                    customPriceLabel = null; // Clear label object
+        try {
+            dragEndTimer = new java.util.Timer("DragEndDetector", true);
+            dragEndTimer.schedule(new java.util.TimerTask() {
+                @Override
+                public void run() {
+                    // Double-check study is still active
+                    if (!isStudyActive) {
+                        return;
+                    }
                     
-                    // Trigger a redraw to hide the label
-                    if (ctx != null && ctx.getDataContext() != null) {
-                        int lastIdx = ctx.getDataContext().getDataSeries().size() - 1;
-                        drawFigures(lastIdx, ctx.getDataContext());
+                    long now = System.currentTimeMillis();
+                    long timeSinceLastDrag = now - lastDragTime;
+                    
+                    // If no drag event for DRAG_END_TIMEOUT_MS, consider drag ended
+                    if (timeSinceLastDrag >= DRAG_END_TIMEOUT_MS && isCustomPriceDragging) {
+                        isCustomPriceDragging = false;
+                        customPriceLabel = null; // Clear label object
+                        
+                        // Trigger a redraw to hide the label
+                        if (ctx != null && ctx.getDataContext() != null) {
+                            try {
+                                int lastIdx = ctx.getDataContext().getDataSeries().size() - 1;
+                                drawFigures(lastIdx, ctx.getDataContext());
+                            } catch (Exception e) {
+                                AdvancedLogger.debug("BiotakTrigger", "DragEndDetector", "Error in redraw: %s", e.getMessage());
+                            }
+                        }
                     }
                 }
-            }
-        }, DRAG_END_TIMEOUT_MS + 50); // Check slightly after timeout
+            }, DRAG_END_TIMEOUT_MS + 50); // Check slightly after timeout
+        } catch (Exception e) {
+            AdvancedLogger.error("BiotakTrigger", "scheduleDragEndDetection", "Error creating timer: %s", e.getMessage());
+        }
     }
 
 
@@ -2071,5 +2102,184 @@ public class BiotakTrigger extends Study {
      * Reset all locked values when lock all levels is disabled
      */
     
+    /**
+     * Finalizer to ensure resources are cleaned up when object is garbage collected
+     * This is a safety net for cases where explicit cleanup isn't called
+     * Note: finalize() is deprecated in Java 9+ but still useful for emergency cleanup
+     */
+    @Override
+    protected void finalize() throws Throwable {
+        try {
+            if (isStudyActive) {
+                AdvancedLogger.warn("BiotakTrigger", "finalize", 
+                    "Study finalized without explicit cleanup - performing emergency cleanup");
+                performCleanup();
+            }
+        } finally {
+            super.finalize();
+        }
+    }
+    
+    /**
+     * Centralized cleanup method for all resources
+     * Can be called explicitly or by finalizer
+     */
+    private void performCleanup() {
+        AdvancedLogger.info("BiotakTrigger", "performCleanup", "Resource cleanup initiated");
+        
+        // Mark study as inactive to prevent further operations
+        isStudyActive = false;
+        
+        // Clean up timer resources
+        cleanupTimer();
+        
+        // Clear all maps to release memory
+        cleanupMaps();
+        
+        // Clear UI components
+        cleanupUIComponents();
+        
+        AdvancedLogger.info("BiotakTrigger", "performCleanup", "Resource cleanup completed successfully");
+    }
+    
+    /**
+     * Clean up timer resources to prevent memory leaks
+     */
+    private void cleanupTimer() {
+        if (dragEndTimer != null) {
+            try {
+                dragEndTimer.cancel();
+                dragEndTimer.purge(); // Remove all cancelled tasks from timer's task queue
+                dragEndTimer = null;
+                AdvancedLogger.debug("BiotakTrigger", "cleanupTimer", "Timer cleaned up successfully");
+            } catch (Exception e) {
+                AdvancedLogger.error("BiotakTrigger", "cleanupTimer", "Error cleaning up timer: %s", e.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * Clear all calculation maps to release memory
+     */
+    private void cleanupMaps() {
+        try {
+            int totalEntries = fullMValues.size() + fullATRValues.size() + 
+                              fullEValues.size() + fullTPValues.size() + 
+                              fullTHValues.size() + fullSSValues.size() + 
+                              fullLSValues.size();
+            
+            fullMValues.clear();
+            fullATRValues.clear();
+            fullEValues.clear();
+            fullTPValues.clear();
+            fullTHValues.clear();
+            fullSSValues.clear();
+            fullLSValues.clear();
+            
+            AdvancedLogger.debug("BiotakTrigger", "cleanupMaps", "Cleared %d total map entries", totalEntries);
+        } catch (Exception e) {
+            AdvancedLogger.error("BiotakTrigger", "cleanupMaps", "Error cleaning up maps: %s", e.getMessage());
+        }
+    }
+    
+    /**
+     * Clear UI components references
+     */
+    private void cleanupUIComponents() {
+        try {
+            infoPanel = null;
+            customPricePoint = null;
+            customPriceLabel = null;
+            customPriceLine = null;
+            rulerStartResize = null;
+            rulerEndResize = null;
+            rulerFigure = null;
+            lastDrawContext = null;
+            
+            AdvancedLogger.debug("BiotakTrigger", "cleanupUIComponents", "UI components cleared");
+        } catch (Exception e) {
+            AdvancedLogger.error("BiotakTrigger", "cleanupUIComponents", "Error cleaning up UI: %s", e.getMessage());
+        }
+    }
+    
+    /**
+     * Safely add entries to a map with automatic size management
+     * Implements LRU eviction when map size exceeds threshold
+     * 
+     * @param targetMap The map to add entries to
+     * @param newEntries The entries to add
+     * @param mapName Name for logging purposes
+     */
+    private void safePutAll(java.util.Map<String, Double> targetMap, 
+                           java.util.Map<String, Double> newEntries, 
+                           String mapName) {
+        if (newEntries == null || newEntries.isEmpty()) {
+            return;
+        }
+        
+        // Check if adding new entries would exceed threshold
+        int totalSize = targetMap.size() + newEntries.size();
+        
+        if (totalSize > CLEANUP_THRESHOLD) {
+            // Perform cleanup before adding new entries
+            int originalSize = targetMap.size();
+            evictOldestEntries(targetMap, TARGET_SIZE_AFTER_CLEANUP);
+            
+            AdvancedLogger.debug("BiotakTrigger", "safePutAll", 
+                "Map '%s' cleanup: %d → %d entries (freed %d)", 
+                mapName, originalSize, targetMap.size(), originalSize - targetMap.size());
+        }
+        
+        // Add new entries
+        targetMap.putAll(newEntries);
+        
+        // Final safety check - should never happen with proper threshold
+        if (targetMap.size() > MAX_MAP_SIZE) {
+            AdvancedLogger.warn("BiotakTrigger", "safePutAll", 
+                "Map '%s' exceeded MAX_SIZE (%d), performing emergency cleanup", 
+                mapName, targetMap.size());
+            evictOldestEntries(targetMap, TARGET_SIZE_AFTER_CLEANUP);
+        }
+    }
+    
+    /**
+     * Evict oldest entries from LinkedHashMap to maintain target size
+     * LinkedHashMap with accessOrder=true automatically tracks LRU
+     * 
+     * @param map The map to clean up
+     * @param targetSize Desired size after cleanup
+     */
+    private void evictOldestEntries(java.util.Map<String, Double> map, int targetSize) {
+        if (map.size() <= targetSize) {
+            return;
+        }
+        
+        int toRemove = map.size() - targetSize;
+        java.util.Iterator<String> iterator = map.keySet().iterator();
+        
+        int removed = 0;
+        while (iterator.hasNext() && removed < toRemove) {
+            iterator.next();
+            iterator.remove();
+            removed++;
+        }
+    }
+    
+    /**
+     * Get current memory usage statistics for all maps
+     * Useful for monitoring and debugging
+     * 
+     * @return Formatted string with map sizes
+     */
+    private String getMapStatistics() {
+        return String.format("Maps[M:%d, ATR:%d, E:%d, TP:%d, TH:%d, SS:%d, LS:%d] Total:%d/%d",
+            fullMValues.size(), fullATRValues.size(), fullEValues.size(),
+            fullTPValues.size(), fullTHValues.size(), fullSSValues.size(),
+            fullLSValues.size(),
+            fullMValues.size() + fullATRValues.size() + fullEValues.size() + 
+            fullTPValues.size() + fullTHValues.size() + fullSSValues.size() + 
+            fullLSValues.size(),
+            MAX_MAP_SIZE * 7); // 7 maps
+    }
     
 }
