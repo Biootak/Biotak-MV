@@ -649,10 +649,7 @@ public class BiotakTrigger extends Study {
                 PathInfo customPricePath = getSettings().getPath(S_CUSTOM_PRICE_PATH);
                 // Force dashed pattern to be larger and more visible
                 if (customPricePath != null) {
-                    customPricePath = new PathInfo(customPricePath.getColor(), 
-                                                    customPricePath.getWidth(), 
-                                                    new float[]{5f, 3f}, 
-                                                    true, true, true, 1, null);
+                    customPricePath = customPricePath.clone().setDash(new float[]{5f, 3f});
                 }
                 customPriceLine = new CustomPriceLine(startTime, endTime, finalCustomPrice, customPricePath);
                 addFigure(customPriceLine);
