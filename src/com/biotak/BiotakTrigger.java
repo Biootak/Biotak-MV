@@ -666,6 +666,11 @@ public class BiotakTrigger extends Study {
                     customPricePath = customPricePath.clone().setDash(new float[]{5f, 3f});
                 }
                 customPriceLine = new CustomPriceLine(startTime, endTime, finalCustomPrice, customPricePath);
+                
+                // FIXED: Register CustomPriceLine with HitTestManager for proper selection priority
+                customPriceLine.setHitTestManager(hitTestManager);
+                hitTestManager.registerElement(customPriceLine);
+                
                 addFigure(customPriceLine);
                 
                 // Add the invisible ResizePoint for line dragging (only if not locked)

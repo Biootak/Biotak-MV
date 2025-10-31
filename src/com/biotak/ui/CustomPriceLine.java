@@ -12,12 +12,13 @@ import com.motivewave.platform.sdk.common.DrawContext;
  * This class handles the visual representation and interaction of a horizontal price line
  * that can be dragged to set custom price levels.
  */
-public class CustomPriceLine extends Figure {
+public class CustomPriceLine extends Figure implements HitTestManager.HitTestable {
     java.awt.geom.Line2D line; // Package-private for LineResizePoint access
     private double price;
     private long startTime, endTime;
     private ResizePoint lineResizePoint; // Invisible ResizePoint covering the entire line
     private PathInfo pathInfo; // Store path info for drawing
+    private HitTestManager hitTestManager; // Reference to the hit test manager
     
     public CustomPriceLine(long startTime, long endTime, double price, PathInfo pathInfo) {
         this.startTime = startTime;
@@ -56,11 +57,44 @@ public class CustomPriceLine extends Figure {
         return lineResizePoint;
     }
     
+    /**
+     * Set the hit test manager reference (called from BiotakTrigger)
+     */
+    public void setHitTestManager(HitTestManager hitTestManager) {
+        this.hitTestManager = hitTestManager;
+    }
+    
     @Override
     public boolean contains(double x, double y, DrawContext ctx) {
-        // Disable selection to prevent interference with Ruler or other figures
-        // The line is still draggable via its LineResizePoint
+        // FIXED: Now properly uses HitTestManager for priority-based selection
+        // This allows the line to be selected while respecting element hierarchy
+        if (hitTestManager != null) {
+            return containsPoint(x, y, ctx) && hitTestManager.shouldElementRespond(this, x, y, ctx);
+        }
+        
+        // Fallback to direct hit test if no manager available
+        return containsPoint(x, y, ctx);
+    }
+    
+    // HitTestable interface implementation
+    @Override
+    public boolean containsPoint(double x, double y, DrawContext ctx) {
+        // Check if click is near the line (within 5 pixels)
+        if (line != null) {
+            double distance = Util.distanceFromLine(x, y, line);
+            return distance < 5.0; // 5-pixel tolerance for easier selection
+        }
         return false;
+    }
+    
+    @Override
+    public HitTestManager.HitTestPriority getHitTestPriority() {
+        return HitTestManager.HitTestPriority.MEDIUM; // CustomPriceLine has medium priority (below Ruler, above others)
+    }
+    
+    @Override
+    public String getElementName() {
+        return "CustomPriceLine";
     }
     
     @Override
