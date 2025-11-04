@@ -567,9 +567,7 @@ public class BiotakTrigger extends Study {
                 }
             }
 
-            // برای محاسبه TH از قیمت لایو Bid استفاده می‌کنیم
             int totalBars    = series.size();
-            double thBasePrice = series.getBidClose(totalBars - 1); // Use current live bid price for TH calculation.
             
             // Use the first and last bar times directly for line drawing
             long startTime = series.getStartTime(0);
@@ -586,6 +584,9 @@ public class BiotakTrigger extends Study {
                 List<Figure> histFigures = LevelDrawer.drawHistoricalLines(getSettings(), startTime, endTime, finalHigh, finalLow);
                 for (Figure f : histFigures) addFigure(f);
             }
+            
+            // IMPORTANT: Calculate midpointPrice FIRST - this is the ANCHOR point for drawing levels
+            // The levels should NOT move with price changes - only the live price moves relative to fixed levels
             double midpointPrice;
             if (currentMode == StepCalculationMode.SS_LS_STEP) {
                 // Force use of custom price as anchor; if not set, default to last close
@@ -598,6 +599,13 @@ public class BiotakTrigger extends Study {
             } else {
                 midpointPrice = LevelDrawer.determineMidpointPrice(getSettings(), finalHigh, finalLow);
             }
+            
+            // CRITICAL FIX: Use the actual midpoint of historical range for TH step SIZE calculations
+            // This is separate from the drawing anchor (midpointPrice)
+            // - midpointPrice: Where levels are drawn from (could be High, Low, Midpoint, or Custom)
+            // - thBasePrice: Reference price for calculating step SIZE (always middle of range)
+            // The step size must be consistent regardless of where we draw from
+            double thBasePrice = (finalHigh + finalLow) / 2.0;
             // Logger.debug("BiotakTrigger: Midpoint price calculated: " + midpointPrice);
             // Handle interactive custom price baseline
             String startTypeStr = getSettings().getString(S_START_POINT, THStartPointType.MIDPOINT.name());
