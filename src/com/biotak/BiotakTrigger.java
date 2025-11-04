@@ -20,6 +20,7 @@ import com.motivewave.platform.sdk.draw.ResizePoint;
 import com.motivewave.platform.sdk.study.Study;
 import com.motivewave.platform.sdk.study.StudyHeader;
 
+import java.awt.Color;
 import java.awt.Font;
 import java.awt.Rectangle;
 
@@ -316,11 +317,18 @@ public class BiotakTrigger extends Study {
             else {
                 long nowClick = System.currentTimeMillis();
                 if (nowClick - lastClickTime < 350 && ctx != null) {
-                    DataSeries series = ctx.getDataContext().getDataSeries();
-                    if (series.size() > 0) {
-                        double lc = series.getClose(series.size() - 1);
-                        settings.setDouble(S_CUSTOM_PRICE, lc);
-                        drawFigures(series.size() - 1, ctx.getDataContext());
+                    // FIXED: Only reset custom price if levels are NOT locked
+                    boolean lockAllLevels = settings.getBoolean(S_LOCK_ALL_LEVELS, false);
+                    if (!lockAllLevels) {
+                        DataSeries series = ctx.getDataContext().getDataSeries();
+                        if (series.size() > 0) {
+                            double lc = series.getClose(series.size() - 1);
+                            settings.setDouble(S_CUSTOM_PRICE, lc);
+                            drawFigures(series.size() - 1, ctx.getDataContext());
+                            AdvancedLogger.info("BiotakTrigger", "onClick", "Custom price reset to current price: %.5f", lc);
+                        }
+                    } else {
+                        AdvancedLogger.info("BiotakTrigger", "onClick", "Custom price reset blocked - levels are locked");
                     }
                 }
                 lastClickTime = nowClick;
@@ -669,9 +677,22 @@ public class BiotakTrigger extends Study {
 
                 // Draw/update custom price horizontal line
                 PathInfo customPricePath = getSettings().getPath(S_CUSTOM_PRICE_PATH);
-                // Force dashed pattern to be larger and more visible
+                // Apply different styling based on lock state
                 if (customPricePath != null) {
-                    customPricePath = customPricePath.clone().setDash(new float[]{5f, 3f});
+                    if (lockAllLevels) {
+                        // When locked: use solid line with reduced opacity to indicate locked state
+                        customPricePath = customPricePath.clone().setDash(null); // Solid line
+                        // Optionally reduce opacity by adjusting color alpha
+                        Color originalColor = customPricePath.getColor();
+                        if (originalColor != null) {
+                            customPricePath = customPricePath.clone().setColor(
+                                new Color(originalColor.getRed(), originalColor.getGreen(), 
+                                         originalColor.getBlue(), 128)); // 50% opacity
+                        }
+                    } else {
+                        // When unlocked: use dashed pattern to indicate it's draggable
+                        customPricePath = customPricePath.clone().setDash(new float[]{5f, 3f});
+                    }
                 }
                 customPriceLine = new CustomPriceLine(startTime, endTime, finalCustomPrice, customPricePath);
                 
