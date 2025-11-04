@@ -116,7 +116,7 @@ public class BiotakTrigger extends Study {
     
     // Timer mechanism to detect drag end
     private long lastDragTime = 0;
-    private static final long DRAG_END_TIMEOUT_MS = 300; // Hide label after 300ms of no movement
+    private static final long DRAG_END_TIMEOUT_MS = 2000; // Hide label after 2 seconds of no movement
     private java.util.Timer dragEndTimer = null;
     
     // Lifecycle management flag to prevent operations after study removal
