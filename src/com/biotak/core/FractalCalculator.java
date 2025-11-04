@@ -192,7 +192,7 @@ public class FractalCalculator {
     /**
      * Logs a detailed table showing all calculations across different fractal timeframes
      */
-    public static void logCalculationTable(DataSeries series, double thValue, double structureValue, 
+    public static void logCalculationTable(DataSeries series, double thValue, double thBasePrice, double structureValue, 
                                     double patternValue, double triggerValue, double shortStep, 
                                     double longStep, double atrValue, double liveAtrValue,
                                     double pipMultiplier, long lastCalcTableLogTime, long LOG_INTERVAL_MS) {
@@ -229,7 +229,7 @@ public class FractalCalculator {
             double triggerTFPercentage = TimeframeUtil.getTimeframePercentage(triggerBarSize);
             
             // Calculate TH values (in price) based on these percentages using live bid price
-            double basePrice = series.getBidClose(series.size() - 1);
+            double basePrice = thBasePrice;
             double structureTHValue = (basePrice * structureTFPercentage) / 100.0;
             double patternTHValue = (basePrice * patternTFPercentage) / 100.0;
             double triggerTHValue = (basePrice * triggerTFPercentage) / 100.0;

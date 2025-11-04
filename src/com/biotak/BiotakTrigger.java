@@ -828,7 +828,7 @@ public class BiotakTrigger extends Study {
             long now = System.currentTimeMillis();
             if (now - lastCalcTableLogTime > LOG_INTERVAL_MS) {
                 double pipMultiplier = com.biotak.util.UnitConverter.getPipMultiplier(series.getInstrument());
-                FractalCalculator.logCalculationTable(series, thValue, structureValue, patternValue, triggerValue,
+                FractalCalculator.logCalculationTable(series, thValue, thBasePrice, structureValue, patternValue, triggerValue,
                                shortStep, longStep, atrValue, liveAtrValue,
                                pipMultiplier, lastCalcTableLogTime, LOG_INTERVAL_MS);
                 
@@ -839,7 +839,8 @@ public class BiotakTrigger extends Study {
             }
 
             // Update / draw information panel
-            drawInfoPanel(series, thValue, startTime, shortStep, longStep, atrValue, liveAtrValue);
+            // Pass thBasePrice to ensure InfoPanel uses the same fixed reference price as level calculations
+            drawInfoPanel(series, thValue, thBasePrice, startTime, shortStep, longStep, atrValue, liveAtrValue);
             
             // ------------------------------------------------------------------
             // Draw horizontal levels according to selected Step Mode
@@ -1317,7 +1318,7 @@ public class BiotakTrigger extends Study {
         calculate(lastIdx, ctx);
     }
 
-    private void drawInfoPanel(DataSeries series, double thValue, long startTime, double shortStep, double longStep, double atrValue, double liveAtrValue) {
+    private void drawInfoPanel(DataSeries series, double thValue, double thBasePrice, long startTime, double shortStep, double longStep, double atrValue, double liveAtrValue) {
         if (!getSettings().getBoolean(S_SHOW_INFO_PANEL, true)) return;
         Instrument instrument = series.getInstrument();
         if (instrument == null) return;
@@ -1363,8 +1364,9 @@ public class BiotakTrigger extends Study {
         boolean showRuler = getSettings().getBoolean(S_SHOW_RULER, false);
         infoPanel.setRulerActive(showRuler);
         // Calculate fractal TH values for hierarchy display
-        // Use current bid price instead of previous-close to base TH calculations
-            double basePrice = series.getBidClose(series.size() - 1);
+        // FIXED: Use the SAME thBasePrice as level calculations for consistency
+        // This ensures InfoPanel shows the same TH values that are used for drawing levels
+        double basePrice = thBasePrice;
         // Pattern timeframe (one level down)
         BarSize patternBarSize = TimeframeUtil.getPatternBarSize(barSize);
         BarSize triggerBarSize = TimeframeUtil.getTriggerBarSize(barSize);
