@@ -45,6 +45,7 @@ public class InfoPanel extends Figure implements HitTestManager.HitTestable {
     private Rectangle minimizeButtonRect; // Stores bounds of minimize/restore button
     private Rectangle rulerButtonRect; // Stores bounds of ruler toggle button
     private boolean rulerActive = false; // Tracks if ruler is active
+    private HitTestManager hitTestManager; // Reference to hit test manager for priority handling
     // Added constant to control vertical padding after separator lines inside the panel
     private static final int SEPARATOR_PADDING = 25; // was previously 15 – gives text more breathing room
     
@@ -664,9 +665,22 @@ int lineSpacing = 10; // Increased spacing for improved readability
         }
     }
     
+    /**
+     * Set the hit test manager reference (called from BiotakTrigger)
+     */
+    public void setHitTestManager(HitTestManager hitTestManager) {
+        this.hitTestManager = hitTestManager;
+    }
+    
     @Override
     public boolean contains(double x, double y, DrawContext ctx) { 
-        // InfoPanel has highest priority - always respond if point is inside bounds
+        // Use HitTestManager to determine if this element should respond
+        // This ensures InfoPanel's CRITICAL priority is respected
+        if (hitTestManager != null) {
+            return containsPoint(x, y, ctx) && hitTestManager.shouldElementRespond(this, x, y, ctx);
+        }
+        
+        // Fallback if no manager - InfoPanel should always work
         return containsPoint(x, y, ctx);
     }
     
@@ -678,8 +692,9 @@ int lineSpacing = 10; // Increased spacing for improved readability
     
     @Override
     public HitTestManager.HitTestPriority getHitTestPriority() {
-        // InfoPanel has HIGHEST priority to ensure buttons always work
-        return HitTestManager.HitTestPriority.HIGHEST;
+        // InfoPanel has CRITICAL priority (above Ruler) to ensure buttons ALWAYS work
+        // This prevents interference when clicking panel buttons
+        return HitTestManager.HitTestPriority.CRITICAL;
     }
     
     @Override

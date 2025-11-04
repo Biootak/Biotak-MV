@@ -1356,8 +1356,9 @@ public class BiotakTrigger extends Study {
             this.infoPanel = new InfoPanel(timeframe, thValue, instrument, contentFont, titleFont, panelPos, marginX, marginY, transparency, shortStep, longStep, atrValue, liveAtrValue, isSecondsBased, isMinimized);
         }
         
-        // FIXED: Register InfoPanel with HitTestManager for highest priority hit detection
-        // This ensures panel buttons work even if other elements overlap
+        // FIXED: Set HitTestManager reference and register InfoPanel for CRITICAL priority
+        // This ensures panel buttons work even if other elements (like Ruler) overlap
+        this.infoPanel.setHitTestManager(hitTestManager);
         hitTestManager.registerElement(this.infoPanel);
         
         // Set initial ruler state

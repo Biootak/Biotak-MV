@@ -17,7 +17,8 @@ public class HitTestManager {
      * Priority levels for different UI elements
      */
     public enum HitTestPriority {
-        HIGHEST(100),    // Ruler, critical UI elements
+        CRITICAL(150),   // InfoPanel with buttons - MUST always work
+        HIGHEST(100),    // Ruler and other critical UI elements
         HIGH(75),        // Important interactive elements
         MEDIUM(50),      // Standard interactive elements
         LOW(25),         // Background elements
